@@ -1,0 +1,31 @@
+name: kalk-top-local
+
+# Local Docker runtime for kalk-top + fast-kalk (PHP built-in server).
+# Equivalent of: kalk-top\scripts\start-runtime-wp.ps1
+#
+# Start:
+#   docker compose -f docker-compose.kalk-top-local.yml up -d
+#
+# Proof:
+#   php fast-kalk/scripts/e2e-scenarios-smoke.php
+#   or: curl http://localhost:8091/wp-json/
+
+services:
+  kalk-top:
+    build:
+      context: ./kalk-top
+      dockerfile: docker/Dockerfile.local
+    image: kalk-top-runtime:local
+    container_name: kalk-top-runtime
+    restart: unless-stopped
+    ports:
+      # Bind to all interfaces so host.docker.internal resolves correctly for Docker containers
+      - "0.0.0.0:8091:8091"
+    volumes:
+      # Bind-mount repos as rw (entrypoint syncs plugin files on startup)
+      - ./kalk-top:/kalk-top:rw
+      - ./fast-kalk:/fast-kalk:ro
+      - ./top-instal-generator:/top-instal-generator:ro
+    environment:
+      # Use host.docker.internal so downloadUrls are resolvable from other Docker containers
+      KALK_TOP_RUNTIME_BASE_URL: http://host.docker.internal:8091

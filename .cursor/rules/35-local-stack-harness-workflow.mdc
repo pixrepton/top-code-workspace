@@ -1,0 +1,33 @@
+---
+description: Cross-repo local stack harness — sync, preflight, verify gates (scripts/)
+alwaysApply: true
+---
+
+# Local stack harness workflow
+
+Harness lives in workspace root `scripts/` (meta-repo git). Requires `TOP_CODE_ROOT` = workspace folder (`resolve-paths.ps1` sets it automatically).
+
+## When to run
+
+| Trigger | Command |
+|---------|---------|
+| Po zmianie portów, kluczy LLM, tokenów Node B / Daszek | `pwsh -File scripts/sync-local-stack-env.ps1` |
+| Start sesji, przed smoke/eval, przed etykietą `proven_local` | `pwsh -File scripts/preflight-local-stack.ps1` |
+| Gmail + Daszek + mailbox/GraphStore PG | `pwsh -File scripts/preflight-local-stack.ps1 -FullStack` |
+| Większy Gate A+B (preflight + pytest) | `pwsh -File scripts/verify-local-gates.ps1` |
+
+## Po sync — gdy zmieniły się tokeny
+
+Recreate kontenerów: `gmail-agent-worker`, Daszek WordPress (`docker compose ... up -d --force-recreate`). Bez tego typowy błąd: Daszek **401** `Invalid Node B service token`.
+
+## Preflight exit codes
+
+- `0` — core OK (FullStack: wszystko OK)
+- `1` — Docker niedostępny (hard fail)
+- `2` — `-FullStack`: część serwisów down (soft warn)
+
+## Powiązane
+
+- Gate A/B etykiety: `92-proof-gate-discipline.mdc`
+- Epistemika `proven_local`: `knowledge/CONTROL_PLANE.md`
+- Domyślny Node B host: `:8766` (`GMAIL_AGENT_NODEB_PORT` w `gmail-agent/.env.vps`)

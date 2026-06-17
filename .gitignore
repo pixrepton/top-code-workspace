@@ -1,7 +1,15 @@
-# TOP-INSTAL workspace meta-repo (sparse): only scripts/ + AGENTS.md tracked.
+# TOP-INSTAL workspace meta-repo (sparse): harness + agent rules + local compose.
 *
 
 !.gitignore
 !AGENTS.md
 !scripts/
 !scripts/**
+!docker-compose.cieplo-local.yml
+!docker-compose.kalk-top-local.yml
+!docker-compose.daszek-local.yml
+!.cursor/
+!.cursor/rules/
+!.cursor/rules/30-workflow-operations.mdc
+!.cursor/rules/35-local-stack-harness-workflow.mdc
+!.cursor/rules/92-proof-gate-discipline.mdc

@@ -1,0 +1,37 @@
+name: cieplo-local
+
+# Local Docker stack for cieplo-orchestrator (worker + SQLite).
+# Uses SQLite by default (no external Postgres needed).
+#
+# Start:
+#   docker compose -f docker-compose.cieplo-local.yml up -d
+#
+# Manual poll:
+#   docker exec cieplo-worker-local cieplo-worker poll --dry-run
+#   docker exec cieplo-worker-local cieplo-worker preflight
+
+services:
+  cieplo-worker:
+    build:
+      context: ./cieplo-orchestrator
+      dockerfile: Dockerfile.local
+    container_name: cieplo-worker-local
+    restart: unless-stopped
+    env_file:
+      - ./cieplo-orchestrator/.env
+    environment:
+      # Remap 127.0.0.1 → host.docker.internal for Docker networking
+      NODE_B_REGISTRY_BASE_URL: http://host.docker.internal:8766
+      KALKTOP_BASE_URL: http://host.docker.internal:8091
+      GENERATOR_BASE_URL: http://host.docker.internal:8091
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - cieplo-var:/app/var
+      # Shared Google OAuth credentials from gmail-agent (same account: biuro.topinstal@gmail.com)
+      # cieplo settings.py reads /etc/topinstal/.env as secondary source
+      - ./gmail-agent/.env.local-vps:/etc/topinstal/.env:ro
+
+volumes:
+  cieplo-var:
+    name: cieplo-worker-var
