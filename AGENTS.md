@@ -18,10 +18,11 @@ Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends
 | Tier            | Meaning                                                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **active**      | Local Docker — `:8766` gmail-agent Node B, `:8090` Daszek, `:8091` kalk-top, `:8000` RAG, `:54329` mailbox PG, `:54330` GraphStore PG |
+| **production**  | **Suspended** (2026-06-17) — firma w zawieszeniu; brak VPS. Agent nie pracuje nad prod deploy dopóki operator nie powiadomi.          |
 | **legacy_prod** | Historical dual VPS — do not use for new proof                                                                                        |
-| **target_prod** | One unified VPS (future) — `knowledge/rfc/single-unified-vps.md`                                                                      |
+| **target_prod** | One unified VPS (frozen future) — `knowledge/rfc/single-unified-vps.md`                                                               |
 
-**Agent default:** work to Gate B locally. No SSH/VPS unless operator explicitly asks.
+**Agent default:** work to Gate B locally. No SSH/VPS/prod deploy unless operator explicitly resumes business and asks.
 
 Machine map: `ECOSYSTEM_MAP.yaml`
 
@@ -46,12 +47,13 @@ Machine map: `ECOSYSTEM_MAP.yaml`
 2. `knowledge/world-state.yaml` — ownership, proof, open_p0/p1, gaps, boundaries **(kanoniczny model strukturalny)**
 3. `knowledge/CONTROL_PLANE.md` — 5 warstw epistemicznych (`proven_local` vs `vision`)
 4. `knowledge/memory/OPERATOR_DECISIONS.md` (all `[ACTIVE]`)
-5. `knowledge/AGENT_OPERATOR_ENVIRONMENT.md` if runtime/deploy
-6. `knowledge/SYSTEM_ATLAS.md` §0–§4 + `TOPINSTAL-KERNEL-GRAPH.yaml`
-7. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
-8. GitNexus MCP — `query` / `impact` only (po freshness check; nie full analyze w chacie)
-9. Serena MCP — symbol navigation / refactors (`initial_instructions` first call per session)
-10. Source + tests
+5. `knowledge/BACKLOG_ARCHITECTURE_REVIEW_2026-06.md` — priorytety otwartej pracy (lokalnie); skrót: `BACKLOG_ROADMAP_2026-06.md`
+6. `knowledge/AGENT_OPERATOR_ENVIRONMENT.md` if runtime/deploy
+7. `knowledge/SYSTEM_ATLAS.md` §0–§4 + `TOPINSTAL-KERNEL-GRAPH.yaml`
+8. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
+9. GitNexus MCP — `query` / `impact` only (po freshness check; nie full analyze w chacie)
+10. Serena MCP — symbol navigation / refactors (`initial_instructions` first call per session)
+11. Source + tests
 
 `knowledge/CODEBASE_SNAPSHOT.md` — VIEW (ładuj na żądanie po krokach 2–3, nie domyślnie). Do not read all Markdown flat. Do not load full repos into context.
 
