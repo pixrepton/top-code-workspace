@@ -1,0 +1,7 @@
+# TOP-INSTAL workspace meta-repo (sparse): only scripts/ + AGENTS.md tracked.
+*
+
+!.gitignore
+!AGENTS.md
+!scripts/
+!scripts/**
