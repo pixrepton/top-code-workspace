@@ -37,6 +37,8 @@ if (Test-Path $gaTests) {
     Push-Location (Join-Path $root 'gmail-agent')
     python -m pytest tools/gmail_audit/tests/test_truth_flow_pr4_pr8.py tools/gmail_audit/tests/test_signal_reconciler_runtime.py -q --tb=line 2>&1
     if ($LASTEXITCODE -ne 0) { $fail++ }
+    python -m pytest tools/gmail_audit/tests/test_attachment_download.py tools/gmail_audit/tests/test_attachment_download_api.py -q --tb=line 2>&1
+    if ($LASTEXITCODE -ne 0) { $fail++ }
     Pop-Location
 }
 
