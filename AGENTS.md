@@ -92,9 +92,10 @@ Preflight: `scripts/preflight-local-stack.ps1`
 zmiana portów/kluczy → scripts/sync-local-stack-env.ps1 → recreate worker+Daszek jeśli tokeny
 start sesji / proof     → scripts/preflight-local-stack.ps1 (-FullStack = cały stack)
 większy gate            → scripts/verify-local-gates.ps1
+agent closure           → build/recreate + proof script samemu; raport dopiero po *_PROOF_OK
 ```
 
-Details: `scripts/README.md` · agent rule `.cursor/rules/35-local-stack-harness-workflow.mdc`
+Details: `scripts/README.md` · agent rules `35-local-stack-harness-workflow.mdc` (§ Agent-owned closure), `92-proof-gate-discipline.mdc`
 
 ## Proof tiers
 

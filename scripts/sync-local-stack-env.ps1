@@ -189,7 +189,14 @@ Upsert-EnvFile $auditEnv $auditUpdates
 $ragEnv = Join-Path $ragRoot '.env'
 $ragKeys = Join-Path $ragRoot '.env-asystent-rag-keys'
 if ($registryToken) {
-    Upsert-EnvFile $ragKeys @{ NODE_B_REGISTRY_TOKEN = $registryToken; GMAIL_AGENT_NODE_B_TOKEN = $registryToken }
+    Upsert-EnvFile $ragKeys @{
+        NODE_B_REGISTRY_TOKEN        = $registryToken
+        GMAIL_AGENT_NODE_B_TOKEN     = $registryToken
+        NODE_B_REGISTRY_BASE_URL     = "http://127.0.0.1:$nodebPort"
+        DASZEK_BRIDGE_TOKEN          = $registryToken
+        DASZEK_BASE_URL              = 'http://127.0.0.1:8090'
+        EVENT_SPINE_RAG_EMIT_ENABLED = '1'
+    }
     Upsert-EnvFile $ragEnv @{
         GMAIL_AGENT_CONTEXT_PACK_URL          = "http://host.docker.internal:$nodebPort"
         GMAIL_AGENT_NODE_B_TOKEN              = $registryToken

@@ -4,15 +4,16 @@ Cross-repo PowerShell harness for local Docker stack. Versioned in the workspace
 
 ## Scripts
 
-| File | Purpose |
-|------|---------|
-| `resolve-paths.ps1` | Sets `TOP_CODE_ROOT` and per-repo env paths (sourced by others) |
-| `sync-local-stack-env.ps1` | Sync `.env.local-vps`, audit `.env`, Daszek `.env.daszek-local`, RAG wire |
-| `preflight-local-stack.ps1` | Health: Node B, RAG; `-FullStack` adds Daszek, kalk-top, PG |
-| `verify-local-gates.ps1` | Preflight + optional pytest smoke (Gate A+B) |
-| `preflight-workspace.ps1` | Workspace-level checks |
-| `session-closeout.ps1` | Session end checklist helper |
-| `compile-world-state.py` | World-state compile helper |
+| File                         | Purpose                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| `resolve-paths.ps1`          | Sets `TOP_CODE_ROOT` and per-repo env paths (sourced by others)            |
+| `sync-local-stack-env.ps1`   | Sync `.env.local-vps`, audit `.env`, Daszek `.env.daszek-local`, RAG wire  |
+| `preflight-local-stack.ps1`  | Health: Node B, RAG; `-FullStack` adds Daszek, kalk-top, PG                |
+| `verify-local-gates.ps1`     | Preflight + optional pytest smoke (Gate A+B)                               |
+| `push-rag-system-health.ps1` | W3: RAG health snapshot → Daszek + `rag.kb_health.snapshot` (cron/harness) |
+| `preflight-workspace.ps1`    | Workspace-level checks                                                     |
+| `session-closeout.ps1`       | Session end checklist helper                                               |
+| `compile-world-state.py`     | World-state compile helper                                                 |
 
 ## Operator workflow
 

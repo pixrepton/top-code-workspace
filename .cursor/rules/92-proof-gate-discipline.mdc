@@ -37,7 +37,9 @@ Wiele repo w jednej sesji: Gate A **w każdym** dotkniętym repo, osobno.
 - Zmiana dotyka operational feed, Daszek bridge drain, RAG widget → backend, fast-kalk → kalk-top
 - Operator jawnie prosi o smoke ekosystemu
 
-**Komenda:** `scripts/preflight-local-stack.ps1` (root workspace). Uzupełniająco, gdy dotyczy: repo-specific smoke (`_local_smoke_run.py`, `daszek_local_133_proof.py` — patrz runbooki w `gmail-agent/docs/runbooks/`).
+**Komenda:** `scripts/preflight-local-stack.ps1` (root workspace). Uzupełniająco, gdy dotyczy: repo-specific smoke (`_local_smoke_run.py`, `daszek_local_133_proof.py`, `daszek_os_event_w0_proof.py` — patrz runbooki w `gmail-agent/docs/runbooks/`).
+
+**Agent sam uruchamia Gate B** — patrz `35-local-stack-harness-workflow.mdc` § Agent-owned closure. Nie kończ sesji „gotowe” z instrukcją dla operatora „uruchom proof / recreate”, jeśli masz shell.
 
 **Nie uruchamiaj Gate B** dla: czystego refactoru bez runtime, docs-only, zmian w `knowledge/` bez wpływu na stack.
 

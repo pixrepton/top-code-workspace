@@ -15,7 +15,7 @@ Konflikt instrukcji: `OPERATOR_DECISIONS.md` > reguły repo > ten plik.
 
 ## Runtime default
 
-Local Docker only (`:8766` gmail-agent Node B host, `:8000` RAG, `:54329` Postgres). Gate B lokalny = domyślny done. VPS/SSH tylko gdy operator jawnie prosi.
+Local Docker only (`:8766` gmail-agent Node B host, `:8000` RAG, `:54329` Postgres). Gate B lokalny = domyślny done. **Produkcja zawieszona** (2026-06-17) — VPS/SSH/prod deploy poza zakresem; `world-state.deferred_production`. Tylko gdy operator jawnie wznowi firmę i poprosi.
 
 Harness (sync / preflight / verify): `35-local-stack-harness-workflow.mdc`
 
