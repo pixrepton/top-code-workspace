@@ -1,13 +1,42 @@
 {
   "ok": true,
-  "signal_id": "sig_e5aca08780a10598daf1f768",
-  "session_id": "sc1_city_4fcb5e1f",
+  "signal_id": "sig_2879d0ee964d3ec142af376d",
+  "session_id": "s1_p_9dc08435",
   "user_input": "Nowy lead: Marek Wisniewski (marek.wisniewski@gmail.com, tel: 507-123-456), dom jednorodzinny 180m2 w Jaworznie z 2005 roku, ogrzewanie gazowe (kociol Viessmann 24kW), zainteresowany pompa ciepla i dofinansowaniem Czystego Powietrza.",
-  "engagement_id": "stg_sig_e5aca087",
+  "engagement_id": "stg_sig_2879d0ee",
   "warnings": [
     "agent_staging_reconcile"
   ],
-  "agent_turns": 12,
-  "proposals": [],
+  "agent_turns": 3,
+  "proposals": [
+    {
+      "proposal_id": "prop_8ae038f9172d4974",
+      "proposal_type": "composite_plan",
+      "status": "pending",
+      "payload": {
+        "plan_title_pl": "create_case: case_id",
+        "steps": [
+          {
+            "step_name_pl": "create_case",
+            "operation": "create_case",
+            "target": "case_id",
+            "args": {
+              "case_kind": "zapytanie_klienta",
+              "hvac_profile": {
+                "building_type": "dom jednorodzinny",
+                "cp2025_eligible": true,
+                "heated_area_m2": 180,
+                "location": {
+                  "city": "Jaworzno"
+                }
+              }
+            },
+            "reasoning_pl": "Utworzenie sprawy dla klienta zgodnie z profilem HVAC i kwalifikacj¹ do programu CP2025."
+          }
+        ],
+        "reasoning_pl": "Utworzenie sprawy dla klienta zgodnie z profilem HVAC i kwalifikacj¹ do programu CP2025."
+      }
+    }
+  ],
   "hitl_required": true
 }
