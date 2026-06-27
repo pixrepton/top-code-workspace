@@ -1,0 +1,43 @@
+{
+  "gmail_health": {
+    "ok": true,
+    "service": "gmail-agent-fastapi",
+    "mode": "read_only",
+    "truth_source": "node_b_mailbox_memory",
+    "write_routes_enabled": true,
+    "contract_surface": "case_context_pack_vnext",
+    "correlation_registry": true
+  },
+  "rag_health": {
+    "status": "healthy",
+    "engine": "ready",
+    "index_ready": true,
+    "doc_count": 55,
+    "embedding_model_name": "intfloat/multilingual-e5-base",
+    "expected_dim": 768,
+    "actual_index_dim": 768,
+    "kb_status": {
+      "index_ready": true,
+      "expected_dim": 768,
+      "actual_dim": 768,
+      "embedding_model": "intfloat/multilingual-e5-base",
+      "status": "ok",
+      "doc_count": 0,
+      "chunk_count": 115
+    },
+    "knowledge_base": "/app/knowledge_base",
+    "chroma_db": "/app/chroma_clean",
+    "chroma_db_exists": true,
+    "registry_path": "/app/chroma_clean/doc_registry.json",
+    "registry_exists": true,
+    "auth_configured": true,
+    "auth_mode": "keys-required",
+    "ingest_running": false,
+    "llm_ready": true,
+    "llm_provider": "groq",
+    "bm25_ready": true
+  },
+  "system_health": {
+    "error": "HTTP Error 500: Internal Server Error"
+  }
+}
