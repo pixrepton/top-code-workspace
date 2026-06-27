@@ -37,7 +37,113 @@
     "llm_provider": "groq",
     "bm25_ready": true
   },
-  "system_health": {
-    "error": "HTTP Error 500: Internal Server Error"
+  "os_events": {
+    "ok": true,
+    "schema_version": "topinstal.os_event_list.v1",
+    "read_only": true,
+    "items": [
+      {
+        "event_id": "osevt_31ef4edbc2b34fb3",
+        "event_type": "new_email",
+        "source_repo": "gmail-agent",
+        "engagement_id": "sim_thread_001",
+        "occurred_at": "2026-06-27T10:26:21.984156+00:00",
+        "summary_pl": "",
+        "status": "ok",
+        "payload": {
+          "body": "Dzieñ dobry, interesuje mnie monta¿ pompy ciep³a powietrze-woda w domu jednorodzinnym 180m2, budynek z 2005 roku, ogrzewanie dotychczas gazowe (kocio³ Viessmann 24kW). S³ysza³em o dofinansowaniu z Czystego Powietrza. Proszê o kontakt i wycenê. Tel: 507-123-456",
+          "source": "gmail",
+          "subject": "Zapytanie o pompê ciep³a - dom 180m2",
+          "from_name": "Marek Wiœniewski",
+          "thread_id": "sim_thread_001",
+          "from_email": "marek.wisniewski@gmail.com",
+          "received_at": "2026-06-27T09:15:00Z",
+          "signal_type": "new_email"
+        },
+        "correlation": {
+          "thread_id": "sim_thread_001",
+          "from_email": "marek.wisniewski@gmail.com"
+        }
+      },
+      {
+        "event_id": "osevt_147fe35cbf43497e",
+        "event_type": "rag.ingest.completed",
+        "source_repo": "rag-chat-asystent",
+        "engagement_id": "",
+        "occurred_at": "2026-06-26T05:07:36.088698+00:00",
+        "summary_pl": "Indeks RAG zaktualizowany — 28 dokumentów — 115 chunków",
+        "status": "ok",
+        "payload": {
+          "job_id": "269cabb8-e1cf-4294-9cd6-c5d0a1637ec2",
+          "status": "ok",
+          "summary_pl": "Indeks RAG zaktualizowany — 28 dokumentów — 115 chunków",
+          "chunks_indexed": 115,
+          "schema_version": "topinstal.os_event.v1",
+          "documents_changed": 28,
+          "documents_processed": 28
+        },
+        "correlation": {
+          "job_id": "269cabb8-e1cf-4294-9cd6-c5d0a1637ec2"
+        }
+      },
+      {
+        "event_id": "osevt_4ec366603e054838",
+        "event_type": "rag.ingest.completed",
+        "source_repo": "rag-chat-asystent",
+        "engagement_id": "",
+        "occurred_at": "2026-06-25T10:05:16.478522+00:00",
+        "summary_pl": "Indeks RAG zaktualizowany — 101 dokumentów — 416 chunków",
+        "status": "ok",
+        "payload": {
+          "job_id": "64f48515-e655-4af7-8c2c-4dc31102da53",
+          "status": "ok",
+          "summary_pl": "Indeks RAG zaktualizowany — 101 dokumentów — 416 chunków",
+          "chunks_indexed": 416,
+          "schema_version": "topinstal.os_event.v1",
+          "documents_changed": 101,
+          "documents_processed": 101
+        },
+        "correlation": {
+          "job_id": "64f48515-e655-4af7-8c2c-4dc31102da53"
+        }
+      },
+      {
+        "event_id": "osevt_2ad95a3422d14821",
+        "event_type": "rag.ingest.failed",
+        "source_repo": "rag-chat-asystent",
+        "engagement_id": "",
+        "occurred_at": "2026-06-25T09:17:15.941666+00:00",
+        "summary_pl": "Ingest RAG nie powiód³ siê: Ingestion failed: Error in compaction: Error reading from metadata segment reader: error occurred while decoding column 0: mismatched types; Rust type `u64` (as SQL type `INTEGE...",
+        "status": "error",
+        "payload": {
+          "job_id": "479ba066-822e-435c-8915-8e5ac708e681",
+          "status": "error",
+          "summary_pl": "Ingest RAG nie powiód³ siê: Ingestion failed: Error in compaction: Error reading from metadata segment reader: error occurred while decoding column 0: mismatched types; Rust type `u64` (as SQL type `INTEGE...",
+          "schema_version": "topinstal.os_event.v1"
+        },
+        "correlation": {
+          "job_id": "479ba066-822e-435c-8915-8e5ac708e681"
+        }
+      },
+      {
+        "event_id": "osevt_a3bca8f874fa45df",
+        "event_type": "rag.ingest.failed",
+        "source_repo": "rag-chat-asystent",
+        "engagement_id": "",
+        "occurred_at": "2026-06-25T08:50:00.486657+00:00",
+        "summary_pl": "Ingest RAG nie powiód³ siê: Ingestion failed: Error in compaction: Error reading from metadata segment reader: error occurred while decoding column 0: mismatched types; Rust type `u64` (as SQL type `INTEGE...",
+        "status": "error",
+        "payload": {
+          "job_id": "058984f8-cc9b-4cac-8781-c5478bb3c148",
+          "status": "error",
+          "summary_pl": "Ingest RAG nie powiód³ siê: Ingestion failed: Error in compaction: Error reading from metadata segment reader: error occurred while decoding column 0: mismatched types; Rust type `u64` (as SQL type `INTEGE...",
+          "schema_version": "topinstal.os_event.v1"
+        },
+        "correlation": {
+          "job_id": "058984f8-cc9b-4cac-8781-c5478bb3c148"
+        }
+      }
+    ],
+    "count": 5
   }
 }

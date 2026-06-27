@@ -1,13 +1,13 @@
 {
   "ok": true,
-  "signal_id": "sig_b2012b3d8177090a8c71148c",
-  "session_id": "scenario1_v3",
-  "user_input": "Nowy lead: Marek Wisniewski (marek.wisniewski@gmail.com, tel: 507-123-456), dom jednorodzinny 180m2 z 2005 roku, ogrzewanie gazowe (kociol Viessmann 24kW), zainteresowany pompa ciepla powietrze-woda i dofinansowaniem Czyste Powietrza.",
-  "engagement_id": "stg_sig_b2012b3d",
+  "signal_id": "sig_e5aca08780a10598daf1f768",
+  "session_id": "sc1_city_4fcb5e1f",
+  "user_input": "Nowy lead: Marek Wisniewski (marek.wisniewski@gmail.com, tel: 507-123-456), dom jednorodzinny 180m2 w Jaworznie z 2005 roku, ogrzewanie gazowe (kociol Viessmann 24kW), zainteresowany pompa ciepla i dofinansowaniem Czystego Powietrza.",
+  "engagement_id": "stg_sig_e5aca087",
   "warnings": [
     "agent_staging_reconcile"
   ],
-  "agent_turns": 2,
+  "agent_turns": 12,
   "proposals": [],
   "hitl_required": true
 }
