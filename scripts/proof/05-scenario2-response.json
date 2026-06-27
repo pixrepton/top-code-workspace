@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "signal_id": "sig_cd284213ce7c2465aa342b6e",
+  "session_id": "sc2_final_3e8e3be4",
+  "user_input": "Klient Marek Wisniewski, sprawa test_case_marek_wisniewski_18835dfd. Chce umowic wizyte pomiarowa.",
+  "engagement_id": "stg_sig_cd284213",
+  "warnings": [
+    "agent_staging_reconcile"
+  ],
+  "agent_turns": 5,
+  "proposals": [],
+  "hitl_required": true
+}
