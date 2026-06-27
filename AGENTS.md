@@ -8,6 +8,8 @@ Keep this file short. Deep docs live in `knowledge/` and per-repo `AGENTS.md`.
 Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends (Node B / RAG), and cross-repo contracts.
 
 **OS guide:** `knowledge/OS_README.md`
+**AI-DEV onboarding (full system path):** `knowledge/docs/ai-dev-onboarding-path.md` · prompt `knowledge/prompts/ai-dev-session-start.md`
+**Stan dla zewnętrznych asystentów:** `knowledge/docs/current-state-for-assistants.md` · sesja `knowledge/docs/session-summary-2026-06-25.md`
 **Atlas (cross-repo):** `knowledge/SYSTEM_ATLAS.md`
 **Operator environment:** `knowledge/AGENT_OPERATOR_ENVIRONMENT.md`
 **Active decisions (read first):** `knowledge/memory/OPERATOR_DECISIONS.md`
@@ -17,7 +19,7 @@ Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends
 
 | Tier            | Meaning                                                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **active**      | Local Docker — `:8766` gmail-agent Node B, `:8090` Daszek, `:8091` kalk-top, `:8000` RAG, `:54329` mailbox PG, `:54330` GraphStore PG |
+| **active**      | Local Docker — `:8766` gmail-agent Node B, `:8090` Daszek, `:8091` kalk-top, `:8000` RAG, `:54129` mailbox PG, `:54130` GraphStore PG |
 | **production**  | **Suspended** (2026-06-17) — firma w zawieszeniu; brak VPS. Agent nie pracuje nad prod deploy dopóki operator nie powiadomi.          |
 | **legacy_prod** | Historical dual VPS — do not use for new proof                                                                                        |
 | **target_prod** | One unified VPS (frozen future) — `knowledge/rfc/single-unified-vps.md`                                                               |
@@ -79,8 +81,8 @@ gmail-agent API   http://127.0.0.1:8766   # host port; container listens on 8765
 RAG backend       http://127.0.0.1:8000
 Daszek sandbox    http://127.0.0.1:8090
 kalk-top runtime  http://127.0.0.1:8091
-Postgres mailbox  localhost:54329         # gmail-agent / mailbox_memory
-Postgres GraphStore localhost:54330       # rag-chat-asystent graphstore-postgres
+Postgres mailbox  localhost:54129         # gmail-agent / mailbox_memory
+Postgres GraphStore localhost:54130       # rag-chat-asystent graphstore-postgres
 rag-widget dev    API URL → http://127.0.0.1:8000
 ```
 
@@ -106,6 +108,8 @@ Details: `scripts/README.md` · agent rules `35-local-stack-harness-workflow.mdc
 | Gate C | VPS — **disabled by default**                                      |
 
 Labels: `confirmed locally` | `confirmed by local tests` | `historical` | `not proven`
+
+**Master proof (2026-06-20):** `MAX_STACK_10_PROOF_OK` via `gmail-agent/tools/gmail_audit/scripts/verify-max-stack.ps1` (requires `GRAPHSTORE_DSN` for temporal sub-proofs).
 
 ## Cross-repo routing
 
@@ -156,6 +160,7 @@ See `knowledge/MEMORY_GOVERNANCE.md`
 - No secrets in chat or commits
 - Surgical diffs; match repo conventions
 - `karpathy-guidelines` for implementation
+- **Browser:** Firefox first for opening URLs and Playwright (see `OPERATOR_DECISIONS` §2026-06-18; `.cursor/mcp.json` playwright `--browser=firefox`)
 
 ## Architectural gaps (do not fix silently)
 

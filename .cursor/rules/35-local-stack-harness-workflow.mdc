@@ -44,7 +44,7 @@ Po zmianach runtime / Docker / API / bridge **agent sam domyka weryfikację** w 
 - `docker compose build` / `up -d --force-recreate` / restart kontenerów
 - Odpalenie proof scriptów i interpretacja wyniku
 - Naprawa typowych problemów (stary obraz, 404 REST regex, token mismatch po sync)
-- Sprawdzenie `:8766/health`, `:8090`, mailbox PG `:54329`
+- Sprawdzenie `:8766/health`, `:8090`, mailbox PG `:54129`
 
 ### Wyjątki (jedyne uzasadnione „zrób Ty”)
 

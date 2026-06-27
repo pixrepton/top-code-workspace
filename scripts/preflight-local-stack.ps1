@@ -138,11 +138,11 @@ if ($FullStack) {
 
     if (-not (Test-HttpHealth 'Daszek sandbox' 'http://127.0.0.1:8090')) { $warn++ }
 
-    if (-not (Test-HttpHealth 'kalk-top runtime' 'http://127.0.0.1:8091/')) { $warn++ }
+    if (-not (Test-HttpHealth 'kalk-top runtime' 'http://127.0.0.1:8091/wp-json/')) { $warn++ }
 
-    if (-not (Test-TcpPort 'GraphStore Postgres' '127.0.0.1' 54330)) { $warn++ }
+    if (-not (Test-TcpPort 'GraphStore Postgres' '127.0.0.1' 54130)) { $warn++ }
 
-    if (-not (Test-TcpPort 'mailbox Postgres' '127.0.0.1' 54329)) { $warn++ }
+    if (-not (Test-TcpPort 'mailbox Postgres' '127.0.0.1' 54129)) { $warn++ }
 
 }
 

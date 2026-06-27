@@ -15,7 +15,7 @@ function Read-EnvValue([string]$Path, [string]$Key) {
     return ''
 }
 
-function Upsert-EnvFile([string]$Path, [hashtable]$Updates) {
+function Update-EnvFile([string]$Path, [hashtable]$Updates) {
     $lines = @()
     if (Test-Path $Path) { $lines = @(Get-Content $Path) }
     $seen = @{}
@@ -44,6 +44,13 @@ function Upsert-EnvFile([string]$Path, [hashtable]$Updates) {
 $vpsEnv = Join-Path $gmailRoot '.env.vps'
 $localVps = Join-Path $gmailRoot '.env.local-vps'
 $auditEnv = Join-Path $gmailRoot 'tools\gmail_audit\.env'
+$mailboxPgPort = Read-EnvValue $vpsEnv 'MAILBOX_MEMORY_PG_PORT'
+if (-not $mailboxPgPort) { $mailboxPgPort = '54129' }
+$mailboxPgPass = Read-EnvValue $vpsEnv 'MAILBOX_MEMORY_POSTGRES_PASSWORD'
+$mailboxPgUser = Read-EnvValue $vpsEnv 'MAILBOX_MEMORY_POSTGRES_USER'
+if (-not $mailboxPgUser) { $mailboxPgUser = 'mailbox_memory' }
+$mailboxPgDb = Read-EnvValue $vpsEnv 'MAILBOX_MEMORY_POSTGRES_DB'
+if (-not $mailboxPgDb) { $mailboxPgDb = 'mailbox_memory' }
 $neoPass = Read-EnvValue $vpsEnv 'NEO4J_PASSWORD'
 $registryToken = Read-EnvValue $localVps 'NODE_B_REGISTRY_TOKEN'
 if (-not $registryToken) { $registryToken = Read-EnvValue $auditEnv 'NODE_B_REGISTRY_TOKEN' }
@@ -144,7 +151,7 @@ if ($registryToken) {
     $localUpdates['DASZEK_NODE_B_SERVICE_TOKEN'] = $registryToken
 }
 
-Upsert-EnvFile $localVps $localUpdates
+Update-EnvFile $localVps $localUpdates
 
 $auditUpdates = @{
     NODE_B_REGISTRY_BASE_URL           = "http://127.0.0.1:$nodebPort"
@@ -184,12 +191,15 @@ if ($neoPass) {
     $auditUpdates['NEO4J_PASSWORD'] = $neoPass
     $auditUpdates['NEO4J_DATABASE'] = 'neo4j'
 }
-Upsert-EnvFile $auditEnv $auditUpdates
+if ($mailboxPgPass) {
+    $auditUpdates['MAILBOX_MEMORY_DATABASE_URL'] = "postgresql://${mailboxPgUser}:$mailboxPgPass@127.0.0.1:${mailboxPgPort}/${mailboxPgDb}"
+}
+Update-EnvFile $auditEnv $auditUpdates
 
 $ragEnv = Join-Path $ragRoot '.env'
 $ragKeys = Join-Path $ragRoot '.env-asystent-rag-keys'
 if ($registryToken) {
-    Upsert-EnvFile $ragKeys @{
+    Update-EnvFile $ragKeys @{
         NODE_B_REGISTRY_TOKEN        = $registryToken
         GMAIL_AGENT_NODE_B_TOKEN     = $registryToken
         NODE_B_REGISTRY_BASE_URL     = "http://127.0.0.1:$nodebPort"
@@ -197,7 +207,7 @@ if ($registryToken) {
         DASZEK_BASE_URL              = 'http://127.0.0.1:8090'
         EVENT_SPINE_RAG_EMIT_ENABLED = '1'
     }
-    Upsert-EnvFile $ragEnv @{
+    Update-EnvFile $ragEnv @{
         GMAIL_AGENT_CONTEXT_PACK_URL          = "http://host.docker.internal:$nodebPort"
         GMAIL_AGENT_NODE_B_TOKEN              = $registryToken
         GMAIL_AGENT_FETCH_CONTEXT_PACK        = '1'
@@ -209,23 +219,32 @@ if ($registryToken) {
 $vpsLines = @(Get-Content $vpsEnv)
 $vpsOut = [System.Collections.Generic.List[string]]::new()
 $portSeen = $false
+$mailboxPortSeen = $false
 foreach ($line in $vpsLines) {
     if ($line -match '^GMAIL_AGENT_NODEB_PORT=') {
         $vpsOut.Add("GMAIL_AGENT_NODEB_PORT=$nodebPort")
         $portSeen = $true
     }
+    elseif ($line -match '^MAILBOX_MEMORY_PG_PORT=') {
+        $vpsOut.Add("MAILBOX_MEMORY_PG_PORT=$mailboxPgPort")
+        $mailboxPortSeen = $true
+    }
     else { $vpsOut.Add($line) }
 }
 if (-not $portSeen) { $vpsOut.Add("GMAIL_AGENT_NODEB_PORT=$nodebPort") }
+if (-not $mailboxPortSeen) { $vpsOut.Add("MAILBOX_MEMORY_PG_PORT=$mailboxPgPort") }
 [IO.File]::WriteAllText($vpsEnv, ($vpsOut -join "`n") + "`n")
 
 $daszekEnv = Join-Path $gmailRoot 'deploy\.env.daszek-local'
+$daszekEnvRoot = Join-Path $env:TOP_CODE_ROOT '.env.daszek-local'
 if ($registryToken) {
-    Upsert-EnvFile $daszekEnv @{
+    $daszekTokenUpdates = @{
         DASZEK_NODE_B_API_TOKEN     = $registryToken
         DASZEK_BRIDGE_TOKEN         = $registryToken
         DASZEK_NODE_B_SERVICE_TOKEN = $registryToken
     }
+    Update-EnvFile $daszekEnv $daszekTokenUpdates
+    Update-EnvFile $daszekEnvRoot $daszekTokenUpdates
 }
 
 $llmMode = if ($llmPrimaryIsOpenAi) { 'openai-native gpt-4o-mini' } elseif ($llmPrimaryKey) { 'openrouter openai/gpt-4o-mini (no sk-proj)' } else { 'no LLM primary key' }

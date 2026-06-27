@@ -33,7 +33,7 @@ Wiele repo w jednej sesji: Gate A **w każdym** dotkniętym repo, osobno.
 
 ## Gate B (lokalny smoke) — uruchamiaj tylko gdy
 
-- Zmiana dotyka Dockera, endpointów API (`:8766` Node B host, `:8000`, `:8090`, `:54329`) lub bridge Node A ↔ Node B
+- Zmiana dotyka Dockera, endpointów API (`:8766` Node B host, `:8000`, `:8090`, `:54129`) lub bridge Node A ↔ Node B
 - Zmiana dotyka operational feed, Daszek bridge drain, RAG widget → backend, fast-kalk → kalk-top
 - Operator jawnie prosi o smoke ekosystemu
 
