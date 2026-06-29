@@ -13,6 +13,7 @@ Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends
 **Atlas (cross-repo):** `knowledge/SYSTEM_ATLAS.md`
 **Operator environment:** archived at `knowledge/archive/root/AGENT_OPERATOR_ENVIRONMENT.md`
 **Active decisions (read first):** `knowledge/memory/OPERATOR_DECISIONS.md`
+**Doc policy (how to write/update docs):** `knowledge/DOCUMENTATION_POLICY.md`
 **Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md` (archived)
 
 ## Deployment model
