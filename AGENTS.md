@@ -14,6 +14,8 @@ Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends
 **Operator environment:** archived at `knowledge/archive/root/AGENT_OPERATOR_ENVIRONMENT.md`
 **Active decisions (read first):** `knowledge/memory/OPERATOR_DECISIONS.md`
 **Doc policy (how to write/update docs):** `knowledge/DOCUMENTATION_POLICY.md`
+**MCP policy (how/when to use MCP servers):** `knowledge/MCP_POLICY.md`
+**Plugin policy (how/when to use plugins):** `knowledge/PLUGIN_POLICY.md`
 **Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md` (archived)
 
 ## Deployment model
