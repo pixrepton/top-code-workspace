@@ -16,6 +16,10 @@ Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends
 **Doc policy (how to write/update docs):** `knowledge/DOCUMENTATION_POLICY.md`
 **MCP policy (how/when to use MCP servers):** `knowledge/MCP_POLICY.md`
 **Plugin policy (how/when to use plugins):** `knowledge/PLUGIN_POLICY.md`
+**Error handling policy (debug/escalate/report):** `knowledge/ERROR_HANDLING_POLICY.md`
+**Security policy (secrets/tokens/creds):** `knowledge/SECURITY_POLICY.md`
+**Session memory policy (cross-session persistence):** `knowledge/SESSION_MEMORY_POLICY.md`
+**Workspace lifecycle policy (start/maintain/stop):** `knowledge/WORKSPACE_LIFECYCLE_POLICY.md`
 **Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md` (archived)
 
 ## Deployment model
@@ -48,7 +52,7 @@ Machine map: `ECOSYSTEM_MAP.yaml`
 
 ## Cold-start read order
 
-1. **`knowledge/INDEX.md`** — jedyny punkt startowy (lista 30 LIVE dokumentow)
+1. **`knowledge/INDEX.md`** — jedyny punkt startowy (lista 37 LIVE dokumentow)
 2. This file (AGENTS.md) — router ekosystemu
 3. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
 4. GitNexus MCP — `query` / `impact` only
