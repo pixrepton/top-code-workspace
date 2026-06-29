@@ -7,13 +7,13 @@ Keep this file short. Deep docs live in `knowledge/` and per-repo `AGENTS.md`.
 
 Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends (Node B / RAG), and cross-repo contracts.
 
-**OS guide:** `knowledge/OS_README.md`
-**AI-DEV onboarding (full system path):** `knowledge/docs/ai-dev-onboarding-path.md` · prompt `knowledge/prompts/ai-dev-session-start.md`
-**Stan dla zewnętrznych asystentów:** `knowledge/docs/current-state-for-assistants.md` · sesja `knowledge/docs/session-summary-2026-06-25.md`
+**OS guide:** archived at `knowledge/archive/root/OS_README.md`
+**AI-DEV onboarding:** archived at `knowledge/archive/docs/ai-dev-onboarding-path.md`
+**Stan dla zewnętrznych asystentów:** archived (current state in `knowledge/memory/ACTIVE_WORKSPACE.md`)
 **Atlas (cross-repo):** `knowledge/SYSTEM_ATLAS.md`
-**Operator environment:** `knowledge/AGENT_OPERATOR_ENVIRONMENT.md`
+**Operator environment:** archived at `knowledge/archive/root/AGENT_OPERATOR_ENVIRONMENT.md`
 **Active decisions (read first):** `knowledge/memory/OPERATOR_DECISIONS.md`
-**Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md` · skill `code-intelligence-router`
+**Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md` (archived)
 
 ## Deployment model
 
@@ -45,19 +45,15 @@ Machine map: `ECOSYSTEM_MAP.yaml`
 
 ## Cold-start read order
 
-1. This file
-2. `knowledge/world-state.yaml` — ownership, proof, open_p0/p1, gaps, boundaries **(kanoniczny model strukturalny)**
-3. `knowledge/CONTROL_PLANE.md` — 5 warstw epistemicznych (`proven_local` vs `vision`)
-4. `knowledge/memory/OPERATOR_DECISIONS.md` (all `[ACTIVE]`)
-5. `knowledge/BACKLOG_ARCHITECTURE_REVIEW_2026-06.md` — priorytety otwartej pracy (lokalnie); skrót: `BACKLOG_ROADMAP_2026-06.md`
-6. `knowledge/AGENT_OPERATOR_ENVIRONMENT.md` if runtime/deploy
-7. `knowledge/SYSTEM_ATLAS.md` §0–§4 + `TOPINSTAL-KERNEL-GRAPH.yaml`
-8. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
-9. GitNexus MCP — `query` / `impact` only (po freshness check; nie full analyze w chacie)
-10. Serena MCP — symbol navigation / refactors (`initial_instructions` first call per session)
-11. Source + tests
+1. **`knowledge/INDEX.md`** — jedyny punkt startowy (lista 30 LIVE dokumentow)
+2. This file (AGENTS.md) — router ekosystemu
+3. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
+4. GitNexus MCP — `query` / `impact` only
+5. Serena MCP — symbol navigation / refactors
+6. Source + tests
 
-`knowledge/CODEBASE_SNAPSHOT.md` — VIEW (ładuj na żądanie po krokach 2–3, nie domyślnie). Do not read all Markdown flat. Do not load full repos into context.
+Szczegolowe kroki: `knowledge/INDEX.md` > `Prawidlowy cold-start`.
+Dokumentow w knowledge/ jest 30 LIVE (reszta w archive/) — nie czytaj wszystkiego.
 
 ## Modes (`knowledge/.cursorrules`)
 
@@ -128,8 +124,8 @@ After REST contract changes: `gitnexus group sync topinstal-workspace --verbose`
 ## Knowledge (docs + code map)
 
 - **Agent canon (SoT):** `knowledge/world-state.yaml` → `knowledge/CONTROL_PLANE.md`
-- **Code detail (VIEW):** `knowledge/CODEBASE_SNAPSHOT.md` — load on demand, not by default
-- **Graphify** (offline MCP): `knowledge/graphify/build-knowledge-graph.ps1` — artifact at `graphify-out/graph.json`
+- **Code detail (VIEW):** archived at `knowledge/archive/root/CODEBASE_SNAPSHOT.md`
+- **Graphify:** archived at `knowledge/archive/root/graphify/`
 - **Understand Anything** (static graph): `.understand-anything/knowledge-graph.json` — check `meta.json` for freshness
 
 ## Serena MCP (symbolic code / LSP)
@@ -145,12 +141,12 @@ Active for the **whole monorepo** via `serena` in root `.cursor/mcp.json` (`--co
 
 ## Memory writes
 
-| Scope              | Where                                           |
-| ------------------ | ----------------------------------------------- |
-| Operator decisions | `knowledge/memory/OPERATOR_DECISIONS.md`        |
-| Session engram     | `knowledge/memory/engrams/` + `LAST_SESSION.md` |
-| Single repo        | `<repo>/memory-bank/agent-handover.md`          |
-| Cross-repo         | `knowledge/timeline/YYYY-MM.md`                 |
+| Scope              | Where                                                                   |
+| ------------------ | ----------------------------------------------------------------------- |
+| Operator decisions | `knowledge/memory/OPERATOR_DECISIONS.md`                                |
+| Session engram     | `top-code-memory/` (auto-archived) + `knowledge/memory/LAST_SESSION.md` |
+| Single repo        | `<repo>/memory-bank/agent-handover.md`                                  |
+| Cross-repo         | `knowledge/timeline/YYYY-MM.md`                                         |
 
 See `knowledge/MEMORY_GOVERNANCE.md`
 

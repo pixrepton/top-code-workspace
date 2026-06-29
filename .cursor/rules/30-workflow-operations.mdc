@@ -6,7 +6,7 @@ alwaysApply: true
 
 ## Cold-start
 
-1. `knowledge/world-state.yaml` — ownership, proof, open_p0/p1, gaps
+1. `knowledge/INDEX.md` — jedyny punkt startowy (lista 30 LIVE dokumentow)
 2. `knowledge/memory/OPERATOR_DECISIONS.md` — tylko `[ACTIVE]`
 3. Jedno repo → `<repo>/AGENTS.md` + `memory-bank/last-agent-handoff.md`
 4. Cross-repo → `knowledge/SYSTEM_ATLAS.md` §0–§4
