@@ -28,7 +28,7 @@ Po zmianach runtime / Docker / API / bridge **agent sam domyka weryfikację** w 
 
 1. **Gate A** — pytest / compile per dotknięte repo (`92-proof-gate-discipline.mdc`)
 2. **Stack** — jeśli kontener nie ma nowego kodu:
-   - `docker compose build` (tylko zmieniony serwis) **lub** hot-patch + restart gdy build trwa zbyt długo
+   - `docker compose build` (tylko zmieniony serwis) — **zakaz** `docker cp` / hot-patch (patrz `36-docker-procedure.mdc`)
    - **Poczekaj** na build w tle (`Await` / poll terminala) — nie zostawiaj w toku
    - `docker compose ... up -d --force-recreate` dla dotkniętych serwisów
 3. **Preflight** — `scripts/preflight-local-stack.ps1 -FullStack` gdy dotyczy Daszek / Node B / PG
