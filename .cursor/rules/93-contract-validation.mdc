@@ -1,0 +1,14 @@
+---
+description: Sprawdzanie kontraktow miedzy repozytoriami. Uzyj gdy zmieniasz endpoint API, dodajesz nowa krawedz HTTP, lub potrzebujesz zgodnosci miedzyrepo.
+alwaysApply: false
+---
+
+## Pipeline
+
+1. TOPINSTAL-KERNEL-GRAPH.yaml — graf zaleznosci HTTP (kanoniczny, nie archiwalny)
+2. CBM search_code w kazdym repozytorium — znajdz HTTP callers (requests.get, httpx, wp_remote_post)
+3. CBM search_code — znajdz REST endpoints (FastAPI route, WordPress REST API)
+4. Porownaj: czy kazdy endpoint ma callerow i kazdy caller ma endpoint?
+5. Sprawdz feature flagi w world-state.yaml jesli endpoint jest warunkowy
+
+Nowa krawedz HTTP wymaga RFC. Nie dodawaj "przy okazji".

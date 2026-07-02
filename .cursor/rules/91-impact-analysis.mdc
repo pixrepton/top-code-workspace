@@ -1,0 +1,16 @@
+---
+description: Pipeline analizy ryzyka przed zmianami. Uzyj gdy pytasz "co sie zepsuje jak zmienie X?" lub potrzebujesz zrozumiec zaleznosci miedzyrepo.
+alwaysApply: false
+---
+
+Zawsze wykonuj przed refaktoringiem zmieniajacym strukture danych, API, lub kontrakty miedzyrepo.
+
+## Pipeline
+
+1. CBM search_code(project, symbol) — znajdz wszystkie uzycia
+2. CBM trace_path(project, symbol, callee) — kto wola ten symbol (upstream)
+3. CBM trace_path(project, caller, symbol) — co ten symbol wola (downstream)
+4. CBM query_graph z MATCH na Function/Class — sprawdz kontrakty API
+5. Jesli zmiana cross-repo → GitNexus MCP impact analysis
+
+Nie uzywaj archiwalnych dokumentow runtime/. CBM jest wystarczajacy.

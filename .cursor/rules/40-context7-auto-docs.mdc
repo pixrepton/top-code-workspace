@@ -1,0 +1,27 @@
+---
+description: "Auto-use Context7 MCP for library/framework documentation lookups"
+alwaysApply: false
+---
+
+# Context7 — Auto Documentation Lookup
+
+Whenever a question involves a **library, framework, SDK, API, CLI tool, or cloud service**, always use the Context7 MCP server to fetch current documentation — even for well-known tools like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot.
+
+**Use Context7 for:**
+
+- API syntax and method signatures
+- Configuration options
+- Installation and setup
+- Version migration
+- CLI usage
+- Library-specific debugging
+
+**Do NOT use Context7 for:** general programming concepts, refactoring, writing scripts from scratch, debugging business logic, or code review.
+
+## Workflow
+
+1. Call `resolve-library-id` with the library name and the user's query.
+2. Use the returned library ID to call `query-docs` with a focused, specific query.
+3. Base your answer on the retrieved documentation — do not rely solely on training data.
+
+Never skip this step assuming you already know the answer. Library APIs change frequently.

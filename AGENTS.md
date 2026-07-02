@@ -7,11 +7,11 @@ Keep this file short. Deep docs live in `knowledge/` and per-repo `AGENTS.md`.
 
 Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends (Node B / RAG), and cross-repo contracts.
 
-**OS guide:** archived at `knowledge/archive/root/OS_README.md`
-**AI-DEV onboarding:** archived at `knowledge/archive/docs/ai-dev-onboarding-path.md`
-**Stan dla zewnętrznych asystentów:** archived (current state in `knowledge/memory/ACTIVE_WORKSPACE.md`)
+**OS guide:** `knowledge/docs/OS_README.md`
+**AI-DEV onboarding:** `knowledge/docs/ai-dev-onboarding-path.md`
+**Stan dla zewnętrznych asystentów:** `knowledge/memory/ACTIVE_WORKSPACE.md`
 **Atlas (cross-repo):** `knowledge/SYSTEM_ATLAS.md`
-**Operator environment:** archived at `knowledge/archive/root/AGENT_OPERATOR_ENVIRONMENT.md`
+**Operator environment:** `knowledge/docs/AGENT_OPERATOR_ENVIRONMENT.md`
 **Active decisions (read first):** `knowledge/memory/OPERATOR_DECISIONS.md`
 **Doc policy (how to write/update docs):** `knowledge/DOCUMENTATION_POLICY.md`
 **MCP policy (how/when to use MCP servers):** `knowledge/MCP_POLICY.md`
@@ -20,7 +20,7 @@ Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends
 **Security policy (secrets/tokens/creds):** `knowledge/SECURITY_POLICY.md`
 **Session memory policy (cross-session persistence):** `knowledge/SESSION_MEMORY_POLICY.md`
 **Workspace lifecycle policy (start/maintain/stop):** `knowledge/WORKSPACE_LIFECYCLE_POLICY.md`
-**Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md` (archived)
+**Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md`
 
 ## Deployment model
 
@@ -50,17 +50,14 @@ Machine map: `ECOSYSTEM_MAP.yaml`
 | fast-kalk            | `fast-kalk/`            | A    | `fast-kalk/AGENTS.md`                                                  |
 | Cross-repo knowledge | `knowledge/`            | meta | `knowledge/PROJECT_README.md`                                          |
 
-## Cold-start read order
+## Cold-start
 
-1. **`knowledge/INDEX.md`** — jedyny punkt startowy (lista 37 LIVE dokumentow)
+1. **`knowledge/INDEX.md`** — jedyny punkt startowy (zawiera prawidlowy cold-start)
 2. This file (AGENTS.md) — router ekosystemu
 3. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
 4. GitNexus MCP — `query` / `impact` only
 5. Serena MCP — symbol navigation / refactors
 6. Source + tests
-
-Szczegolowe kroki: `knowledge/INDEX.md` > `Prawidlowy cold-start`.
-Dokumentow w knowledge/ jest 30 LIVE (reszta w archive/) — nie czytaj wszystkiego.
 
 ## Modes (`knowledge/.cursorrules`)
 
@@ -110,7 +107,7 @@ Details: `scripts/README.md` · agent rules `35-local-stack-harness-workflow.mdc
 | Gate B | local smoke (`_local_smoke_run.py`, doctor, preflight-local-stack) |
 | Gate C | VPS — **disabled by default**                                      |
 
-Labels: `confirmed locally` | `confirmed by local tests` | `historical` | `not proven`
+Labels: `proven_local` | `confirmed by local tests` | `historical` | `not proven`
 
 **Master proof (2026-06-20):** `MAX_STACK_10_PROOF_OK` via `gmail-agent/tools/gmail_audit/scripts/verify-max-stack.ps1` (requires `GRAPHSTORE_DSN` for temporal sub-proofs).
 
@@ -131,8 +128,8 @@ After REST contract changes: `gitnexus group sync topinstal-workspace --verbose`
 ## Knowledge (docs + code map)
 
 - **Agent canon (SoT):** `knowledge/world-state.yaml` → `knowledge/CONTROL_PLANE.md`
-- **Code detail (VIEW):** archived at `knowledge/archive/root/CODEBASE_SNAPSHOT.md`
-- **Graphify:** archived at `knowledge/archive/root/graphify/`
+- **Code detail (VIEW):** `knowledge/docs/CODEBASE_SNAPSHOT.md`
+- **Graphify:** `knowledge/graphify/`
 - **Understand Anything** (static graph): `.understand-anything/knowledge-graph.json` — check `meta.json` for freshness
 
 ## Serena MCP (symbolic code / LSP)
@@ -167,6 +164,29 @@ See `knowledge/MEMORY_GOVERNANCE.md`
 
 ## Architectural gaps (do not fix silently)
 
-D1 RAG ∉ Cieplo pipeline · D2 mail → no OfferDTO · D3 dual Gmail pollers · D4 Daszek = projection
+D1 RAG ∉ Cieplo pipeline · D2 mail → no OfferDTO · ~~D3 dual Gmail pollers~~ (RESOLVED 2026-07-02: signal_worker consolidated, cieplo poller disabled) · D4 Daszek = projection
+
+## Recent changes (2026-07-01/02)
+
+### ETAP 1 — Infrastructure
+
+- **D3 resolved:** Dual Gmail pollers consolidated into single signal_worker; cieplo-orchestrator poller disabled (`CIEPLO_GMAIL_POLL_ENABLED=0`)
+- **Event Spine:** Enabled locally in shadow mode (`EVENT_SPINE_PROCESSOR_ENABLED=1`)
+- **Decision Queue:** New `/system/decision-queue` endpoint with SLA (4h warning, 24h critical)
+- **Business Dictionary:** New module `business_dictionary/` — PostgreSQL + Neo4j glossary of HVAC terms
+- **System View:** Widok "System" w Daszku pokazuje health dashboard + constitution + rule candidates
+
+### ETAP 2 — Chat Agent & Memory
+
+- **Chat agent UI:** Zakładka "Czat" w Daszku — interfejs konwersacyjny z cyfrowym wspólnikiem
+- **Operator Memory (L0):** Tabela `operator_memory` w PG — pamięta rozmowy, preferencje, klientów
+- **Personalities:** Chat-agent (cyfrowy wspólnik) i mail-agent (wspólnik operacyjny) mają osobowości
+- **Briefing:** Automatyczny briefing NL na starcie czatu (`/system/briefing`)
+
+### ETAP 3 — Business Intelligence
+
+- **9 Business Pulse tools:** pipeline, client health, daily delta, win rate, top clients, revenue forecast, system health, signals, agent activity
+- **Cost tracking:** `/system/cost-summary` — tokeny i koszt dzien/tydzien
+- **Quality scoring:** `/system/quality-summary` — jakosc decyzji agenta (exact/divergent rate)
 
 Evolution: `knowledge/EVOLUTION_BOUNDARIES.md`

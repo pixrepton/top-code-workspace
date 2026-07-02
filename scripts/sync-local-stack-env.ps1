@@ -111,7 +111,9 @@ $localUpdates = [ordered]@{
     GMAIL_INGRESS_OWNER                           = 'signal_worker'
     GMAIL_CHANGE_DETECTION_ENABLED                = '1'
     UNIFIED_SIGNAL_RUNTIME_ENABLED                = '1'
-    EVENT_SPINE_PROCESSOR_ENABLED                 = '0'
+    BUSINESS_DICTIONARY_ENABLED                   = '1'
+    EVENT_SPINE_PROCESSOR_ENABLED                 = '1'
+    EVENT_SPINE_PROCESSOR_MODE                    = 'shadow'
     DASZEK_V2_PUSH                                = '0'
     DASZEK_V2_READBACK_ENABLED                    = '0'
     DASZEK_BASE_URL                               = 'http://host.docker.internal:8090'
@@ -247,5 +249,17 @@ if ($registryToken) {
     Update-EnvFile $daszekEnvRoot $daszekTokenUpdates
 }
 
+# D3 resolution — single signal_worker owns Gmail; cieplo-orchestrator poller disabled
+$cieploEnv = Join-Path $env:TOP_CODE_ROOT 'cieplo-orchestrator'
+$cieploDotEnv = Join-Path $cieploEnv '.env'
+if (Test-Path $cieploDotEnv) {
+    Update-EnvFile $cieploDotEnv @{
+        CIEPLO_GMAIL_POLL_ENABLED         = '0'
+        CIEPLO_GMAIL_POLL_ENABLED_COMMENT = 'D3: disabled — gmail-agent signal_worker owns Gmail ingress'
+    }
+}
+$localUpdates['CIEPLO_GMAIL_POLL_ENABLED'] = '0'
+$auditUpdates['CIEPLO_GMAIL_POLL_ENABLED'] = '0'
+
 $llmMode = if ($llmPrimaryIsOpenAi) { 'openai-native gpt-4o-mini' } elseif ($llmPrimaryKey) { 'openrouter openai/gpt-4o-mini (no sk-proj)' } else { 'no LLM primary key' }
-Write-Host "[OK] sync-local-stack-env: Node B :$nodebPort | LLM: $llmMode | Neo4j pilot | RAG wire" -ForegroundColor Green
+Write-Host "[OK] sync-local-stack-env: Node B :$nodebPort | LLM: $llmMode | Neo4j pilot | RAG wire | D3 resolved" -ForegroundColor Green

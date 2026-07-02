@@ -1,0 +1,14 @@
+---
+description: Bariery bezpieczenstwa przed refaktoringiem. Uzyj gdy pytasz "czy moge to zrefaktorowac?".
+alwaysApply: false
+---
+
+## Pipeline
+
+1. Uruchom rule impact-analysis (91-impact-analysis.mdc) — pelna analiza
+2. Sprawdz kontrakty (rule 93-contract-validation.mdc) — jesli zmiana dotyczy API
+3. CBM trace_path — czy zmieniany symbol jest uzywany w innych repo?
+4. Sprawdz idempotencje: szukaj ON CONFLICT, idempotency_key, replay safety
+5. Sprawdz ARCHITECTURE_DECISIONS.md — czy lamiesz ktoras regule?
+
+Refactoring wewnatrz jednego repo = bezpieczny. Refactoring cross-repo = wymaga RFC.

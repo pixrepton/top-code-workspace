@@ -1,0 +1,43 @@
+---
+description: Obowiązkowa procedura Docker — zawsze rebuild przed up, nigdy docker cp
+alwaysApply: true
+---
+
+# Docker Procedure
+
+## Złota zasada
+
+**Po KAŻDEJ zmianie kodu, który trafia do kontenera → BUILD przed UP.**
+
+```
+docker compose build <service>   # albo docker compose build --no-cache
+docker compose up -d --force-recreate <service>
+```
+
+## Czego NIGDY nie robić
+
+| Zabronione                                   | Dlaczego                                                         |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| `docker compose up -d` (sam) po zmianie kodu | Obraz z cache — kod z repo NIE trafia do kontenera               |
+| `docker cp` jako sposób dostarczania kodu    | Nieodtwarzalne — kontener ginie przy recreate, zmiany przepadają |
+| `docker exec` do edycji plików w kontenerze  | To samo — zmiany są efemeryczne                                  |
+
+## Procedura krok po kroku
+
+1. Zmieniasz kod w repo (`.py`, `.env`, config)
+2. **Natychmiast**: `docker compose build <service>` (nie `up`, nie `restart`)
+3. Sprawdzasz, czy build przeszedł (exit code 0, brak błędów)
+4. Dopiero potem: `docker compose up -d --force-recreate <service>`
+5. Czekasz na health (lub `start_period`)
+6. Weryfikujesz endpointem /health lub testem
+
+## Wyjątki
+
+Jedyny przypadek, gdy `up` bez builda jest OK: zmieniasz TYLKO zmienne środowiskowe w `docker-compose.yml` lub `.env` — nie zmieniasz kodu w kontenerze.
+
+## Dlaczego
+
+- `docker compose up -d` z istniejącym obrazem nie przebudowuje go
+- `docker compose restart` używa tego samego obrazu
+- `docker cp` tworzy nieudokumentowany stan — następny recreate kasuje zmiany
+- Jedyna gwarancja że repo == kontener: build z repo

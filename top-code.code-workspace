@@ -1,0 +1,39 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+  ],
+  "settings": {
+    "search.exclude": {
+      "_graphify-corpus/**": true,
+      "graphify-out/**": true,
+      "knowledge/graphify/graphify-out/**": true,
+      "knowledge/graphify/_semantic-batch/**": true,
+      ".understand-anything/intermediate/**": true,
+      ".understand-anything/tmp/**": true,
+      "**/node_modules/**": true,
+      "**/vendor/**": true,
+      "**/.venv/**": true,
+      "**/.runtime-wp/**": true,
+      "**/dist/**": true,
+      "**/build/**": true,
+      "**/__pycache__/**": true,
+      "**/.gitnexus/**": true,
+      ".serena/cache/**": true,
+      "_md_audit/**": true
+    },
+    "files.watcherExclude": {
+      "_graphify-corpus/**": true,
+      ".understand-anything/intermediate/**": true,
+      ".understand-anything/tmp/**": true,
+      "**/node_modules/**": true,
+      "**/vendor/**": true,
+      "**/.venv/**": true,
+      "**/.runtime-wp/**": true,
+      "**/__pycache__/**": true,
+      "**/.gitnexus/**": true
+    },
+    "terminal.integrated.defaultProfile.windows": "PowerShell"
+  }
+}

@@ -1,0 +1,26 @@
+---
+description: "Cross-repo contract safety for EngagementSnapshotV2, OfferDTO, CalcRequestDTO, CanonicalSignal, dash_projection_v2"
+globs: ["**/contracts/**", "**/schemas/**", "**/mapping.py", "**/client.py", "**/models.py"]
+alwaysApply: false
+---
+
+# Cross-repo contract safety
+
+Następujące kontrakty są używane w wielu repo jednocześnie:
+
+- `EngagementSnapshotV2` — gmail-agent (40+ plików) → daszek, feed, HITL
+- `OfferDTO` — kalk-top → top-instal-generator, gmail-agent, cieplo-orchestrator
+- `CalcRequestDTO` — kalk-top → cieplo-orchestrator, gmail-agent
+- `CanonicalSignal` — gmail-agent → cieplo-orchestrator
+- `dash_projection_v2` — gmail-agent → daszek
+
+## Przed zmianą kontraktu
+
+1. Wyszukaj symbol w całym monorepo (Grep lub GitNexus impact) — wylistuj wszystkich konsumentów zanim dotkniesz kodu.
+2. Zaplanuj zmiany we wszystkich plikach konsumentów w tej samej sesji lub opisz co odkładasz.
+3. Po zmianie — zaktualizuj `docs/contracts/` lub odpowiedni plik schema JSON.
+4. Nigdy nie usuwaj pola bez etapu deprecation: najpierw oznacz polem opcjonalnym lub dodaj komentarz `# deprecated`, usuń w osobnej sesji.
+
+## Po zmianie kontraktu
+
+Uruchom Gate A dla wszystkich dotkniętych repo przed deklaracją "done".

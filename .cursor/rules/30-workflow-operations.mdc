@@ -1,17 +1,16 @@
 ---
-alwaysApply: true
+description: "Workflow router: cold-start, runtime defaults, browser preferences, memory protocol"
+alwaysApply: false
 ---
 
 # Workflow router (TOP-INSTAL)
 
 ## Cold-start
 
-1. `knowledge/INDEX.md` — jedyny punkt startowy (lista 30 LIVE dokumentow)
-2. `knowledge/memory/OPERATOR_DECISIONS.md` — tylko `[ACTIVE]`
-3. Jedno repo → `<repo>/AGENTS.md` + `memory-bank/last-agent-handoff.md`
-4. Cross-repo → `knowledge/SYSTEM_ATLAS.md` §0–§4
+Postepuj zgodnie z `knowledge/INDEX.md` § Prawidlowy cold-start.
+Tam jest kanoniczna lista krokow i dokumentow do przeczytania.
 
-Konflikt instrukcji: `OPERATOR_DECISIONS.md` > reguły repo > ten plik.
+Konflikt instrukcji: `knowledge/memory/OPERATOR_DECISIONS.md` > reguly repo > ten plik.
 
 ## Runtime default
 
@@ -25,9 +24,10 @@ Otwieranie URL i automatyzacja UI: **Firefox pierwszy** (`OPERATOR_DECISIONS` §
 
 ## Memory (session end)
 
-- Decyzja operatora → `knowledge/memory/OPERATOR_DECISIONS.md` z `[ACTIVE]`
-- Koniec sesji → engram `knowledge/memory/engrams/YYYY-MM-DD-slug.md`, update `LAST_SESSION.md` + `ACTIVE_WORKSPACE.md`
-- Hook `stop` = checklista; zapis ręczny. Zob. `knowledge/MEMORY_GOVERNANCE.md`
+Postępuj zgodnie z `16-session-memory-protocol.mdc` (alwaysApply: true):
+- Nowy system: `top-code-memory/` (auto-archiwizowany przez hooki)
+- Decyzje operatora → `knowledge/memory/OPERATOR_DECISIONS.md` z `[ACTIVE]`
+- Governance: `knowledge/MEMORY_GOVERNANCE.md`
 
 ## On demand (nie ładuj domyślnie)
 

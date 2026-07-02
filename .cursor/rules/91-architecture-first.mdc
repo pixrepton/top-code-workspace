@@ -1,0 +1,26 @@
+---
+description: "Architecture-First: przed praca architektoniczna uruchom Discovery Pipeline"
+globs: ["**/*.py", "**/*.md", "**/*.yml", "**/*.yaml"]
+---
+
+## Architecture-First Mandate
+
+Zanim wyciagniesz wniosek architektoniczny lub zaproponujesz zmiane:
+
+1. **Przeczytaj** `knowledge/ARCHITECTURE_DISCOVERY_POLICY.md`
+2. **Sprawdz** artefakty w `knowledge/runtime/`
+3. **Zapytaj** Codebase Memory MCP (CBM: query_graph, trace_path)
+4. **Oznacz** kazdy wniosek [GRAF], [KOD], [RUNTIME], [DOK] lub [WNIOSEK]
+
+## Zakazy
+
+- Nie wyciagaj wnioskow architektonicznych z samych nazw plikow lub folderow
+- Nie zakladaj, ze funkcja jest aktywna — sprawdz feature flagi
+- Nie grepuj na slepo — najpierw CBM, potem kod
+- Nie zmieniaj kodu bez sprawdzenia blast radius (impact_analysis)
+
+## Dowod
+
+- `[GRAF]` > `[KOD]` > `[DOK]` > `[WNIOSEK]`
+- Jesli artifact i kod sa sprzeczne: artifact wygrywa
+- Jesli runtime i kod sa sprzeczne: runtime wygrywa

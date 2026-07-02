@@ -1,0 +1,90 @@
+---
+description: Wymusza precyzję, minimalność zmian i weryfikację kodu przez agenta AI w Cursorze
+alwaysApply: true
+---
+
+# AI Coding Agent — Zasady precyzji i jakości
+
+## Read Before Code
+
+Przed edycją jakiegokolwiek pliku użyj narzędzia Read, aby przeczytać jego aktualną zawartość.
+Nie zakładaj, że znasz zawartość pliku z poprzednich kroków lub kontekstu.
+
+## Surgical Edits — minimalne chirurgiczne zmiany
+
+Wprowadzaj wyłącznie zmiany niezbędne do realizacji zadania.
+Nie modyfikuj linii poza bezpośrednim zakresem zadania.
+Nie zmieniaj formatowania, wcięć ani kolejności elementów, które nie są częścią zadania.
+Każda edycja powinna być możliwie jak najmniejsza i skupiona.
+
+## Zakaz placeholderów i kodu niekompletnego
+
+Nigdy nie generuj kodu zawierającego:
+
+- `// TODO: implement later`
+- `... rest of the code ...`
+- `pass  # implement`
+- `throw new Error("not implemented")`
+- Puste ciała funkcji bez uzasadnienia
+
+Kod musi być w pełni funkcjonalny i gotowy do uruchomienia.
+
+## Zakaz komentarzy-narratorów
+
+Nie dodawaj komentarzy opisujących oczywiste działanie kodu:
+
+- `// Import the module`
+- `// Define the function`
+- `// Return the result`
+- `// Handle the error`
+
+Komentarze są dozwolone wyłącznie dla nieoczywistych decyzji architektonicznych,
+kompromisów lub zewnętrznych ograniczeń, które kod sam w sobie nie wyraża.
+
+## Weryfikacja po zmianach
+
+Po każdej zmianie kodu użyj narzędzia ReadLints na zmodyfikowanych plikach.
+Jeśli pojawiają się błędy, napraw je natychmiast zanim zgłosisz zakończenie zadania.
+Nie informuj użytkownika o sukcesie, zanim linter nie potwierdzi braku błędów.
+
+### Gate A — definicja „done”
+
+ReadLints to minimum, nie dowód ukończenia. Przed słowami „done”, „zaimplementowano” lub „gotowe” uruchom Gate A
+dla zmienionego repo zgodnie z `92-proof-gate-discipline.mdc` (pytest / `npm run proof` / `php -l` itd.).
+Etykiety proof (`proven_local`, `confirmed by local tests`, `not proven`) stosuj zgodnie z regułą 92.
+
+Gate B (`scripts/preflight-local-stack.ps1`, smoke cross-repo) **nie zastępuje** Gate A — szczegóły i kiedy uruchamiać: wyłącznie `92-proof-gate-discipline.mdc` § Gate B.
+
+## Kontekst — katalogi poza zasięgiem
+
+Nie czytaj, nie edytuj i nie cytuj plików z katalogów wykluczonych w `.cursorignore` i `search.exclude`, m.in.:
+
+- `_graphify-corpus/` (mirror — źródło prawdy to repo kanoniczne)
+- `.serena/cache/`, `graphify-out/`, `_md_audit/`
+- `.understand-anything/intermediate/`, `.understand-anything/tmp/`, `.understand-anything/cache/`
+- `**/node_modules/`, `**/.gitnexus/`
+
+Grafy i analizy kodu: skill `code-intelligence-router` + MCP na żądanie — nie flat-load całych grafów do kontekstu.
+Zob. też `30-workflow-operations.mdc` (sekcja „On demand”).
+
+### Nowy katalog cache / artefaktów — checklista (3 pliki)
+
+Gdy tool, skrypt lub MCP zacznie zapisywać **regenerowalne** dane poza kodem produktowym, zaktualizuj **wszystkie trzy** miejsca w tej samej sesji:
+
+| Plik                                                                                  | Cel                                                                       |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `.cursorignore`                                                                       | Agent nie ładuje katalogu do kontekstu (`Read` / `@`)                     |
+| `.gitignore`                                                                          | Git nie śledzi artefaktów                                                 |
+| `%APPDATA%\Cursor\User\settings.json` → `search.exclude` **i** `files.watcherExclude` | IDE nie indeksuje ani nie watchuje (Windows: ten sam glob w obu kluczach) |
+
+Wzorzec globu: `**/nazwa-katalogu/**` (spójny z istniejącymi wpisami w workspace).
+
+**Kryterium:** katalog jest cache/mirror/build output — nie źródło prawdy runtime. Jeśli to kod produktowy lub dokumentacja kanoniczna (`knowledge/` poza `graphify-out/`), **nie** dodawaj do ignore.
+
+Po dodaniu wpisu: krótko wspomnij w handoff/timeline, jeśli dotyczy workflow całego ekosystemu.
+
+## Raportowanie ryzyk
+
+Jeśli podczas edycji zauważysz potencjalny błąd, regresję lub lukę bezpieczeństwa
+w kodzie poza bezpośrednim zakresem zadania — zgłoś to użytkownikowi.
+Nie ignoruj problemu i nie naprawiaj go cicho bez informacji.

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/session-start-inject.js"
+      },
+      {
+        "command": "node .cursor/hooks/session-start-arch-check.js"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node .cursor/hooks/session-stop-reflect.js",
+        "loop_limit": 1
+      },
+      {
+        "command": "node .cursor/hooks/session-stop-arch-refresh.js",
+        "loop_limit": 1
+      },
+      {
+        "command": "node .cursor/hooks/session-stop-engram.js",
+        "loop_limit": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+﻿# Root archive — all historical content, don't read at cold-start
+archive/
+
+# Orphaned / regenerable graphify outputs outside canonical knowledge/graphify/graphify-out/
+graphify-out/
+
+# Graphify build artifacts (canonical: knowledge/graphify/graphify-out/ — gitignored there)
+knowledge/graphify/graphify-out/
+knowledge/graphify/_semantic-batch/
+
+# UA build artifacts (canonical graph on demand via /understand skill — not flat-load)
+.understand-anything/intermediate/
+.understand-anything/tmp/
+.understand-anything/cache/
+
+# GitNexus per-repo index caches (regenerate: knowledge/gitnexus/reindex-workspace.ps1)
+**/.gitnexus/
+
+# Dependency trees and runtime caches — not product code
+**/node_modules/
+**/vendor/
+**/.venv/
+**/dist/
+**/build/
+**/__pycache__/
+**/.pytest_cache/
+**/.agent-tooling-cache/
+
+# Serena LSP cache
+.serena/cache/
+
+# Legacy backup with identical duplicates of rules and AGENTS.md
+kalk-top/backup-tekstowe/

@@ -1,0 +1,16 @@
+---
+description: Weryfikacja wlasciciela komponentu i Source of Truth. Uzyj gdy pytasz "kto jest wlascicielem?" lub "czy to jest SoT?".
+alwaysApply: false
+---
+
+SoT nigdy nie jest projekcja. Projekcja nigdy nie jest SoT.
+
+## Pipeline
+
+1. AGENTS.md (root) §Ownership — szybka odpowiedz (kalk-top=OfferDTO, gmail-agent=case, daszek=projection)
+2. world-state.yaml repos.\*.role — kanoniczny ownership
+3. CBM query_graph(project, "MATCH (c:Class) WHERE ...") — kto zapisuje/odczytuje storage
+4. CBM search_code(project, "INSERT INTO|UPDATE|DELETE FROM") — weryfikacja write path
+
+Nie uzywaj archiwalnych runtime/BOUNDARY*MAP.md ani runtime/WRITE_EXECUTOR_GRAPH.md.
+Jesli potrzebujesz listy write executors: CBM search_code(gmail-agent, "execute*") lub spytaj CBM o funkcje.

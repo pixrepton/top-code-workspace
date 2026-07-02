@@ -1,0 +1,54 @@
+name: MAX-STACK Nightly Verify
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  verify-max-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: topinstal
+          POSTGRES_PASSWORD: topinstal
+          POSTGRES_DB: mailbox_memory
+        ports:
+          - 54129:5432
+        options: >-
+          --health-cmd "pg_isready -U topinstal"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install gmail-agent deps
+        working-directory: gmail-agent/tools/gmail_audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt 2>/dev/null || pip install pydantic psycopg fastapi httpx
+
+      - name: Install rag-chat-asystent deps
+        working-directory: rag-chat-asystent/backend
+        run: |
+          pip install -r requirements.txt 2>/dev/null || pip install pydantic pyyaml
+
+      - name: Run verify-max-stack (smoke subset)
+        working-directory: gmail-agent/tools/gmail_audit
+        env:
+          MAILBOX_MEMORY_DATABASE_URL: postgresql://topinstal:topinstal@localhost:54129/mailbox_memory
+          CASE_OS_RUNTIME_PROFILE: full
+          AGENT_RUNTIME_ENABLED: "1"
+          AGENT_RUNTIME_MODE: prep
+        run: |
+          python scripts/case_os_single_runtime_proof.py
+          python scripts/materialize_full_chain_proof.py
+          python scripts/case_os_intelligence_first_closure_proof.py

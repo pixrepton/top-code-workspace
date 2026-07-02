@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "openmemory": {
+      "command": "uvx",
+      "args": [
+        "openmemory-mcp",
+        "--client",
+        "cursor"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--browser=firefox",
+        "--allowed-hosts",
+        "www.topinstal.com.pl,topinstal.com.pl,127.0.0.1,localhost"
+      ]
+    },
+    "serena": {
+      "command": "C:\\Users\\compg\\.local\\bin\\serena.exe",
+      "args": [
+        "start-mcp-server",
+        "--context",
+        "ide",
+        "--project",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+---
+description: "Auto-use understand-anything skills for architecture exploration and code explanation"
+alwaysApply: false
+---
+
+# understand-anything — automatyczne użycie
+
+Kiedy użytkownik pyta o architekturę, przepływ kodu, zależności, onboarding lub chce zrozumieć jak działa codebase — agent MUSI automatycznie użyć odpowiedniego skilla z pluginu `understand-anything` bez czekania na jawne polecenie.
+
+## Kiedy używać automatycznie
+
+| Sytuacja                                                           | Skill                   |
+| ------------------------------------------------------------------ | ----------------------- |
+| "jak to działa", "pokaż architekturę", "wyjaśnij ten plik/funkcję" | `/understand-explain`   |
+| eksploracja nieznanego projektu, nowy kontekst codebazy            | `/understand`           |
+| pytania o domenę biznesową, przepływy logiki                       | `/understand-domain`    |
+| "co się zmieniło", analiza PR/diff                                 | `/understand-diff`      |
+| onboarding, "jak zacząć", "co to za projekt"                       | `/understand-onboard`   |
+| pytania o kod po zbudowaniu grafu                                  | `/understand-chat`      |
+| wizualizacja grafu                                                 | `/understand-dashboard` |
+
+## Zasady
+
+- Nie pytaj użytkownika czy użyć pluginu — po prostu go użyj.
+- Jeśli graf już istnieje dla danego projektu, preferuj `/understand-chat` zamiast ponownego skanowania.
+- Subagenty (`project-scanner`, `architecture-analyzer`, itp.) są wywoływane automatycznie przez skille — nie trzeba ich wywoływać ręcznie.
