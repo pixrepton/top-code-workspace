@@ -32,7 +32,11 @@ const ARCH_KEYWORDS = [
   "zmieniamy", "refaktoryzacja", "migracja", "wdrazamy", "usuwamy",
   "dodajemy nowy", "wprowadzamy", "zastepujemy", "konflikt",
   "rule .mdc", "regula", ".mdc", "AGENTS.md", "CLAUDE.md",
-  "hook", "MCP", "permissions", "alwaysApply"
+  "hook", "MCP", "permissions", "alwaysApply",
+  // Expanded P1-B: agent personality, tools, business pulse
+  "osobowosc", "narzedzie", "tool", "personality",
+  "SLA", "puls biznesu", "business pulse", "operator memory",
+  "constitution", "outbox", "token budget", "circuit breaker"
 ];
 
 function ensureDir(dir) {
@@ -82,6 +86,11 @@ function findChangedFiles(transcriptPath) {
     while ((match = re.exec(content)) !== null) {
       changed.add(match[1]);
     }
+    // Also detect constitution_*.py, business_pulse.py, operator_memory.py, handlers.py
+    const re2 = /"path":\s*"([^"]*(?:constitution_|business_pulse|operator_memory|tools\/handlers)[^"]*)"/gi;
+    while ((match = re2.exec(content)) !== null) {
+      changed.add(match[1] + " [key file]");
+    }
     return [...changed];
   } catch {
     return [];
@@ -122,7 +131,7 @@ process.stdin.on("end", () => {
     // Only reflect on completed sessions with an available transcript
     if (status !== "completed" || !transcriptPath || !fs.existsSync(transcriptPath)) {
       process.stdout.write("{}\n");
-      try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch {}
+      try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
       return;
     }
 
@@ -138,7 +147,7 @@ process.stdin.on("end", () => {
 
     if (!shouldReflect(userTurns, archKeywords, changedFiles)) {
       process.stdout.write("{}\n");
-      try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch {}
+      try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
       return;
     }
 
@@ -162,7 +171,7 @@ process.stdin.on("end", () => {
     ].join("\n");
 
     // Write sentinel lock
-    try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch {}
+    try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
 
     process.stdout.write(JSON.stringify({ followup_message: msg }) + "\n");
   } catch (err) {
