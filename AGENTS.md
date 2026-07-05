@@ -29,11 +29,11 @@ Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends
 | **active**      | Local Docker — `:8766` gmail-agent Node B, `:8090` Daszek, `:8091` kalk-top, `:8000` RAG, `:54129` mailbox PG, `:54130` GraphStore PG |
 | **production**  | **Suspended** (2026-06-17) — firma w zawieszeniu; brak VPS. Agent nie pracuje nad prod deploy dopóki operator nie powiadomi.          |
 | **legacy_prod** | Historical dual VPS — do not use for new proof                                                                                        |
-| **target_prod** | One unified VPS (frozen future) — `knowledge/rfc/single-unified-vps.md`                                                               |
+| **target_prod** | One unified VPS (frozen future) — plan w `knowledge/rfc/P2-cieplo-php-ingress-retirement.md` (jedyny aktywny RFC dot. prod)           |
 
 **Agent default:** work to Gate B locally. No SSH/VPS/prod deploy unless operator explicitly resumes business and asks.
 
-Machine map: `ECOSYSTEM_MAP.yaml`
+Machine map: `knowledge/SYSTEM_ATLAS.md` (maszyny i topologia)
 
 ## Logical products
 
@@ -48,7 +48,7 @@ Machine map: `ECOSYSTEM_MAP.yaml`
 | Cieplo worker        | `cieplo-orchestrator/`  | B    | `cieplo-orchestrator/AGENTS.md`                                                                                                                                                                 |
 | Generator            | `top-instal-generator/` | A    | `top-instal-generator/AGENTS.md`                                                                                                                                                                |
 | fast-kalk            | `fast-kalk/`            | A    | `fast-kalk/AGENTS.md`                                                                                                                                                                           |
-| Cross-repo knowledge | `knowledge/`            | meta | `knowledge/PROJECT_README.md`                                                                                                                                                                   |
+| Cross-repo knowledge | `knowledge/`            | meta | `knowledge/INDEX.md` (cold-start)                                                                                                                                                               |
 
 ## Latest closure state (2026-07-04)
 
