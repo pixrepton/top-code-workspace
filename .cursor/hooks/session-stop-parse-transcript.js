@@ -1,9 +1,27 @@
 /**
- * Pass 1: Transcript parser for reflection (no LLM).
- * Extracts key events from JSONL transcript: decisions, files, proof gates.
- * Output: condensed structured summary (<200 words).
+ * Session-stop transcript parser hook.
+ *
+ * Auto-detects the latest JSONL transcript and extracts key events:
+ * decisions, files touched, proof gates, user turns.
+ * Outputs a condensed structured summary for agent context.
+ *
+ * Called by .cursor/hooks.json "stop" hook.
+ * Receives stdin JSON: { status: "completed", loop_count: 0 }
  */
 const fs = require("fs");
+const path = require("path");
+const os = require("os");
+
+const TRANSCRIPTS_DIR = path.join(os.tmpdir(), "cursor", "agent-transcripts");
+
+const DECISION_PATTERNS = [
+  /decyzja|decision/i, /rezygnujemy/i, /przenosimy/i, /zmieniamy/i,
+  /refaktoryzacj/i, /migracj/i, /wdrażamy/i, /usuwamy/i,
+  /dodajemy/i, /wprowadzamy/i, /zastępujemy/i,
+  /konflikt/i, /rule \.mdc/i, /regul[ay]/i,
+  /osobowość/i, /narzędzie/i, /tool/i,
+  /SLA/i, /puls biznesu/i
+];
 
 const DECISION_PATTERNS = [
   /decyzja|decision/i, /rezygnujemy/i, /przenosimy/i, /zmieniamy/i,
@@ -72,12 +90,68 @@ function parseTranscript(filepath) {
   };
 }
 
-// CLI
-const filepath = process.argv[2];
-if (!filepath) {
-  process.stderr.write("Usage: node session-stop-parse-transcript.js <transcript.jsonl>\n");
-  process.exit(1);
+function findLatestTranscript() {
+  if (!fs.existsSync(TRANSCRIPTS_DIR)) return null;
+  const files = fs.readdirSync(TRANSCRIPTS_DIR)
+    .filter(f => f.endsWith(".jsonl"))
+    .map(f => ({
+      name: f,
+      path: path.join(TRANSCRIPTS_DIR, f),
+      mtime: fs.statSync(path.join(TRANSCRIPTS_DIR, f)).mtimeMs,
+    }))
+    .sort((a, b) => b.mtime - a.mtime);
+  return files.length > 0 ? files[0].path : null;
 }
 
-const result = parseTranscript(filepath);
-process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+const chunks = [];
+process.stdin.on("data", (c) => chunks.push(c));
+process.stdin.on("end", () => {
+  try {
+    const payload = JSON.parse((Buffer.concat(chunks).toString("utf8") || "{}").trim());
+    const loopCount = Number(payload.loop_count || 0);
+
+    if (loopCount > 0) {
+      process.stdout.write("{}\n");
+      return;
+    }
+
+    const transcriptPath = findLatestTranscript();
+    if (!transcriptPath) {
+      process.stdout.write(JSON.stringify({ followup_message: "[TRANSCRIPT PARSE] No transcript found." }) + "\n");
+      return;
+    }
+
+    const result = parseTranscript(transcriptPath);
+    if (result.userTurns === 0) {
+      process.stdout.write(JSON.stringify({ followup_message: "[TRANSCRIPT PARSE] Transcript is empty or unparseable." }) + "\n");
+      return;
+    }
+
+    const parts = [
+      "--- SESSION TRANSCRIPT (parsed) ---",
+      `User turns: ${result.userTurns}`,
+    ];
+    if (result.decisions.length > 0) {
+      parts.push(`Decisions found: ${result.decisions.length}`);
+      for (const d of result.decisions.slice(0, 5)) {
+        parts.push(`  • ${d.slice(0, 100)}`);
+      }
+    }
+    if (result.files.length > 0) {
+      parts.push(`Files touched: ${result.files.length}`);
+      for (const f of result.files.slice(0, 8)) {
+        parts.push(`  • ${f}`);
+      }
+    }
+    if (result.proofGates.length > 0) {
+      parts.push(`Proof gates: ${result.proofGates.length}`);
+      for (const g of result.proofGates) {
+        parts.push(`  • ${g.slice(0, 80)}`);
+      }
+    }
+
+    process.stdout.write(JSON.stringify({ followup_message: parts.join("\n") }) + "\n");
+  } catch {
+    process.stdout.write(JSON.stringify({ followup_message: "[TRANSCRIPT PARSE] Error parsing transcript." }) + "\n");
+  }
+});

@@ -27,8 +27,16 @@ const { execSync } = require("child_process");
 
 const WORKSPACE_ROOT = path.join(__dirname, "..", "..");
 const MEMORY_DIR = path.join(WORKSPACE_ROOT, "top-code-memory");
+const RUNTIME_DIR = path.join(WORKSPACE_ROOT, "knowledge", "runtime");
 const LAST_REFRESHED = path.join(MEMORY_DIR, ".last-refreshed");
+const RUNTIME_LAST_REFRESHED = path.join(RUNTIME_DIR, ".last-refreshed");
 const DRIFT_LOG = path.join(MEMORY_DIR, "DRIFT.md");
+
+// Scratch files older than this TTL are auto-deleted (7 days)
+const SCRATCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Patterns for files that should trigger a GitNexus re-index after commit
+const NEXUS_TRIGGER_PATTERNS = [/\.py$/, /\.sql$/, /\.yml$/, /\.yaml$/];
 
 // Files matching these patterns are excluded from auto-commit
 const SCRATCH_PATTERNS = [
@@ -97,8 +105,13 @@ function isRelevant(fp) {
 }
 
 function writeTimestamp() {
+  const ts = new Date().toISOString();
   ensureDir(MEMORY_DIR);
-  fs.writeFileSync(LAST_REFRESHED, new Date().toISOString(), "utf8");
+  fs.writeFileSync(LAST_REFRESHED, ts, "utf8");
+  // Sync to knowledge/runtime/.last-refreshed so artifact freshness is aligned
+  if (fs.existsSync(RUNTIME_DIR)) {
+    fs.writeFileSync(RUNTIME_LAST_REFRESHED, ts, "utf8");
+  }
 }
 
 function updateDriftLog(changedFiles, untrackedFiles, summary) {
@@ -178,6 +191,17 @@ process.stdin.on("end", () => {
 
     writeTimestamp();
 
+    // Auto-cleanup: delete scratch files older than TTL
+    for (const f of scratchFiles) {
+      const fp = path.join(WORKSPACE_ROOT, f);
+      try {
+        const stat = fs.statSync(fp);
+        if (Date.now() - stat.mtimeMs > SCRATCH_TTL_MS) {
+          fs.unlinkSync(fp);
+        }
+      } catch { /* file may have been deleted already */ }
+    }
+
     // Auto-commit non-scratch drift
     if (committableChanged.length > 0 || committableUntracked.length > 0) {
       try {
@@ -197,6 +221,18 @@ process.stdin.on("end", () => {
           cwd: WORKSPACE_ROOT,
           timeout: 10000,
         });
+
+        // GitNexus re-index after commit if source/schema files changed
+        const hasTriggerFiles = allCommittable.some(f => NEXUS_TRIGGER_PATTERNS.some(p => p.test(f)));
+        if (hasTriggerFiles) {
+          try {
+            execSync('gitnexus group sync topinstal-workspace --verbose', {
+              cwd: WORKSPACE_ROOT,
+              timeout: 60000,
+              stdio: "pipe",
+            });
+          } catch { /* gitnexus sync is best-effort */ }
+        }
       } catch {
         // Auto-commit is best-effort; don't fail the hook
       }

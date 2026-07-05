@@ -21,6 +21,10 @@
       {
         "command": "node .cursor/hooks/session-stop-engram.js",
         "loop_limit": 1
+      },
+      {
+        "command": "node .cursor/hooks/session-stop-parse-transcript.js",
+        "loop_limit": 1
       }
     ]
   }
