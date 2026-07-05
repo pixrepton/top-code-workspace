@@ -5,7 +5,16 @@
  *   1. Checks git diff for changed files since HEAD
  *   2. If relevant files changed, creates a drift snapshot in top-code-memory/
  *   3. Writes a .last-refreshed timestamp for freshness tracking
- *   4. Outputs a summary of what drifted
+ *   4. Auto-commits non-scratch drift changes
+ *   5. Outputs a summary of what drifted
+ *
+ * SCRATCH FILES:
+ *   Files matching SCRATCH_PATTERNS are shown in drift log but NOT auto-committed.
+ *   They remain untracked as intentional workspace artifacts.
+ *
+ * AUTO-COMMIT:
+ *   Meaningful changes are committed automatically at session end.
+ *   Commit message includes drift summary by area.
  *
  * ACTIVATION:
  *   Called by Cursor IDE via .cursor/hooks.json "stop" hook.
@@ -20,6 +29,14 @@ const WORKSPACE_ROOT = path.join(__dirname, "..", "..");
 const MEMORY_DIR = path.join(WORKSPACE_ROOT, "top-code-memory");
 const LAST_REFRESHED = path.join(MEMORY_DIR, ".last-refreshed");
 const DRIFT_LOG = path.join(MEMORY_DIR, "DRIFT.md");
+
+// Files matching these patterns are excluded from auto-commit
+const SCRATCH_PATTERNS = [
+  /[/\\]test\d*\.py$/,
+  /[/\\]test_write\.txt$/,
+  /[/\\]scratch\b/,
+  /[/\\]temp\b/,
+];
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -49,6 +66,10 @@ function getUntracked() {
   } catch {
     return [];
   }
+}
+
+function isScratchFile(fp) {
+  return SCRATCH_PATTERNS.some(p => p.test(fp));
 }
 
 function classifyFile(fp) {
@@ -145,12 +166,41 @@ process.stdin.on("end", () => {
       summary += "\n" + areas.join("\n");
     }
 
+    // Separate scratch files from committable files
+    const committableChanged = relevantChanged.filter(f => !isScratchFile(f));
+    const committableUntracked = relevantUntracked.filter(f => !isScratchFile(f));
+    const scratchFiles = [...relevantChanged, ...relevantUntracked].filter(f => isScratchFile(f));
+
     // Save drift log if there were changes
     if (totalChanges > 0) {
       updateDriftLog(relevantChanged, relevantUntracked, summary);
     }
 
     writeTimestamp();
+
+    // Auto-commit non-scratch drift
+    if (committableChanged.length > 0 || committableUntracked.length > 0) {
+      try {
+        const allCommittable = [...committableChanged, ...committableUntracked];
+        for (const f of allCommittable) {
+          execSync(`git add "${f}"`, { cwd: WORKSPACE_ROOT, timeout: 5000 });
+        }
+
+        // Build commit message from drift areas
+        const areaList = Object.entries(byArea)
+          .filter(([area]) => committableChanged.some(f => classifyFile(f) === area) || committableUntracked.some(f => classifyFile(f) === area))
+          .map(([area, files]) => `${area}: ${files.length} files`)
+          .join(", ");
+
+        const msg = `perf(session): auto-commit drift — ${areaList}`;
+        execSync(`git commit -m "${msg}" -m "Auto-committed at session end. ${totalChanges} files drifted (${scratchFiles.length} scratch excluded). Full log: top-code-memory/DRIFT.md"`, {
+          cwd: WORKSPACE_ROOT,
+          timeout: 10000,
+        });
+      } catch {
+        // Auto-commit is best-effort; don't fail the hook
+      }
+    }
 
     // Output
     const lines = ["🏗️  ARCHITECTURE REFRESH", ""];
@@ -161,6 +211,11 @@ process.stdin.on("end", () => {
       const sortedAreas = Object.entries(byArea).sort((a, b) => b[1].length - a[1].length);
       for (const [area, files] of sortedAreas) {
         lines.push(`    ${area}: ${files.length} files`);
+      }
+      if (scratchFiles.length > 0) {
+        lines.push("");
+        lines.push(`  ${scratchFiles.length} scratch file(s) excluded from commit:`);
+        for (const f of scratchFiles) lines.push(`    ${f}`);
       }
       lines.push("");
       lines.push(`  Full log: top-code-memory/DRIFT.md`);
