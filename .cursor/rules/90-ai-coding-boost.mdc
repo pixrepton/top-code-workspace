@@ -87,24 +87,24 @@ Po dodaniu wpisu: krótko wspomnij w handoff/timeline, jeśli dotyczy workflow c
 
 Agent automatycznie uruchamia poniższe skille bez pytania operatora:
 
-| Trigger | Skill | Akcja |
-|---------|-------|-------|
-| Rozpoczęcie nowego zadania | brainstorming | natychmiastowa eksploracja wymagań |
-| Plan obejmuje >3 pliki | writing-plans → executing-plans | plan → delegacja do subagenta |
-| Debugowanie >2 minuty | systematic-debugging | strukturalne debugowanie |
-| Przed zgłoszeniem "gotowe" | verification-before-completion | sprawdź zanim powiesz "done" |
-| Po 30+ minutach pracy | verification-before-completion | sprawdź stan |
-| Nowa funkcjonalność bez testów | test-driven-development | test najpierw, potem kod |
-| Koniec implementacji | requesting-code-review | poproś o review |
-| Refactor >1 plik | receiving-code-review | przeanalizuj zanim zmienisz |
-| Wyniki danych z MCP | canvas | renderuj w canvas |
-| Zmiany w API/DB | gitnexus-impact-analysis | impact analysis |
-| Cross-repo zmiana | cross-repo-contract-safety | walidacja kontraktów |
-| Duży blok kodu AI | deslop | wyczyść slop przed commitem |
-| Po każdej zmianie kodu | check-compiler-errors | kompilacja/testy |
-| Działanie w przeglądarce | control-ui | automatyzacja przez MCP |
-| Praca z CLI/TUI | control-cli | harness terminalowy |
-| Nowa biblioteka/zależność | context7 + docs-researcher | dokumentacja + weryfikacja |
+| Trigger                        | Skill                           | Akcja                              |
+| ------------------------------ | ------------------------------- | ---------------------------------- |
+| Rozpoczęcie nowego zadania     | brainstorming                   | natychmiastowa eksploracja wymagań |
+| Plan obejmuje >3 pliki         | writing-plans → executing-plans | plan → delegacja do subagenta      |
+| Debugowanie >2 minuty          | systematic-debugging            | strukturalne debugowanie           |
+| Przed zgłoszeniem "gotowe"     | verification-before-completion  | sprawdź zanim powiesz "done"       |
+| Po 30+ minutach pracy          | verification-before-completion  | sprawdź stan                       |
+| Nowa funkcjonalność bez testów | test-driven-development         | test najpierw, potem kod           |
+| Koniec implementacji           | requesting-code-review          | poproś o review                    |
+| Refactor >1 plik               | receiving-code-review           | przeanalizuj zanim zmienisz        |
+| Wyniki danych z MCP            | canvas                          | renderuj w canvas                  |
+| Zmiany w API/DB                | gitnexus-impact-analysis        | impact analysis                    |
+| Cross-repo zmiana              | cross-repo-contract-safety      | walidacja kontraktów               |
+| Duży blok kodu AI              | deslop                          | wyczyść slop przed commitem        |
+| Po każdej zmianie kodu         | check-compiler-errors           | kompilacja/testy                   |
+| Działanie w przeglądarce       | control-ui                      | automatyzacja przez MCP            |
+| Praca z CLI/TUI                | control-cli                     | harness terminalowy                |
+| Nowa biblioteka/zależność      | context7 + docs-researcher      | dokumentacja + weryfikacja         |
 
 ## Raportowanie ryzyk
 
