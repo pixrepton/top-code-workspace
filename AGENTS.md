@@ -37,18 +37,64 @@ Machine map: `ECOSYSTEM_MAP.yaml`
 
 ## Logical products
 
-| Product              | Folder                  | Node | Entry AGENTS                                                           |
-| -------------------- | ----------------------- | ---- | ---------------------------------------------------------------------- |
-| gmail-agent AI       | `gmail-agent/`          | B    | `gmail-agent/AGENTS.md`                                                |
-| Daszek UI            | `daszek/`               | A    | [`daszek/README-DASZEK.md`](daszek/README-DASZEK.md) §16               |
-| RAG backend          | `rag-chat-asystent/`    | B    | `rag-chat-asystent/AGENTS.md` (Graph RAG: `docs/GRAPH_RAG_RUNTIME.md`) |
-| RAG widget WP        | `rag-widget/`           | A    | `rag-widget/AGENTS.md`                                                 |
-| WP mail bridge       | `wp-bridges/`           | A    | `wp-bridges/AGENTS.md`                                                 |
-| kalk-top             | `kalk-top/`             | A    | `kalk-top/AGENTS.md`                                                   |
-| Cieplo worker        | `cieplo-orchestrator/`  | B    | `cieplo-orchestrator/AGENTS.md`                                        |
-| Generator            | `top-instal-generator/` | A    | `top-instal-generator/AGENTS.md`                                       |
-| fast-kalk            | `fast-kalk/`            | A    | `fast-kalk/AGENTS.md`                                                  |
-| Cross-repo knowledge | `knowledge/`            | meta | `knowledge/PROJECT_README.md`                                          |
+| Product              | Folder                  | Node | Entry AGENTS                                                                                                |
+| -------------------- | ----------------------- | ---- | ----------------------------------------------------------------------------------------------------------- |
+| gmail-agent AI       | `gmail-agent/`          | B    | `gmail-agent/AGENTS.md` (Quality Sprint F1-F5 complete — exceptions, logging, LLM resilience, write safety) |
+| Daszek UI            | `daszek/`               | A    | [`daszek/README-DASZEK.md`](daszek/README-DASZEK.md) §16 (new: Tasks view with 3 sections)                  |
+| RAG backend          | `rag-chat-asystent/`    | B    | `rag-chat-asystent/AGENTS.md` (Graph RAG: `docs/GRAPH_RAG_RUNTIME.md`)                                      |
+| RAG widget WP        | `rag-widget/`           | A    | `rag-widget/AGENTS.md`                                                                                      |
+| WP mail bridge       | `wp-bridges/`           | A    | `wp-bridges/AGENTS.md`                                                                                      |
+| kalk-top             | `kalk-top/`             | A    | `kalk-top/AGENTS.md`                                                                                        |
+| Cieplo worker        | `cieplo-orchestrator/`  | B    | `cieplo-orchestrator/AGENTS.md`                                                                             |
+| Generator            | `top-instal-generator/` | A    | `top-instal-generator/AGENTS.md`                                                                            |
+| fast-kalk            | `fast-kalk/`            | A    | `fast-kalk/AGENTS.md`                                                                                       |
+| Cross-repo knowledge | `knowledge/`            | meta | `knowledge/PROJECT_README.md`                                                                               |
+
+## Quality Sprint 2026-07-03 podsumowanie
+
+Dwie sesje: pierwsza (2026-07-02 20:30-11:55) Quality Sprint 1-5 + 18 zadan; druga (2026-07-03 11:56-19:10) dogrywka + fazy D/E/F.
+
+### Sesja 1 7h25min
+
+- Exception hierarchy (exceptions.py) 33 klas
+- Structured logging (log_config.py) JSON + correlation context
+- LLM resilience timeout 45s/30s/60s circuit breaker
+- Write safety auto-commit atomic transakcje idempotency
+- Tasks UI widok Zadania w Daszku
+- 18 zadan produkcyjnych action proposal validation structured logging
+- Docker fix gmail-agent-worker restart loop
+
+### Sesja 2 7h15min
+
+- Phase 1 Exception Taxonomy +14 klas aplikacja catch-all w 8 plikach
+- Phase 2 Structured Logging 4 pliki get_logger 3 pliki z dodanym loggerem
+- Phase 3 LLM Resilience \_call_with_retry() 60s + exponential backoff
+- Phase 4 Business Logic Safety agent_goals.yaml env vars guardy biznesowe
+- Phase 5 Type Safety Pydantic schemas Protocols conn:Any poprawione
+- Phase D-F UnderstandingOutput/IntakeSnapshot/MemoryRecord modele 21 testow Write Safety Audit
+- Docker rebuild gmail-agent-nodeb-api
+
+### Enterprise Closeout 2026-07-04
+
+| Co                                  | Efekt                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Distributed tracing                 | 8 faz pokryte przez ContextVar w log_config.py                                                                                                                                                                                                                                                                                                                                               |
+| Graceful shutdown                   | SIGTERM handler w signal_worker                                                                                                                                                                                                                                                                                                                                                              |
+| Connection pool + circuit breaker   | daszek_client (pool 20, 3 fail cooldown 120s)                                                                                                                                                                                                                                                                                                                                                |
+| CAS retry + rate limiting LLM       | materialize_bridge + central_llm_stage Semaphore(2)                                                                                                                                                                                                                                                                                                                                          |
+| Feed cache + concurrency control    | daszek_v3_feed_runtime + graph.py Semaphore(1)                                                                                                                                                                                                                                                                                                                                               |
+| Health endpoint workera             | /system/worker/health                                                                                                                                                                                                                                                                                                                                                                        |
+| Trace endpoint                      | /system/trace                                                                                                                                                                                                                                                                                                                                                                                |
+| Migracje + cleanup                  | correlation_registry + cleanup_old_events.py                                                                                                                                                                                                                                                                                                                                                 |
+| Rotacja tokenow Daszek              | --service daszek                                                                                                                                                                                                                                                                                                                                                                             |
+| Testy integracyjne                  | 13/13 PASS                                                                                                                                                                                                                                                                                                                                                                                   |
+| Backlog resolved                    | P0.1-P0.3 zamkniete                                                                                                                                                                                                                                                                                                                                                                          |
+| Dokumentacja core                   | LLM_PROVIDER_MAP, INTAKE_TRACKS, EVENT_CATALOG, AUTHZ_SCOPE_MAP, DIVERGENCE_LOOP_COVERAGE                                                                                                                                                                                                                                                                                                    |
+| Chat-agent enterprise               | 16 luk zamknietych: prompt injection, operator_id, redaction BP, logowanie chat, metryki BP, TOOL_EXECUTED duration, TTL memory, connection pool, testy (29/29 PASS), personality.yaml, auto-briefing, feedback loop, request_human_handoff, cross-session memory, self-diagnosis /system/agent-health                                                                                       |
+| Pipeline mailowy domkniecie         | Graceful shutdown, connection pool, circuit breaker, CAS retry, indeksy, fix 19 importow, checkpoint workera, LLM cost metrics, parallel downstream, async push, LLM caching z temperature guard, incremental feed, CI/CD workflow, agent checkpoint co ture                                                                                                                                 |
+| Chat-agent enterprise (Sprint 120%) | structured logging ~32 plikow, type safety settings: Any→Settings 17 plikow, conn: Any→DatabaseConnection 9 plikow, mailbox store rozbity 2545L→4 moduly, big files refactor (intake, drive, reconciler, parser), drive/calendar/spine hardening, except:pass=0, 113/113 testow PASS. Bugi: business_pulse logger, api_app timedelta/column, status_filter. Model: deepseek→openrouter/free. |
+
+Szczegoly knowledge/memory/LAST_SESSION.md
 
 ## Cold-start
 
@@ -188,5 +234,13 @@ D1 RAG ∉ Cieplo pipeline · D2 mail → no OfferDTO · ~~D3 dual Gmail pollers
 - **9 Business Pulse tools:** pipeline, client health, daily delta, win rate, top clients, revenue forecast, system health, signals, agent activity
 - **Cost tracking:** `/system/cost-summary` — tokeny i koszt dzien/tydzien
 - **Quality scoring:** `/system/quality-summary` — jakosc decyzji agenta (exact/divergent rate)
+
+### CLEANUP 2026-07-02 — Repo cleanup across all repositories
+
+- **gmail-agent:** Usunięto 166 plików (1.2 GB model_cache, 82 proof scripts, 11 deploy scripts, 23 auxiliary scripts, 10 orphans). ~3,432 lines added (new code), ~1,026,351 removed.
+- **rag-chat-asystent:** Usunięto 2.2 GB duplikat `backend/backend/` (nested model_cache).
+- **7 small repos:** Usunięto `.gitnexus/` cache (~350 MB), `.venv` w cieplo-orchestrator (89 MB), `tmp/pdfs` + `backup-tekstowe` w kalk-top (51 MB), 367 `__pycache__` katalogów.
+- **Nowe .gitignore:** top-instal-generator (Python/IDE/OS), wp-bridges (IDE/OS).
+- **Total freed:** ~3.5 GB dysku, ~166 tracked files removed.
 
 Evolution: `knowledge/EVOLUTION_BOUNDARIES.md`

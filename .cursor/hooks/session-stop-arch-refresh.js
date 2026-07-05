@@ -98,12 +98,14 @@ function updateDriftLog(changedFiles, untrackedFiles, summary) {
 
   const newSection = entries.join("\n") + "\n";
 
-  // If the log exists and already has an entry for today, replace it
+  // If the log exists and already has an entry for today, replace ALL duplicates
   const existing = fs.existsSync(DRIFT_LOG) ? fs.readFileSync(DRIFT_LOG, "utf8") : header;
   const todayMarker = `## ${date}`;
   if (existing.includes(todayMarker)) {
-    // Replace everything between today's ## and the next ## or end
-    const regex = new RegExp(`${todayMarker}[\\s\\S]*?(?=\\n## |\\n---|$)`, 'm');
+    // Replace all occurrences of today's section (handles previous duplicate bugs).
+    // No `m` flag — `$` must match end-of-string only, not end-of-line.
+    // The section ends at `\n## ` (next date header) or at end-of-string.
+    const regex = new RegExp(`${todayMarker}[\\s\\S]*?(?=\\n## |$)`, 'g');
     const updated = existing.replace(regex, newSection.trimEnd());
     fs.writeFileSync(DRIFT_LOG, updated, "utf8");
   } else {
