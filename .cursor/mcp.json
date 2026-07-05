@@ -30,6 +30,14 @@
         "--project",
         "${workspaceFolder}"
       ]
+    },
+    "gitnexus": {
+      "command": "gitnexus",
+      "args": ["mcp"]
+    },
+    "codebase-memory": {
+      "command": "uvx",
+      "args": ["codebase-memory-mcp"]
     }
   }
 }
