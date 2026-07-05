@@ -77,6 +77,10 @@ DROP INDEX IF EXISTS IF EXISTS idx_opmem_type_key;
 CREATE INDEX IF NOT EXISTS idx_opmem_operator ON operator_memory(operator_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_opmem_operator_type_key ON operator_memory(operator_id, memory_type, key);
 
+-- 13. learning_rule_candidates(status, pattern_key) — szybkie wyszukanie kandydatow pattern learnera
+CREATE INDEX IF NOT EXISTS idx_learning_pattern
+    ON learning_rule_candidates (status, pattern_key);
+
 -- Weryfikacja: po uruchomieniu sprawdź czy indeksy są używane:
 --   EXPLAIN ANALYZE SELECT * FROM mailbox_memory_cases WHERE stage = 'NEW_LEAD';
 --   EXPLAIN ANALYZE SELECT * FROM agent_proposal_records WHERE engagement_id = 'xxx' ORDER BY created_at DESC LIMIT 10;
