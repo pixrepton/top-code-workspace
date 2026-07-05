@@ -33,11 +33,15 @@
     },
     "gitnexus": {
       "command": "gitnexus",
-      "args": ["mcp"]
+      "args": [
+        "mcp"
+      ]
     },
     "codebase-memory": {
       "command": "uvx",
-      "args": ["codebase-memory-mcp"]
+      "args": [
+        "codebase-memory-mcp"
+      ]
     }
   }
 }
