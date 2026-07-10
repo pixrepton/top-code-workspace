@@ -25,15 +25,16 @@ Otwieranie URL i automatyzacja UI: **Firefox pierwszy** (`OPERATOR_DECISIONS` §
 ## Memory (session end)
 
 Postępuj zgodnie z `16-session-memory-protocol.mdc` (alwaysApply: true):
+
 - Nowy system: `top-code-memory/` (auto-archiwizowany przez hooki)
 - Decyzje operatora → `knowledge/memory/OPERATOR_DECISIONS.md` z `[ACTIVE]`
 - Governance: `knowledge/MEMORY_GOVERNANCE.md`
 
 ## On demand (nie ładuj domyślnie)
 
-- Grafy (GitNexus / Graphify / UA): skill `code-intelligence-router` + `CODE_INTELLIGENCE_STACK.md`
-- MCP matrix, skills, scripts: `knowledge/agent-os/references/workflow-operations.md`
-- MCP manifest: `knowledge/agent-os/MCP_MANIFEST.yaml`
+- Grafy (GitNexus / Graphify / UA): skill `code-intelligence-router` + `knowledge/docs/CODE_INTELLIGENCE_STACK.md`
+- MCP matrix i zasady: `knowledge/MCP_POLICY.md`
+- Dokumentacja (warstwy, CBM, utrzymanie): `knowledge/DOCUMENTATION_POLICY.md`
 - Serena: `initial_instructions` po restarcie MCP
 
 Nie ładuj: `_graphify-corpus/`, pełny `graph.json`, `mirror/repos/` do kontekstu.
