@@ -64,6 +64,8 @@ Do not re-read the raw session log here — it lives there by design
 
 ## Cold-start
 
+**Start sesji (operator):** „uruchom hooki startu sesji” → `scripts/run-session-start-hooks.ps1` → przeczytaj `top-code-memory/SESSION_START_CONTEXT.md`.
+
 1. **`knowledge/INDEX.md`** — jedyny punkt startowy (zawiera prawidlowy cold-start)
 2. **`knowledge/docs/WORKSPACE_ONBOARDING.md`** — router portów, oś gmail↔daszek, ścieżki czytania
 3. This file (AGENTS.md) — router ekosystemu

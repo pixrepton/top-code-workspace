@@ -13,7 +13,10 @@
  *   2. knowledge/memory/OPERATOR_DECISIONS.md → active decisions
  *   3. knowledge/memory/BACKLOG.md            → open tasks
  *   4. top-code-memory/DRIFT.md               → what changed last session
- *   5. Fallback: top-code-memory/LAST_SESSION.md (legacy)
+ *   5. knowledge/memory/LAST_SESSION.md (always when present)
+ *   6. Fallback: top-code-memory/LAST_SESSION.md (legacy)
+ *
+ * Manual activation: scripts/run-session-start-hooks.ps1
  */
 
 const fs = require("fs");
@@ -88,12 +91,13 @@ process.stdin.on("data", (c) => chunks.push(c));
 process.stdin.on("end", () => {
   try {
     const payload = JSON.parse((Buffer.concat(chunks).toString("utf8") || "{}").trim());
+    const manual = Boolean(payload.manual);
     if (payload.loop_count > 0) {
       process.stdout.write("{}\n");
       return;
     }
 
-    if (fs.existsSync(LOCK_FILE)) {
+    if (!manual && fs.existsSync(LOCK_FILE)) {
       process.stdout.write("{}\n");
       return;
     }
@@ -182,20 +186,18 @@ process.stdin.on("end", () => {
       parts.push(`\n--- LAST TRANSCRIPT PARSE ---\n${transcriptParse}`);
     }
 
-    // 7. Fallback: legacy LAST_SESSION.md (only if no Reflection exists)
-    if (!hasReflection) {
-      const lastSessionNew = readTrimmed(
+    // 7. LAST_SESSION — knowledge/memory is canonical (may be newer than Reflection)
+    const lastSessionKnowledge = readTrimmed(
+      path.join(root, "knowledge/memory/LAST_SESSION.md"), 2000
+    );
+    if (lastSessionKnowledge) {
+      parts.push(`\n--- LAST SESSION (knowledge/memory) ---\n${lastSessionKnowledge}`);
+    } else {
+      const lastSessionMemory = readTrimmed(
         path.join(root, "top-code-memory/LAST_SESSION.md"), 2500
       );
-      if (lastSessionNew) {
-        parts.push(`\n--- LAST SESSION (legacy, top-code-memory) ---\n${lastSessionNew}`);
-      } else {
-        const lastSessionLegacy = readTrimmed(
-          path.join(root, "knowledge/memory/LAST_SESSION.md"), 2000
-        );
-        if (lastSessionLegacy) {
-          parts.push(`\n--- LAST SESSION (legacy, knowledge/memory) ---\n${lastSessionLegacy}`);
-        }
+      if (lastSessionMemory) {
+        parts.push(`\n--- LAST SESSION (top-code-memory) ---\n${lastSessionMemory}`);
       }
     }
 
@@ -205,7 +207,9 @@ process.stdin.on("end", () => {
     );
 
     process.stdout.write(JSON.stringify({ followup_message: parts.join("\n") }) + "\n");
-    try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
+    if (!manual) {
+      try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
+    }
   } catch {
     process.stdout.write("{}\n");
   }

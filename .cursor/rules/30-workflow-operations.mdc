@@ -22,11 +22,16 @@ Harness (sync / preflight / verify): `35-local-stack-harness-workflow.mdc`
 
 Otwieranie URL i automatyzacja UI: **Firefox pierwszy** (`OPERATOR_DECISIONS` §2026-06-18). Playwright MCP: `--browser=firefox`. Windows: `Start-Process firefox -ArgumentList '<url>'` (fallback: pełna ścieżka `%ProgramFiles%\Mozilla Firefox\firefox.exe`).
 
-## Memory (session end)
+## Memory (session boundaries)
 
-Postępuj zgodnie z `16-session-memory-protocol.mdc` (alwaysApply: true):
+Operator steruje startem i końcem sesji komendami głosowymi:
 
-- Nowy system: `top-code-memory/` (auto-archiwizowany przez hooki)
+- **Start:** `powershell -File scripts/run-session-start-hooks.ps1` → `top-code-memory/SESSION_START_CONTEXT.md`
+- **Koniec:** mirror `LAST_SESSION` → `powershell -File scripts/run-session-stop-hooks.ps1`
+
+Szczegóły: `16-session-memory-protocol.mdc` (alwaysApply: true)
+
+- Nowy system: `top-code-memory/` (auto-archiwizowany przez hooki końca)
 - Decyzje operatora → `knowledge/memory/OPERATOR_DECISIONS.md` z `[ACTIVE]`
 - Governance: `knowledge/MEMORY_GOVERNANCE.md`
 

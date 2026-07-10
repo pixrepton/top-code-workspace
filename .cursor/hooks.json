@@ -1,14 +1,7 @@
 {
   "version": 1,
   "hooks": {
-    "sessionStart": [
-      {
-        "command": "node .cursor/hooks/session-start-inject.js"
-      },
-      {
-        "command": "node .cursor/hooks/session-start-arch-check.js"
-      }
-    ],
+    "sessionStart": [],
     "sessionEnd": [
       {
         "command": "node .cursor/hooks/session-stop-reflect.js"

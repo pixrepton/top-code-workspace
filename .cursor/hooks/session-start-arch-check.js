@@ -6,7 +6,8 @@
  * 3. Read runtime evidence cache
  * 4. Inform agent about artifact state
  *
- * Called by .cursor/hooks.json "sessionStart" hook.
+ * Called by .cursor/hooks.json "sessionStart" hook (optional auto).
+ * Manual activation: scripts/run-session-start-hooks.ps1
  */
 const fs = require("fs");
 const path = require("path");
@@ -98,10 +99,11 @@ process.stdin.on("data", (c) => chunks.push(c));
 process.stdin.on("end", () => {
   try {
     const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+    const manual = Boolean(payload.manual);
     const loopCount = Number(payload.loop_count || 0);
 
-    // Sentinel lock: run only ONCE per Cursor process
-    if (fs.existsSync(LOCK_FILE)) {
+    // Sentinel lock: run only ONCE per Cursor process (skipped when manual)
+    if (!manual && fs.existsSync(LOCK_FILE)) {
       process.stdout.write("{}\n");
       return;
     }
@@ -128,8 +130,9 @@ process.stdin.on("end", () => {
           followup_message: msg,
         }) + "\n",
       );
-      // Write sentinel lock
-      try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
+      if (!manual) {
+        try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
+      }
       return;
     }
     process.stdout.write("{}\n");

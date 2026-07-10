@@ -1,0 +1,92 @@
+# Run session-start hooks manually (operator: "uruchom hooki startu sesji").
+# Writes top-code-memory/SESSION_START_CONTEXT.md for the agent to read.
+param()
+
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'resolve-paths.ps1')
+
+$root = $env:TOP_CODE_ROOT
+if (-not $root) { throw 'TOP_CODE_ROOT not set (run via resolve-paths.ps1).' }
+
+$stdinObj = @{
+    manual          = $true
+    loop_count      = 0
+    conversation_id = 'manual-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+}
+$stdin = $stdinObj | ConvertTo-Json -Compress
+
+function Get-HookFollowupMessage {
+    param(
+        [string]$HookPath,
+        [string]$StdinJson
+    )
+    if (-not (Test-Path $HookPath)) {
+        return $null
+    }
+    $raw = $StdinJson | node $HookPath 2>$null
+    if (-not $raw) { return $null }
+    try {
+        $parsed = $raw.Trim() | ConvertFrom-Json
+        if ($parsed.followup_message) {
+            return [string]$parsed.followup_message
+        }
+    }
+    catch {
+        return $null
+    }
+    return $null
+}
+
+$hooksDir = Join-Path $root '.cursor\hooks'
+$hookSpecs = @(
+    @{ File = 'session-start-inject.js'; Section = 'Memory inject' }
+    @{ File = 'session-start-arch-check.js'; Section = 'Arch check' }
+)
+
+$generatedAt = (Get-Date).ToUniversalTime().ToString('o')
+$sections = @(
+    '# Session start context',
+    '',
+    "Generated: $generatedAt",
+    'Mode: manual',
+    ''
+)
+
+$logLines = @("## $generatedAt")
+
+Write-Host 'Session start hooks (manual)' -ForegroundColor Cyan
+foreach ($spec in $hookSpecs) {
+    $hookPath = Join-Path $hooksDir $spec.File
+    if (-not (Test-Path $hookPath)) {
+        Write-Warning "Missing: $hookPath"
+        $sections += @("## $($spec.Section)", '', '(hook missing)', '')
+        $logLines += "[start] MISSING: $($spec.File)"
+        continue
+    }
+    Write-Host "  -> $($spec.File)" -ForegroundColor Gray
+    $message = Get-HookFollowupMessage -HookPath $hookPath -StdinJson $stdin
+    $sections += @("## $($spec.Section)", '')
+    if ($message) {
+        $sections += $message.Split("`n")
+        $logLines += "[start] OK: $($spec.File)"
+    }
+    else {
+        $sections += '(no data)'
+        $logLines += "[start] EMPTY: $($spec.File)"
+    }
+    $sections += ''
+}
+
+$memoryDir = Join-Path $root 'top-code-memory'
+if (-not (Test-Path $memoryDir)) {
+    New-Item -ItemType Directory -Path $memoryDir -Force | Out-Null
+}
+
+$contextPath = Join-Path $memoryDir 'SESSION_START_CONTEXT.md'
+$logPath = Join-Path $memoryDir 'SESSION_START.log'
+
+Set-Content -Path $contextPath -Value ($sections -join "`n") -Encoding UTF8
+Add-Content -Path $logPath -Value (($logLines -join "`n") + "`n")
+
+Write-Host "Done. Context: top-code-memory/SESSION_START_CONTEXT.md" -ForegroundColor Green
+Write-Host "Log: top-code-memory/SESSION_START.log" -ForegroundColor Green

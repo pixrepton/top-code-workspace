@@ -5,11 +5,34 @@ alwaysApply: true
 
 # Session memory protocol
 
+## Operator-driven session boundaries (canonical)
+
+Operator steruje granicami sesji dwoma komendami. Auto-hooki Cursor: **tylko `sessionEnd` jako backup** (`.cursor/hooks.json` — `sessionStart` jest puste).
+
+### Start — operator: „uruchom hooki startu sesji”
+
+1. `powershell -File scripts/run-session-start-hooks.ps1`
+2. Przeczytaj `top-code-memory/SESSION_START_CONTEXT.md`
+3. Jeśli `top-code-memory/PENDING_REFLECTION.md` istnieje → **priorytet**: napisz Reflection, zaktualizuj `top-code-memory/reflections/INDEX.md`, usuń pending
+4. Cold-start: `knowledge/INDEX.md` → `WORKSPACE_ONBOARDING.md` → `BACKLOG` P0/P1
+
+### Koniec — operator: „koniec sesji czatu. uruchom hooki końca sesji”
+
+1. Zaktualizuj `knowledge/memory/LAST_SESSION.md`
+2. **Mirror** (ten sam content) → `top-code-memory/LAST_SESSION.md` — **obowiązkowe przed hookami**
+3. Zaktualizuj `BACKLOG.md` / `ACTIVE_WORKSPACE.md` jeśli dotyczy
+4. `powershell -File scripts/run-session-stop-hooks.ps1`
+5. Potwierdź: `top-code-memory/SESSION_CLOSEOUT.log`
+
+Auto `sessionEnd` w Cursor uruchamia ten sam pipeline closeout jako backup, gdy operator zapomni komendy końca.
+
+---
+
 ## 0. Reflection Protocol (primary memory system)
 
 Hook `session-stop-reflect.js` na `sessionEnd` sprawdza czy sesja zawiera
 decyzje architektoniczne. Jesli tak, zapisuje `top-code-memory/PENDING_REFLECTION.md`.
-Agent na **nastepnej** sesji (sessionStart inject) widzi ten plik i MUSI
+Agent na **nastepnej** sesji (manual start runner) widzi ten plik w `SESSION_START_CONTEXT.md` i MUSI
 uruchomic subagenta refleksyjnego (Task tool) oraz zapisac Reflection.
 
 Format Reflection:
@@ -20,11 +43,11 @@ Format Reflection:
 - ## Co dalej — priorytetowe nastepne kroki
 
 Reflection zastepuje stare LAST_SESSION.md jako glowne zrodlo pamieci miedzy sesjami.
-Na starcie sesji `session-start-inject.js` wstrzykuje ostatni Reflection (L2).
+Na starcie sesji manual runner (`run-session-start-hooks.ps1`) składa kontekst z ostatnim Reflection (L2) do `SESSION_START_CONTEXT.md`.
 
 Memory Retrieval:
 
-- L2 = ostatni Reflection (wstrzykiwany na start, ~3000 znakow)
+- L2 = ostatni Reflection (w `SESSION_START_CONTEXT.md` na start, ~3000 znakow)
 - L3 = starsze Reflection (agent czyta z `top-code-memory/reflections/` gdy potrzebuje)
 - L4 = dokumentacja projektu (knowledge/, AGENTS.md, INDEX.md)
 - L5 = RAG / openmemory MCP
@@ -55,7 +78,10 @@ Copy or mirror the same summary here (the hooks archive this file automatically)
 
 ### 3. Run session-end hooks
 
-The hooks in `.cursor/hooks.json` under **`sessionEnd`** (once per chat close):
+**Kanonicznie** (operator: „koniec sesji czatu. uruchom hooki końca sesji”):
+`powershell -File scripts/run-session-stop-hooks.ps1`
+
+Ten sam pipeline jako backup w `.cursor/hooks.json` **`sessionEnd`** (gdy operator zapomni komendy):
 
 - `session-stop-reflect.js` → `PENDING_REFLECTION.md` if architectural decisions detected
 - `session-stop-arch-refresh.js` → git diff, write DRIFT.md, update .last-refreshed
@@ -64,9 +90,6 @@ The hooks in `.cursor/hooks.json` under **`sessionEnd`** (once per chat close):
 - `session-stop-auto-review.js` → `AUTO_REVIEW_PENDING.md` when divergence found
 
 Log: `top-code-memory/SESSION_CLOSEOUT.log`
-
-**Manual closeout** (operator: „uruchom hooki końca sesji”):
-`powershell -File scripts/run-session-stop-hooks.ps1`
 
 Hooks do **not** use `stop` (per-turn). They never inject `followup_message` into chat.
 
@@ -82,14 +105,17 @@ If any P0/P1 items were closed or opened, update:
 
 ### Memory file locations
 
-| File                                             | Purpose                                               |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| `top-code-memory/reflections/YYYY-MM-DD-slug.md` | **PRIMARY** — Reflection (decisions + justifications) |
-| `top-code-memory/reflections/INDEX.md`           | Master index of all reflections                       |
-| `top-code-memory/LAST_SESSION.md`                | Legacy session summary (mirror)                       |
-| `top-code-memory/sessions/YYYY-MM-DD-slug.md`    | Archived session engrams                              |
-| `top-code-memory/sessions/YYYY-MM-DD.jsonl`      | Archived full transcripts                             |
-| `top-code-memory/INDEX.md`                       | Master index of all sessions                          |
-| `top-code-memory/DRIFT.md`                       | Git diff per session (auto, by hook)                  |
-| `knowledge/memory/OPERATOR_DECISIONS.md`         | Canonical operator decisions                          |
-| `knowledge/memory/BACKLOG.md`                    | Open tasks P0-P3                                      |
+| File                                             | Purpose                                                  |
+| ------------------------------------------------ | -------------------------------------------------------- |
+| `top-code-memory/reflections/YYYY-MM-DD-slug.md` | **PRIMARY** — Reflection (decisions + justifications)    |
+| `top-code-memory/reflections/INDEX.md`           | Master index of all reflections                          |
+| `top-code-memory/LAST_SESSION.md`                | Legacy session summary (mirror)                          |
+| `top-code-memory/sessions/YYYY-MM-DD-slug.md`    | Archived session engrams                                 |
+| `top-code-memory/sessions/YYYY-MM-DD.jsonl`      | Archived full transcripts                                |
+| `top-code-memory/INDEX.md`                       | Master index of all sessions                             |
+| `top-code-memory/SESSION_START_CONTEXT.md`       | Wynik manual start hooks (`run-session-start-hooks.ps1`) |
+| `top-code-memory/SESSION_START.log`              | Log manual start hooks                                   |
+| `top-code-memory/SESSION_CLOSEOUT.log`           | Log session end hooks (manual + auto backup)             |
+| `top-code-memory/DRIFT.md`                       | Git diff per session (auto, by hook)                     |
+| `knowledge/memory/OPERATOR_DECISIONS.md`         | Canonical operator decisions                             |
+| `knowledge/memory/BACKLOG.md`                    | Open tasks P0-P3                                         |

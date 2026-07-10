@@ -25,6 +25,11 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const {
+  acquireSessionEndLock,
+  readStdinPayload,
+  writeCloseoutLog,
+} = require("./lib/transcript-utils");
 
 const WORKSPACE_ROOT = path.join(__dirname, "..", "..");
 const MEMORY_DIR = path.join(WORKSPACE_ROOT, "top-code-memory");
@@ -159,112 +164,120 @@ function updateDriftLog(changedFiles, untrackedFiles, summary) {
   }
 }
 
-const chunks = [];
-process.stdin.on("data", (c) => chunks.push(c));
-process.stdin.on("end", () => {
-  try {
-    const changedFiles = getGitDiff();
-    const untrackedFiles = getUntracked();
+function runArchRefresh() {
+  const changedFiles = getGitDiff();
+  const untrackedFiles = getUntracked();
 
-    // Filter to relevant extensions and files
-    const relevantChanged = changedFiles.filter(isRelevant);
-    const relevantUntracked = untrackedFiles.filter(f => isRelevant(f) && !f.includes("__pycache__") && !f.includes("model_cache") && !f.includes(".pyc"));
+  // Filter to relevant extensions and files
+  const relevantChanged = changedFiles.filter(isRelevant);
+  const relevantUntracked = untrackedFiles.filter(f => isRelevant(f) && !f.includes("__pycache__") && !f.includes("model_cache") && !f.includes(".pyc"));
 
-    // Classify by area
-    const byArea = {};
-    for (const f of [...relevantChanged, ...relevantUntracked]) {
-      const area = classifyFile(f);
-      if (!byArea[area]) byArea[area] = [];
-      byArea[area].push(f);
-    }
+  // Classify by area
+  const byArea = {};
+  for (const f of [...relevantChanged, ...relevantUntracked]) {
+    const area = classifyFile(f);
+    if (!byArea[area]) byArea[area] = [];
+    byArea[area].push(f);
+  }
 
-    // Build summary
-    const totalChanges = relevantChanged.length + relevantUntracked.length;
-    let summary = `**${totalChanges} files changed** across ${Object.keys(byArea).length} areas.`;
-    if (totalChanges > 0) {
-      const areas = Object.entries(byArea)
-        .sort((a, b) => b[1].length - a[1].length)
-        .map(([area, files]) => `  ${area}: ${files.length} files`);
-      summary += "\n" + areas.join("\n");
-    }
+  // Build summary
+  const totalChanges = relevantChanged.length + relevantUntracked.length;
+  let summary = `**${totalChanges} files changed** across ${Object.keys(byArea).length} areas.`;
+  if (totalChanges > 0) {
+    const areas = Object.entries(byArea)
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([area, files]) => `  ${area}: ${files.length} files`);
+    summary += "\n" + areas.join("\n");
+  }
 
-    // Separate scratch files from committable files
-    const committableChanged = relevantChanged.filter(f => !isScratchFile(f));
-    const committableUntracked = relevantUntracked.filter(f => !isScratchFile(f));
-    const scratchFiles = [...relevantChanged, ...relevantUntracked].filter(f => isScratchFile(f));
+  // Separate scratch files from committable files
+  const committableChanged = relevantChanged.filter(f => !isScratchFile(f));
+  const committableUntracked = relevantUntracked.filter(f => !isScratchFile(f));
+  const scratchFiles = [...relevantChanged, ...relevantUntracked].filter(f => isScratchFile(f));
 
-    // Save drift log if there were changes
-    if (totalChanges > 0) {
-      updateDriftLog(relevantChanged, relevantUntracked, summary);
-    }
+  // Save drift log if there were changes
+  if (totalChanges > 0) {
+    updateDriftLog(relevantChanged, relevantUntracked, summary);
+  }
 
-    writeTimestamp();
+  writeTimestamp();
 
-    // Auto-cleanup: delete scratch files older than TTL
-    for (const f of scratchFiles) {
-      const fp = path.join(WORKSPACE_ROOT, f);
-      try {
-        const stat = fs.statSync(fp);
-        if (Date.now() - stat.mtimeMs > SCRATCH_TTL_MS) {
-          fs.unlinkSync(fp);
-        }
-      } catch { /* file may have been deleted already */ }
-    }
-
-    // Auto-commit non-scratch drift (disabled by default — see FOLLOW_GIT_COMMIT_DISCIPLINE above)
-    if (committableChanged.length > 0 || committableUntracked.length > 0) {
-      const allCommittable = [...committableChanged, ...committableUntracked];
-      const areaList = Object.entries(byArea)
-        .filter(([area]) => committableChanged.some(f => classifyFile(f) === area) || committableUntracked.some(f => classifyFile(f) === area))
-        .map(([area, files]) => `${area}: ${files.length} files`)
-        .join(", ");
-
-      if (!FOLLOW_GIT_COMMIT_DISCIPLINE) {
-        // Re-enabled auto-commit: operator has opted out of commit discipline
-        try {
-          for (const f of allCommittable) {
-            execSync(`git add "${f}"`, { cwd: WORKSPACE_ROOT, timeout: 5000 });
-          }
-
-          const msg = `perf(session): auto-commit drift — ${areaList}`;
-          execSync(`git commit -m "${msg}" -m "Auto-committed at session end. ${totalChanges} files drifted (${scratchFiles.length} scratch excluded). Full log: top-code-memory/DRIFT.md"`, {
-            cwd: WORKSPACE_ROOT,
-            timeout: 10000,
-          });
-
-          // GitNexus re-index after commit if source/schema files changed
-          const hasTriggerFiles = allCommittable.some(f => NEXUS_TRIGGER_PATTERNS.some(p => p.test(f)));
-          if (hasTriggerFiles) {
-            try {
-              execSync('gitnexus group sync topinstal-workspace --verbose', {
-                cwd: WORKSPACE_ROOT,
-                timeout: 60000,
-                stdio: "pipe",
-              });
-            } catch { /* gitnexus sync is best-effort */ }
-          }
-        } catch {
-          // Auto-commit is best-effort; don't fail the hook
-        }
+  // Auto-cleanup: delete scratch files older than TTL
+  for (const f of scratchFiles) {
+    const fp = path.join(WORKSPACE_ROOT, f);
+    try {
+      const stat = fs.statSync(fp);
+      if (Date.now() - stat.mtimeMs > SCRATCH_TTL_MS) {
+        fs.unlinkSync(fp);
       }
-      // When FOLLOW_GIT_COMMIT_DISCIPLINE is true: no auto-commit.
-      // Drift is logged in DRIFT.md. Operator must explicitly request commit.
+    } catch { /* file may have been deleted already */ }
+  }
+
+  // Auto-commit non-scratch drift (disabled by default — see FOLLOW_GIT_COMMIT_DISCIPLINE above)
+  if (committableChanged.length > 0 || committableUntracked.length > 0) {
+    const allCommittable = [...committableChanged, ...committableUntracked];
+    const areaList = Object.entries(byArea)
+      .filter(([area]) => committableChanged.some(f => classifyFile(f) === area) || committableUntracked.some(f => classifyFile(f) === area))
+      .map(([area, files]) => `${area}: ${files.length} files`)
+      .join(", ");
+
+    if (!FOLLOW_GIT_COMMIT_DISCIPLINE) {
+      // Re-enabled auto-commit: operator has opted out of commit discipline
+      try {
+        for (const f of allCommittable) {
+          execSync(`git add "${f}"`, { cwd: WORKSPACE_ROOT, timeout: 5000 });
+        }
+
+        const msg = `perf(session): auto-commit drift — ${areaList}`;
+        execSync(`git commit -m "${msg}" -m "Auto-committed at session end. ${totalChanges} files drifted (${scratchFiles.length} scratch excluded). Full log: top-code-memory/DRIFT.md"`, {
+          cwd: WORKSPACE_ROOT,
+          timeout: 10000,
+        });
+
+        // GitNexus re-index after commit if source/schema files changed
+        const hasTriggerFiles = allCommittable.some(f => NEXUS_TRIGGER_PATTERNS.some(p => p.test(f)));
+        if (hasTriggerFiles) {
+          try {
+            execSync('gitnexus group sync topinstal-workspace --verbose', {
+              cwd: WORKSPACE_ROOT,
+              timeout: 60000,
+              stdio: "pipe",
+            });
+          } catch { /* gitnexus sync is best-effort */ }
+        }
+      } catch {
+        // Auto-commit is best-effort; don't fail the hook
+      }
+    }
+    // When FOLLOW_GIT_COMMIT_DISCIPLINE is true: no auto-commit.
+    // Drift is logged in DRIFT.md. Operator must explicitly request commit.
+  }
+
+  const logLines = ["[arch-refresh] OK"];
+  if (totalChanges === 0) {
+    logLines.push("  no drift");
+  } else {
+    logLines.push(`  ${totalChanges} files drifted`);
+    logLines.push("  log: top-code-memory/DRIFT.md");
+  }
+  logLines.push(`  refreshed: ${new Date().toISOString().slice(0, 19)}`);
+  writeCloseoutLog(WORKSPACE_ROOT, logLines);
+}
+
+readStdinPayload().then((payload) => {
+  try {
+    const manual = Boolean(payload.manual);
+    const convoId = payload.conversation_id || payload.conversationId || "unknown";
+
+    if (!acquireSessionEndLock(`arch-refresh-${convoId}`, manual)) {
+      process.stdout.write("{}\n");
+      return;
     }
 
-    const { writeCloseoutLog } = require("./lib/transcript-utils");
-    const logLines = ["[arch-refresh] OK"];
-    if (totalChanges === 0) {
-      logLines.push("  no drift");
-    } else {
-      logLines.push(`  ${totalChanges} files drifted`);
-      logLines.push("  log: top-code-memory/DRIFT.md");
-    }
-    logLines.push(`  refreshed: ${new Date().toISOString().slice(0, 19)}`);
-    writeCloseoutLog(WORKSPACE_ROOT, logLines);
+    runArchRefresh();
     process.stdout.write("{}\n");
   } catch (err) {
     try {
-      const { writeCloseoutLog } = require("./lib/transcript-utils");
       writeCloseoutLog(WORKSPACE_ROOT, [`[arch-refresh] ERROR: ${err.message}`]);
     } catch { /* best-effort */ }
     process.stdout.write("{}\n");
