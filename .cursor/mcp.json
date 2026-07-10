@@ -1,15 +1,11 @@
 {
   "mcpServers": {
     "openmemory": {
-      "command": "uvx",
+      "command": "npx",
       "args": [
-        "openmemory-mcp",
-        "--client",
-        "cursor"
-      ],
-      "env": {
-        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
-      }
+        "-y",
+        "@openmem/mcp@0.2.0"
+      ]
     },
     "playwright": {
       "command": "npx",

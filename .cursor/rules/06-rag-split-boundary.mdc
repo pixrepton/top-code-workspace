@@ -7,6 +7,6 @@ alwaysApply: false
 # RAG split boundary
 
 - `rag-widget/` — WordPress plugin, JS UI, shortcode. HTTP client to backend only.
-- `rag-chat-asystent/` — FastAPI, ingest, Chroma, `/chat`. No widget assets here.
+- `rag-chat-asystent/` — FastAPI, ingest, pgvector, `/chat`. No widget assets here.
 - Local dev API URL: `http://127.0.0.1:8000`
 - Do not add ingest/Chroma logic to rag-widget.

@@ -1,21 +1,26 @@
 /**
- * Session-stop auto-review hook (Faza 4 Divergence Loop).
+ * Session-end auto-review (divergence loop).
  *
- * Analizuje transkrypt sesji w poszukiwaniu divergence candidates:
- *   - Agent zaproponował → operator edytował → to divergence candidate
- *   - Szuka wzorców decyzji o regułach, propozycjach, edycjach operatora
- *   - Tworzy learning_rule_candidate z source: "auto_review"
+ * Scans transcript for divergence candidates; writes top-code-memory/AUTO_REVIEW_PENDING.md
+ * when found. Does NOT inject followup_message into chat.
  *
- * Called by .cursor/hooks.json "stop" hook.
- * Receives stdin JSON: { status, transcript_path, loop_count, conversation_id }
+ * ACTIVATION:
+ *   .cursor/hooks.json "sessionEnd" or scripts/run-session-stop-hooks.ps1
  */
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
 
-const LOCK_FILE = path.join(os.tmpdir(), ".cursor-auto-review.lock");
+const {
+  iterateUserQueries,
+  findLatestTranscript,
+  acquireSessionEndLock,
+  readStdinPayload,
+  writeCloseoutLog,
+} = require("./lib/transcript-utils");
 
-// Wzorce sugerujące divergence candidate
+const ROOT = path.join(__dirname, "..", "..");
+const OUTPUT_PATH = path.join(ROOT, "top-code-memory", "AUTO_REVIEW_PENDING.md");
+
 const PROPOSAL_PATTERNS = [
   /propozycj|proposal|sugest|suggest|zasuger/i,
   /agent\s*(propon|propos)/i,
@@ -28,7 +33,6 @@ const PROPOSAL_PATTERNS = [
 
 const OPERATOR_EDIT_PATTERNS = [
   /operator\s*(edytował|edytowal|zmienił|zmienil|zaakceptował|zaakceptowal)/i,
-  /edit|edyt/i,
   /hitl_edit|hitl_approve/i,
   /operator\s*response/i,
   /zatwierdz.*po edycji/i,
@@ -40,182 +44,122 @@ const RULE_DECISION_PATTERNS = [
   /playbook|pattern_key|candidate_id/i,
 ];
 
-function findLatestTranscript() {
-  const TRANSCRIPTS_DIR = path.join(os.tmpdir(), "cursor", "agent-transcripts");
-  if (!fs.existsSync(TRANSCRIPTS_DIR)) return null;
-  const files = fs.readdirSync(TRANSCRIPTS_DIR)
-    .filter(f => f.endsWith(".jsonl"))
-    .map(f => ({
-      name: f,
-      path: path.join(TRANSCRIPTS_DIR, f),
-      mtime: fs.statSync(path.join(TRANSCRIPTS_DIR, f)).mtimeMs,
-    }))
-    .sort((a, b) => b.mtime - a.mtime);
-  return files.length > 0 ? files[0].path : null;
-}
-
 function scanTranscript(filepath) {
-  try {
-    const content = fs.readFileSync(filepath, "utf8");
-    const lower = content.toLowerCase();
+  const proposals = [];
+  const operatorEdits = [];
+  const ruleDecisions = [];
 
-    const proposals = [];
-    const operatorEdits = [];
-    const ruleDecisions = [];
-
-    // Scan line by line for user turns mentioning divergence candidates
-    const lines = content.split(/\r?\n/).filter(Boolean);
-    for (const line of lines) {
-      try {
-        const obj = JSON.parse(line);
-        if (obj.role !== "user") continue;
-        const text = typeof obj.content === "string" ? obj.content : JSON.stringify(obj);
-
-        for (const pat of PROPOSAL_PATTERNS) {
-          if (pat.test(text)) {
-            proposals.push(text.slice(0, 150));
-            break;
-          }
-        }
-        for (const pat of OPERATOR_EDIT_PATTERNS) {
-          if (pat.test(text)) {
-            operatorEdits.push(text.slice(0, 150));
-            break;
-          }
-        }
-        for (const pat of RULE_DECISION_PATTERNS) {
-          if (pat.test(text)) {
-            ruleDecisions.push(text.slice(0, 150));
-            break;
-          }
-        }
-      } catch { /* skip malformed */ }
+  iterateUserQueries(filepath, (query) => {
+    for (const pat of PROPOSAL_PATTERNS) {
+      if (pat.test(query)) {
+        proposals.push(query.slice(0, 200));
+        break;
+      }
     }
+    for (const pat of OPERATOR_EDIT_PATTERNS) {
+      if (pat.test(query)) {
+        operatorEdits.push(query.slice(0, 200));
+        break;
+      }
+    }
+    for (const pat of RULE_DECISION_PATTERNS) {
+      if (pat.test(query)) {
+        ruleDecisions.push(query.slice(0, 200));
+        break;
+      }
+    }
+  });
 
-    return {
-      proposals: [...new Set(proposals)].slice(0, 10),
-      operatorEdits: [...new Set(operatorEdits)].slice(0, 10),
-      ruleDecisions: [...new Set(ruleDecisions)].slice(0, 10),
-      hasDivergenceActivity: proposals.length > 0 && operatorEdits.length > 0,
-      totalCandidates: Math.min(proposals.length, operatorEdits.length),
-    };
-  } catch {
-    return {
-      proposals: [],
-      operatorEdits: [],
-      ruleDecisions: [],
-      hasDivergenceActivity: false,
-      totalCandidates: 0,
-    };
-  }
+  const uniqueProposals = [...new Set(proposals)].slice(0, 10);
+  const uniqueEdits = [...new Set(operatorEdits)].slice(0, 10);
+  const uniqueRules = [...new Set(ruleDecisions)].slice(0, 10);
+
+  return {
+    proposals: uniqueProposals,
+    operatorEdits: uniqueEdits,
+    ruleDecisions: uniqueRules,
+    hasDivergenceActivity: uniqueProposals.length > 0 && uniqueEdits.length > 0,
+    totalCandidates: Math.min(uniqueProposals.length, uniqueEdits.length),
+  };
 }
 
-function formatSummary(scanResult) {
-  if (!scanResult.hasDivergenceActivity) {
-    return null;
-  }
-
+function formatFile(result, convoId, transcriptPath) {
   const parts = [
-    "--- AUTO-REVIEW: divergence candidates found ---",
-    `Found ~${scanResult.totalCandidates} potential divergence candidate(s) in this session.`,
+    "# Auto-review: divergence candidates",
+    "",
+    `Created: ${new Date().toISOString()}`,
+    `Session: ${convoId}`,
+    `Transcript: ${transcriptPath}`,
+    `Candidates: ~${result.totalCandidates}`,
     "",
   ];
-
-  if (scanResult.proposals.length > 0) {
-    parts.push(`Proposals (${scanResult.proposals.length}):`);
-    for (const p of scanResult.proposals.slice(0, 5)) {
-      parts.push(`  \u2022 ${p.slice(0, 120)}`);
+  if (result.proposals.length > 0) {
+    parts.push("## Proposals", "");
+    for (const p of result.proposals.slice(0, 5)) {
+      parts.push(`- ${p.replace(/\s+/g, " ").slice(0, 160)}`);
     }
     parts.push("");
   }
-
-  if (scanResult.operatorEdits.length > 0) {
-    parts.push(`Operator edits (${scanResult.operatorEdits.length}):`);
-    for (const e of scanResult.operatorEdits.slice(0, 5)) {
-      parts.push(`  \u2022 ${e.slice(0, 120)}`);
+  if (result.operatorEdits.length > 0) {
+    parts.push("## Operator edits", "");
+    for (const e of result.operatorEdits.slice(0, 5)) {
+      parts.push(`- ${e.replace(/\s+/g, " ").slice(0, 160)}`);
     }
     parts.push("");
   }
-
-  if (scanResult.ruleDecisions.length > 0) {
-    parts.push(`Rule decisions (${scanResult.ruleDecisions.length}):`);
-    for (const d of scanResult.ruleDecisions.slice(0, 3)) {
-      parts.push(`  \u2022 ${d.slice(0, 120)}`);
+  if (result.ruleDecisions.length > 0) {
+    parts.push("## Rule decisions", "");
+    for (const d of result.ruleDecisions.slice(0, 3)) {
+      parts.push(`- ${d.replace(/\s+/g, " ").slice(0, 160)}`);
     }
     parts.push("");
   }
-
   parts.push(
-    "ACTION REQUIRED:",
-    "  For each divergence candidate found above, create a learning_rule_candidate",
-    "  record in the database with source = 'auto_review' and status = 'pending_operator'.",
-    "  Use the `update_candidate_status` or `maybe_create_learning_candidate` flow",
-    "  to persist these so the operator can review them in the decision queue.",
+    "## Next steps",
     "",
-    "  Format per candidate:",
-    "    - pattern_key: <case_family>::<proposal_type>::<response_type>",
-    "    - rule_text_pl: opis divergence ktora wymaga uwagi",
-    "    - metadata: { \"source\": \"auto_review\", \"session\": \"<conversation_id>\" }",
+    "Persist learning_rule_candidate records (source: auto_review) for operator review.",
+    "Delete this file after processing.",
+    "",
   );
-
   return parts.join("\n");
 }
 
-const chunks = [];
-process.stdin.on("data", (c) => chunks.push(c));
-process.stdin.on("end", () => {
+readStdinPayload().then((payload) => {
   try {
-    let raw = Buffer.concat(chunks).toString("utf8").trim();
-    if (!raw) raw = "{}";
-    const payload = JSON.parse(raw);
-    const status = payload.status;
-    const transcriptPath = payload.transcript_path;
-    const loopCount = Number(payload.loop_count || 0);
-    const convoId = payload.conversation_id || "unknown";
+    const manual = Boolean(payload.manual);
+    const convoId = payload.conversation_id || payload.conversationId || "unknown";
+    const transcriptPath = payload.transcript_path || findLatestTranscript();
 
-    // Sentinel lock
-    if (fs.existsSync(LOCK_FILE)) {
+    if (!acquireSessionEndLock(`auto-review-${convoId}`, manual)) {
       process.stdout.write("{}\n");
       return;
     }
 
-    // Only run on completed sessions
-    if (status !== "completed") {
+    if (!transcriptPath || !fs.existsSync(transcriptPath)) {
+      writeCloseoutLog(ROOT, ["[auto-review] No transcript — skipped."]);
       process.stdout.write("{}\n");
       return;
     }
 
-    // Prevent re-trigger loops
-    if (loopCount > 0) {
+    const result = scanTranscript(transcriptPath);
+    if (!result.hasDivergenceActivity) {
+      writeCloseoutLog(ROOT, ["[auto-review] No divergence activity."]);
       process.stdout.write("{}\n");
       return;
     }
 
-    // Find transcript
-    const resolvedPath = transcriptPath || findLatestTranscript();
-    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
-      process.stdout.write("{}\n");
-      return;
-    }
+    const outDir = path.dirname(OUTPUT_PATH);
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(OUTPUT_PATH, formatFile(result, convoId.slice(0, 12), transcriptPath), "utf8");
 
-    const result = scanTranscript(resolvedPath);
-    const summary = formatSummary(result);
-
-    // Write sentinel lock
-    try { fs.writeFileSync(LOCK_FILE, new Date().toISOString(), "utf8"); } catch { }
-
-    if (summary) {
-      process.stdout.write(JSON.stringify({
-        followup_message: summary,
-        auto_review_found: result.totalCandidates,
-        auto_review_session: convoId.slice(0, 12),
-      }) + "\n");
-    } else {
-      process.stdout.write("{}\n");
-    }
+    writeCloseoutLog(ROOT, [
+      "[auto-review] Candidates found",
+      `  count: ~${result.totalCandidates}`,
+      `  file: top-code-memory/AUTO_REVIEW_PENDING.md`,
+    ]);
+    process.stdout.write("{}\n");
   } catch (err) {
-    process.stdout.write(JSON.stringify({
-      followup_message: "[AUTO-REVIEW ERROR] " + err.message,
-    }) + "\n");
+    writeCloseoutLog(ROOT, [`[auto-review] ERROR: ${err.message}`]);
+    process.stdout.write("{}\n");
   }
 });

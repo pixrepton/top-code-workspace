@@ -8,11 +8,13 @@ Keep this file short. Deep docs live in `knowledge/` and per-repo `AGENTS.md`.
 Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends (Node B / RAG), and cross-repo contracts.
 
 **OS guide:** `knowledge/docs/OS_README.md`
+**Workspace onboarding (router):** `knowledge/docs/WORKSPACE_ONBOARDING.md`
 **AI-DEV onboarding:** `knowledge/docs/ai-dev-onboarding-path.md`
 **Stan dla zewnętrznych asystentów:** `knowledge/memory/ACTIVE_WORKSPACE.md`
 **Atlas (cross-repo):** `knowledge/SYSTEM_ATLAS.md`
 **Operator environment:** `knowledge/docs/AGENT_OPERATOR_ENVIRONMENT.md`
 **Active decisions (read first):** `knowledge/memory/OPERATOR_DECISIONS.md`
+**Open backlog (agent-maintained):** `knowledge/memory/BACKLOG.md`
 **Doc policy (how to write/update docs):** `knowledge/DOCUMENTATION_POLICY.md`
 **MCP policy (how/when to use MCP servers):** `knowledge/MCP_POLICY.md`
 **Plugin policy (how/when to use plugins):** `knowledge/PLUGIN_POLICY.md`
@@ -37,26 +39,24 @@ Machine map: `knowledge/SYSTEM_ATLAS.md` (maszyny i topologia)
 
 ## Logical products
 
-| Product              | Folder                  | Node | Entry AGENTS                                                                                                                                                                                    |
-| -------------------- | ----------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| gmail-agent AI       | `gmail-agent/`          | B    | `gmail-agent/AGENTS.md` — enterprise hardening closed (exceptions, logging, LLM resilience, write safety, distributed tracing, circuit breakers); details in `knowledge/memory/LAST_SESSION.md` |
-| Daszek UI            | `daszek/`               | A    | [`daszek/README-DASZEK.md`](daszek/README-DASZEK.md) §16 — includes Tasks view (3 sections: pending/active/agent-suggested)                                                                     |
-| RAG backend          | `rag-chat-asystent/`    | B    | `rag-chat-asystent/AGENTS.md` (Graph RAG: `docs/GRAPH_RAG_RUNTIME.md`)                                                                                                                          |
-| RAG widget WP        | `rag-widget/`           | A    | `rag-widget/AGENTS.md`                                                                                                                                                                          |
-| WP mail bridge       | `wp-bridges/`           | A    | `wp-bridges/AGENTS.md`                                                                                                                                                                          |
-| kalk-top             | `kalk-top/`             | A    | `kalk-top/AGENTS.md`                                                                                                                                                                            |
-| Cieplo worker        | `cieplo-orchestrator/`  | B    | `cieplo-orchestrator/AGENTS.md`                                                                                                                                                                 |
-| Generator            | `top-instal-generator/` | A    | `top-instal-generator/AGENTS.md`                                                                                                                                                                |
-| fast-kalk            | `fast-kalk/`            | A    | `fast-kalk/AGENTS.md`                                                                                                                                                                           |
-| Cross-repo knowledge | `knowledge/`            | meta | `knowledge/INDEX.md` (cold-start)                                                                                                                                                               |
+| Product              | Folder                  | Node | Entry AGENTS                                                                                                                              |
+| -------------------- | ----------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| gmail-agent AI       | `gmail-agent/`          | B    | `gmail-agent/AGENTS.md` · deep [`gmail-agent/docs/core/PROJECT_README.md`](gmail-agent/docs/core/PROJECT_README.md)                       |
+| Daszek UI            | `daszek/`               | A    | [`daszek/docs/core/PROJECT_README.md`](daszek/docs/core/PROJECT_README.md) · runbook [`daszek/README-DASZEK.md`](daszek/README-DASZEK.md) |
+| RAG backend          | `rag-chat-asystent/`    | B    | `rag-chat-asystent/AGENTS.md` (Graph RAG: `docs/GRAPH_RAG_RUNTIME.md`)                                                                    |
+| RAG widget WP        | `rag-widget/`           | A    | `rag-widget/AGENTS.md`                                                                                                                    |
+| WP mail bridge       | `wp-bridges/`           | A    | `wp-bridges/AGENTS.md`                                                                                                                    |
+| kalk-top             | `kalk-top/`             | A    | `kalk-top/AGENTS.md`                                                                                                                      |
+| Cieplo worker        | `cieplo-orchestrator/`  | B    | `cieplo-orchestrator/AGENTS.md`                                                                                                           |
+| Generator            | `top-instal-generator/` | A    | `top-instal-generator/AGENTS.md`                                                                                                          |
+| fast-kalk            | `fast-kalk/`            | A    | `fast-kalk/AGENTS.md`                                                                                                                     |
+| Cross-repo knowledge | `knowledge/`            | meta | `knowledge/INDEX.md` (cold-start)                                                                                                         |
 
-## Latest closure state (2026-07-04)
+## Latest closure state (2026-07-10)
 
-Enterprise hardening sprint across gmail-agent (mail + chat agent) is closed.
-Proof gates: exception taxonomy, structured logging w/ correlation context,
-LLM resilience (timeout + circuit breaker), write-path idempotency, chat-agent
-enterprise (prompt injection guard, self-diagnosis, cross-session memory),
-mailbox store split into 4 modules, 113/113 tests PASS.
+pytest `tools/gmail_audit/tests`: **1256 passed** (GREEN) — metryki w `knowledge/memory/ACTIVE_WORKSPACE.md`.
+Proof operacyjny lokalny: LPS § `GATE_B_GAPS_CLOSED` (CT-FU-5 materialize, e2e 12/12).
+Dokumentacja warstwowa: `WORKSPACE_ONBOARDING.md` + `daszek/docs/core/PROJECT_README.md` (faza 2).
 
 Full session-by-session detail: `knowledge/memory/LAST_SESSION.md`
 Do not re-read the raw session log here — it lives there by design
@@ -65,13 +65,15 @@ Do not re-read the raw session log here — it lives there by design
 ## Cold-start
 
 1. **`knowledge/INDEX.md`** — jedyny punkt startowy (zawiera prawidlowy cold-start)
-2. This file (AGENTS.md) — router ekosystemu
-3. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
-4. GitNexus MCP — `query` / `impact` only
-5. Serena MCP — symbol navigation / refactors
-6. Source + tests
+2. **`knowledge/docs/WORKSPACE_ONBOARDING.md`** — router portów, oś gmail↔daszek, ścieżki czytania
+3. This file (AGENTS.md) — router ekosystemu
+4. Target repo deep manual: `gmail-agent/docs/core/PROJECT_README.md` lub `daszek/docs/core/PROJECT_README.md`
+5. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
+6. GitNexus MCP — `query` / `impact` only
+7. Serena MCP — symbol navigation / refactors
+8. Source + tests
 
-## Modes (`knowledge/.cursorrules`)
+## Modes (reguły w `.cursor/rules/*.mdc`)
 
 - **Execution:** respect As-Is; no new HTTP edges without approval; report contract impact
 - **Discovery:** RFC in `knowledge/rfc/` before cross-repo code

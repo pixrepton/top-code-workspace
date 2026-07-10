@@ -29,3 +29,6 @@ services:
     environment:
       # Use host.docker.internal so downloadUrls are resolvable from other Docker containers
       KALK_TOP_RUNTIME_BASE_URL: http://host.docker.internal:8091
+      NODE_B_REGISTRY_BASE_URL: http://host.docker.internal:8766
+    env_file:
+      - ./gmail-agent/.env.local-vps

@@ -9,26 +9,21 @@
         "command": "node .cursor/hooks/session-start-arch-check.js"
       }
     ],
-    "stop": [
+    "sessionEnd": [
       {
-        "command": "node .cursor/hooks/session-stop-reflect.js",
-        "loop_limit": 1
+        "command": "node .cursor/hooks/session-stop-reflect.js"
       },
       {
-        "command": "node .cursor/hooks/session-stop-arch-refresh.js",
-        "loop_limit": 1
+        "command": "node .cursor/hooks/session-stop-arch-refresh.js"
       },
       {
-        "command": "node .cursor/hooks/session-stop-engram.js",
-        "loop_limit": 1
+        "command": "node .cursor/hooks/session-stop-engram.js"
       },
       {
-        "command": "node .cursor/hooks/session-stop-parse-transcript.js",
-        "loop_limit": 1
+        "command": "node .cursor/hooks/session-stop-parse-transcript.js"
       },
       {
-        "command": "node .cursor/hooks/session-stop-auto-review.js",
-        "loop_limit": 1
+        "command": "node .cursor/hooks/session-stop-auto-review.js"
       }
     ]
   }

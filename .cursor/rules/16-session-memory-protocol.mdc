@@ -7,12 +7,13 @@ alwaysApply: true
 
 ## 0. Reflection Protocol (primary memory system)
 
-Hook `session-stop-reflect.js` na `stop` sprawdza czy sesja zawiera
-decyzje architektoniczne. Jesli tak, zwraca followup_message.
-Agent MUSI wtedy uruchomic subagenta refleksyjnego (Task tool)
-ktory zapisze Reflection do `top-code-memory/reflections/YYYY-MM-DD-slug.md`.
+Hook `session-stop-reflect.js` na `sessionEnd` sprawdza czy sesja zawiera
+decyzje architektoniczne. Jesli tak, zapisuje `top-code-memory/PENDING_REFLECTION.md`.
+Agent na **nastepnej** sesji (sessionStart inject) widzi ten plik i MUSI
+uruchomic subagenta refleksyjnego (Task tool) oraz zapisac Reflection.
 
 Format Reflection:
+
 - ## Decyzje architektoniczne — kazda z uzasadnieniami i cytatami z transkryptu
 - ## Stan koncowy — co dziala, co nie dziala
 - ## Wzorce — czego sie nauczyles, czego unikac
@@ -22,6 +23,7 @@ Reflection zastepuje stare LAST_SESSION.md jako glowne zrodlo pamieci miedzy ses
 Na starcie sesji `session-start-inject.js` wstrzykuje ostatni Reflection (L2).
 
 Memory Retrieval:
+
 - L2 = ostatni Reflection (wstrzykiwany na start, ~3000 znakow)
 - L3 = starsze Reflection (agent czyta z `top-code-memory/reflections/` gdy potrzebuje)
 - L4 = dokumentacja projektu (knowledge/, AGENTS.md, INDEX.md)
@@ -39,6 +41,7 @@ At the **end of every session** (before stopping or handing off), the agent MUST
 ### 1. Update knowledge/memory/LAST_SESSION.md
 
 Write a structured summary covering:
+
 - **Co zrobione** — table of changes (file, area, result)
 - **State before** — what was broken
 - **State after** — system state at session end
@@ -50,15 +53,22 @@ Write a structured summary covering:
 
 Copy or mirror the same summary here (the hooks archive this file automatically).
 
-### 3. Run session-stop hooks
+### 3. Run session-end hooks
 
-The hooks in `.cursor/hooks.json` will:
-- `session-stop-reflect.js` → check if session needs reflection, trigger via followup_message
-- `session-stop-arch-refresh.js` → check git diff, write DRIFT.md, update .last-refreshed
-- `session-stop-engram.js` → archive LAST_SESSION.md into `top-code-memory/sessions/` and update INDEX.md
+The hooks in `.cursor/hooks.json` under **`sessionEnd`** (once per chat close):
 
-Do NOT skip this step. Hooks run automatically when the session ends in Cursor IDE,
-but if you exit manually, call: `echo "" | node .cursor/hooks/session-stop-engram.js`
+- `session-stop-reflect.js` → `PENDING_REFLECTION.md` if architectural decisions detected
+- `session-stop-arch-refresh.js` → git diff, write DRIFT.md, update .last-refreshed
+- `session-stop-engram.js` → archive LAST_SESSION.md into `top-code-memory/sessions/`
+- `session-stop-parse-transcript.js` → `top-code-memory/TRANSCRIPT_PARSE.md` (no chat injection)
+- `session-stop-auto-review.js` → `AUTO_REVIEW_PENDING.md` when divergence found
+
+Log: `top-code-memory/SESSION_CLOSEOUT.log`
+
+**Manual closeout** (operator: „uruchom hooki końca sesji”):
+`powershell -File scripts/run-session-stop-hooks.ps1`
+
+Hooks do **not** use `stop` (per-turn). They never inject `followup_message` into chat.
 
 ### 4. Save new operator decisions
 
@@ -72,14 +82,14 @@ If any P0/P1 items were closed or opened, update:
 
 ### Memory file locations
 
-| File | Purpose |
-|------|---------|
+| File                                             | Purpose                                               |
+| ------------------------------------------------ | ----------------------------------------------------- |
 | `top-code-memory/reflections/YYYY-MM-DD-slug.md` | **PRIMARY** — Reflection (decisions + justifications) |
-| `top-code-memory/reflections/INDEX.md` | Master index of all reflections |
-| `top-code-memory/LAST_SESSION.md` | Legacy session summary (mirror) |
-| `top-code-memory/sessions/YYYY-MM-DD-slug.md` | Archived session engrams |
-| `top-code-memory/sessions/YYYY-MM-DD.jsonl` | Archived full transcripts |
-| `top-code-memory/INDEX.md` | Master index of all sessions |
-| `top-code-memory/DRIFT.md` | Git diff per session (auto, by hook) |
-| `knowledge/memory/OPERATOR_DECISIONS.md` | Canonical operator decisions |
-| `knowledge/memory/BACKLOG.md` | Open tasks P0-P3 |
+| `top-code-memory/reflections/INDEX.md`           | Master index of all reflections                       |
+| `top-code-memory/LAST_SESSION.md`                | Legacy session summary (mirror)                       |
+| `top-code-memory/sessions/YYYY-MM-DD-slug.md`    | Archived session engrams                              |
+| `top-code-memory/sessions/YYYY-MM-DD.jsonl`      | Archived full transcripts                             |
+| `top-code-memory/INDEX.md`                       | Master index of all sessions                          |
+| `top-code-memory/DRIFT.md`                       | Git diff per session (auto, by hook)                  |
+| `knowledge/memory/OPERATOR_DECISIONS.md`         | Canonical operator decisions                          |
+| `knowledge/memory/BACKLOG.md`                    | Open tasks P0-P3                                      |

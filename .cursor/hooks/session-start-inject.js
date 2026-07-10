@@ -168,7 +168,21 @@ process.stdin.on("end", () => {
       parts.push(`\n--- DRIFT (since last session) ---\n${driftLog}`);
     }
 
-    // 6. Fallback: legacy LAST_SESSION.md (only if no Reflection exists)
+    // 6. Pending work from last session closeout (sessionEnd hooks)
+    const pendingReflection = readTrimmed(path.join(root, "top-code-memory/PENDING_REFLECTION.md"), 1500);
+    if (pendingReflection) {
+      parts.push(`\n--- PENDING REFLECTION (from session end) ---\n${pendingReflection}`);
+    }
+    const pendingAutoReview = readTrimmed(path.join(root, "top-code-memory/AUTO_REVIEW_PENDING.md"), 1200);
+    if (pendingAutoReview) {
+      parts.push(`\n--- AUTO-REVIEW PENDING (from session end) ---\n${pendingAutoReview}`);
+    }
+    const transcriptParse = readTrimmed(path.join(root, "top-code-memory/TRANSCRIPT_PARSE.md"), 1200);
+    if (transcriptParse) {
+      parts.push(`\n--- LAST TRANSCRIPT PARSE ---\n${transcriptParse}`);
+    }
+
+    // 7. Fallback: legacy LAST_SESSION.md (only if no Reflection exists)
     if (!hasReflection) {
       const lastSessionNew = readTrimmed(
         path.join(root, "top-code-memory/LAST_SESSION.md"), 2500

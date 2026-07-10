@@ -240,6 +240,9 @@ if (-not $mailboxPortSeen) { $vpsOut.Add("MAILBOX_MEMORY_PG_PORT=$mailboxPgPort"
 $daszekEnv = Join-Path $gmailRoot 'deploy\.env.daszek-local'
 $daszekEnvRoot = Join-Path $env:TOP_CODE_ROOT '.env.daszek-local'
 if ($registryToken) {
+    # Token tiers (Phase 9.6): local stack mirrors one registry token into operator API,
+    # bridge queue, and service paths. Production should split DASZEK_NODE_B_API_TOKEN (operator),
+    # DASZEK_BRIDGE_TOKEN (WP bridge), and DASZEK_NODE_B_SERVICE_TOKEN (internal service).
     $daszekTokenUpdates = @{
         DASZEK_NODE_B_API_TOKEN     = $registryToken
         DASZEK_BRIDGE_TOKEN         = $registryToken

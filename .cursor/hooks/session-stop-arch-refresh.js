@@ -17,8 +17,9 @@
  *   Commit message includes drift summary by area.
  *
  * ACTIVATION:
- *   Called by Cursor IDE via .cursor/hooks.json "stop" hook.
- *   Receives stdin JSON: { status: "completed", loop_count: 0 }
+ *   Called by Cursor IDE via .cursor/hooks.json "sessionEnd" hook.
+ *   Or manually: scripts/run-session-stop-hooks.ps1
+ *   Writes DRIFT.md only — does NOT inject into chat.
  */
 
 const fs = require("fs");
@@ -31,6 +32,14 @@ const RUNTIME_DIR = path.join(WORKSPACE_ROOT, "knowledge", "runtime");
 const LAST_REFRESHED = path.join(MEMORY_DIR, ".last-refreshed");
 const RUNTIME_LAST_REFRESHED = path.join(RUNTIME_DIR, ".last-refreshed");
 const DRIFT_LOG = path.join(MEMORY_DIR, "DRIFT.md");
+
+/**
+ * Auto-commit is disabled by default — operator must explicitly request commits.
+ * See AGENTS.md § Agent rules: "Git commit/push: only when operator explicitly asks".
+ *
+ * Change FOLLOW_GIT_COMMIT_DISCIPLINE to false to re-enable auto-commit.
+ */
+const FOLLOW_GIT_COMMIT_DISCIPLINE = true;
 
 // Scratch files older than this TTL are auto-deleted (7 days)
 const SCRATCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -202,64 +211,62 @@ process.stdin.on("end", () => {
       } catch { /* file may have been deleted already */ }
     }
 
-    // Auto-commit non-scratch drift
+    // Auto-commit non-scratch drift (disabled by default — see FOLLOW_GIT_COMMIT_DISCIPLINE above)
     if (committableChanged.length > 0 || committableUntracked.length > 0) {
-      try {
-        const allCommittable = [...committableChanged, ...committableUntracked];
-        for (const f of allCommittable) {
-          execSync(`git add "${f}"`, { cwd: WORKSPACE_ROOT, timeout: 5000 });
+      const allCommittable = [...committableChanged, ...committableUntracked];
+      const areaList = Object.entries(byArea)
+        .filter(([area]) => committableChanged.some(f => classifyFile(f) === area) || committableUntracked.some(f => classifyFile(f) === area))
+        .map(([area, files]) => `${area}: ${files.length} files`)
+        .join(", ");
+
+      if (!FOLLOW_GIT_COMMIT_DISCIPLINE) {
+        // Re-enabled auto-commit: operator has opted out of commit discipline
+        try {
+          for (const f of allCommittable) {
+            execSync(`git add "${f}"`, { cwd: WORKSPACE_ROOT, timeout: 5000 });
+          }
+
+          const msg = `perf(session): auto-commit drift — ${areaList}`;
+          execSync(`git commit -m "${msg}" -m "Auto-committed at session end. ${totalChanges} files drifted (${scratchFiles.length} scratch excluded). Full log: top-code-memory/DRIFT.md"`, {
+            cwd: WORKSPACE_ROOT,
+            timeout: 10000,
+          });
+
+          // GitNexus re-index after commit if source/schema files changed
+          const hasTriggerFiles = allCommittable.some(f => NEXUS_TRIGGER_PATTERNS.some(p => p.test(f)));
+          if (hasTriggerFiles) {
+            try {
+              execSync('gitnexus group sync topinstal-workspace --verbose', {
+                cwd: WORKSPACE_ROOT,
+                timeout: 60000,
+                stdio: "pipe",
+              });
+            } catch { /* gitnexus sync is best-effort */ }
+          }
+        } catch {
+          // Auto-commit is best-effort; don't fail the hook
         }
-
-        // Build commit message from drift areas
-        const areaList = Object.entries(byArea)
-          .filter(([area]) => committableChanged.some(f => classifyFile(f) === area) || committableUntracked.some(f => classifyFile(f) === area))
-          .map(([area, files]) => `${area}: ${files.length} files`)
-          .join(", ");
-
-        const msg = `perf(session): auto-commit drift — ${areaList}`;
-        execSync(`git commit -m "${msg}" -m "Auto-committed at session end. ${totalChanges} files drifted (${scratchFiles.length} scratch excluded). Full log: top-code-memory/DRIFT.md"`, {
-          cwd: WORKSPACE_ROOT,
-          timeout: 10000,
-        });
-
-        // GitNexus re-index after commit if source/schema files changed
-        const hasTriggerFiles = allCommittable.some(f => NEXUS_TRIGGER_PATTERNS.some(p => p.test(f)));
-        if (hasTriggerFiles) {
-          try {
-            execSync('gitnexus group sync topinstal-workspace --verbose', {
-              cwd: WORKSPACE_ROOT,
-              timeout: 60000,
-              stdio: "pipe",
-            });
-          } catch { /* gitnexus sync is best-effort */ }
-        }
-      } catch {
-        // Auto-commit is best-effort; don't fail the hook
       }
+      // When FOLLOW_GIT_COMMIT_DISCIPLINE is true: no auto-commit.
+      // Drift is logged in DRIFT.md. Operator must explicitly request commit.
     }
 
-    // Output
-    const lines = ["🏗️  ARCHITECTURE REFRESH", ""];
+    const { writeCloseoutLog } = require("./lib/transcript-utils");
+    const logLines = ["[arch-refresh] OK"];
     if (totalChanges === 0) {
-      lines.push("  No drift detected — all clean.");
+      logLines.push("  no drift");
     } else {
-      lines.push(`  ${totalChanges} files drifted:`);
-      const sortedAreas = Object.entries(byArea).sort((a, b) => b[1].length - a[1].length);
-      for (const [area, files] of sortedAreas) {
-        lines.push(`    ${area}: ${files.length} files`);
-      }
-      if (scratchFiles.length > 0) {
-        lines.push("");
-        lines.push(`  ${scratchFiles.length} scratch file(s) excluded from commit:`);
-        for (const f of scratchFiles) lines.push(`    ${f}`);
-      }
-      lines.push("");
-      lines.push(`  Full log: top-code-memory/DRIFT.md`);
+      logLines.push(`  ${totalChanges} files drifted`);
+      logLines.push("  log: top-code-memory/DRIFT.md");
     }
-    lines.push(`  Last refreshed: ${new Date().toISOString().slice(0, 19)}`);
-
-    process.stdout.write(JSON.stringify({ followup_message: lines.join("\n") }) + "\n");
+    logLines.push(`  refreshed: ${new Date().toISOString().slice(0, 19)}`);
+    writeCloseoutLog(WORKSPACE_ROOT, logLines);
+    process.stdout.write("{}\n");
   } catch (err) {
-    process.stdout.write(JSON.stringify({ followup_message: `[arch refresh error] ${err.message}` }) + "\n");
+    try {
+      const { writeCloseoutLog } = require("./lib/transcript-utils");
+      writeCloseoutLog(WORKSPACE_ROOT, [`[arch-refresh] ERROR: ${err.message}`]);
+    } catch { /* best-effort */ }
+    process.stdout.write("{}\n");
   }
 });

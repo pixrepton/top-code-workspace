@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Local-only mandate
 
-- **Active runtime:** Docker Desktop — gmail-agent `:8766` host (container `8765`), RAG `:8000`, Postgres `:54329` / GraphStore `:54330`.
+- **Active runtime:** Docker Desktop — gmail-agent `:8766` host (container `8765`), RAG `:8000`, Postgres `:54129` / GraphStore `:54130`.
 - **Production:** firma w zawieszeniu — brak VPS, brak deploy na żywą stronę w backlogu (OPERATOR_DECISIONS 2026-06-17). Docker lokalny **imituje** prod; to jest jedyny aktywny cel.
 - Do **not** propose SSH, VPS deploy, prod WP deploy, or curl to legacy hosts (`178.104.171.104`, `46.224.235.86`) as the next step.
 - Do **not** treat `prod_deploy_missing` or similar as open P0 — see `world-state.deferred_production`.
