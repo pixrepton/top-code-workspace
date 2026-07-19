@@ -1,121 +1,39 @@
 ---
-description: Session-end memory protocol — Reflection + legacy engram support
+description: "Session memory protocol - canonical memory only"
 alwaysApply: true
 ---
 
-# Session memory protocol
+# Session Memory Protocol
 
-## Operator-driven session boundaries (canonical)
+Canonical persistent memory lives only in:
 
-Operator steruje granicami sesji dwoma komendami. Auto-hooki Cursor: **tylko `sessionEnd` jako backup** (`.cursor/hooks.json` — `sessionStart` jest puste).
+- `knowledge/memory/OPERATOR_DECISIONS.md`
+- `knowledge/memory/BACKLOG.md`
+- `knowledge/memory/ACTIVE_WORKSPACE.md`
+- `knowledge/memory/LAST_SESSION.md`
 
-### Start — operator: „uruchom hooki startu sesji”
+`top-code-memory/`, repo-local `memory-bank/`, transcript stores and reflection stores are not active memory systems.
 
-1. `powershell -File scripts/run-session-start-hooks.ps1`
-2. Przeczytaj `top-code-memory/SESSION_START_CONTEXT.md`
-3. Jeśli `top-code-memory/PENDING_REFLECTION.md` istnieje → **priorytet**: napisz Reflection, zaktualizuj `top-code-memory/reflections/INDEX.md`, usuń pending
-4. Cold-start: `knowledge/INDEX.md` → `WORKSPACE_ONBOARDING.md` → `BACKLOG` P0/P1
+## Start
 
-### Koniec — operator: „koniec sesji czatu. uruchom hooki końca sesji”
+Operator command: "uruchom hooki startu sesji"
 
-1. Zaktualizuj `knowledge/memory/LAST_SESSION.md`
-2. **Mirror** (ten sam content) → `top-code-memory/LAST_SESSION.md` — **obowiązkowe przed hookami**
-3. Zaktualizuj `BACKLOG.md` / `ACTIVE_WORKSPACE.md` jeśli dotyczy
-4. `powershell -File scripts/run-session-stop-hooks.ps1`
-5. Potwierdź: `top-code-memory/SESSION_CLOSEOUT.log`
+1. Run `powershell -File scripts/run-session-start-hooks.ps1`.
+2. Read `C:\top-code-session-scratch\SESSION_START_CONTEXT.md`, unless `TOP_CODE_SESSION_SCRATCH` points elsewhere.
+3. Cold-start from `knowledge/INDEX.md`, then the four canonical memory files above as needed.
 
-Auto `sessionEnd` w Cursor uruchamia ten sam pipeline closeout jako backup, gdy operator zapomni komendy końca.
+## Stop
 
----
+Operator command: "koniec sesji czatu. uruchom hooki konca sesji"
 
-## 0. Reflection Protocol (primary memory system)
+1. Update only the four canonical memory files when there is live state to record.
+2. Run `powershell -File scripts/run-session-stop-hooks.ps1`.
+3. Scratch closeout is written outside repo: `C:\top-code-session-scratch\SESSION_CLOSEOUT.log` by default.
 
-Hook `session-stop-reflect.js` na `sessionEnd` sprawdza czy sesja zawiera
-decyzje architektoniczne. Jesli tak, zapisuje `top-code-memory/PENDING_REFLECTION.md`.
-Agent na **nastepnej** sesji (manual start runner) widzi ten plik w `SESSION_START_CONTEXT.md` i MUSI
-uruchomic subagenta refleksyjnego (Task tool) oraz zapisac Reflection.
+## Rules
 
-Format Reflection:
-
-- ## Decyzje architektoniczne — kazda z uzasadnieniami i cytatami z transkryptu
-- ## Stan koncowy — co dziala, co nie dziala
-- ## Wzorce — czego sie nauczyles, czego unikac
-- ## Co dalej — priorytetowe nastepne kroki
-
-Reflection zastepuje stare LAST_SESSION.md jako glowne zrodlo pamieci miedzy sesjami.
-Na starcie sesji manual runner (`run-session-start-hooks.ps1`) składa kontekst z ostatnim Reflection (L2) do `SESSION_START_CONTEXT.md`.
-
-Memory Retrieval:
-
-- L2 = ostatni Reflection (w `SESSION_START_CONTEXT.md` na start, ~3000 znakow)
-- L3 = starsze Reflection (agent czyta z `top-code-memory/reflections/` gdy potrzebuje)
-- L4 = dokumentacja projektu (knowledge/, AGENTS.md, INDEX.md)
-- L5 = RAG / openmemory MCP
-
----
-
-## Legacy system (utrzymywany dla kompatybilnosci wstecznej)
-
-Ponizsze sekcje sa utrzymywane dla kompatybilnosci wstecznej.
-Glownym zrodlem pamieci miedzy sesjami jest Reflection Protocol (§0).
-
-At the **end of every session** (before stopping or handing off), the agent MUST:
-
-### 1. Update knowledge/memory/LAST_SESSION.md
-
-Write a structured summary covering:
-
-- **Co zrobione** — table of changes (file, area, result)
-- **State before** — what was broken
-- **State after** — system state at session end
-- **Backlog delta** — what P0/P1 items were closed, what opened
-- **Operator decisions** — any new decisions that should go to OPERATOR_DECISIONS.md
-- **Next** — recommended next steps
-
-### 2. Update top-code-memory/LAST_SESSION.md
-
-Copy or mirror the same summary here (the hooks archive this file automatically).
-
-### 3. Run session-end hooks
-
-**Kanonicznie** (operator: „koniec sesji czatu. uruchom hooki końca sesji”):
-`powershell -File scripts/run-session-stop-hooks.ps1`
-
-Ten sam pipeline jako backup w `.cursor/hooks.json` **`sessionEnd`** (gdy operator zapomni komendy):
-
-- `session-stop-reflect.js` → `PENDING_REFLECTION.md` if architectural decisions detected
-- `session-stop-arch-refresh.js` → git diff, write DRIFT.md, update .last-refreshed
-- `session-stop-engram.js` → archive LAST_SESSION.md into `top-code-memory/sessions/`
-- `session-stop-parse-transcript.js` → `top-code-memory/TRANSCRIPT_PARSE.md` (no chat injection)
-- `session-stop-auto-review.js` → `AUTO_REVIEW_PENDING.md` when divergence found
-
-Log: `top-code-memory/SESSION_CLOSEOUT.log`
-
-Hooks do **not** use `stop` (per-turn). They never inject `followup_message` into chat.
-
-### 4. Save new operator decisions
-
-If the operator made any decisions this session, append them to:
-`knowledge/memory/OPERATOR_DECISIONS.md` with `## [ACTIVE] YYYY-MM-DD — Title` format.
-
-### 5. Update backlog
-
-If any P0/P1 items were closed or opened, update:
-`knowledge/memory/BACKLOG.md`
-
-### Memory file locations
-
-| File                                             | Purpose                                                  |
-| ------------------------------------------------ | -------------------------------------------------------- |
-| `top-code-memory/reflections/YYYY-MM-DD-slug.md` | **PRIMARY** — Reflection (decisions + justifications)    |
-| `top-code-memory/reflections/INDEX.md`           | Master index of all reflections                          |
-| `top-code-memory/LAST_SESSION.md`                | Legacy session summary (mirror)                          |
-| `top-code-memory/sessions/YYYY-MM-DD-slug.md`    | Archived session engrams                                 |
-| `top-code-memory/sessions/YYYY-MM-DD.jsonl`      | Archived full transcripts                                |
-| `top-code-memory/INDEX.md`                       | Master index of all sessions                             |
-| `top-code-memory/SESSION_START_CONTEXT.md`       | Wynik manual start hooks (`run-session-start-hooks.ps1`) |
-| `top-code-memory/SESSION_START.log`              | Log manual start hooks                                   |
-| `top-code-memory/SESSION_CLOSEOUT.log`           | Log session end hooks (manual + auto backup)             |
-| `top-code-memory/DRIFT.md`                       | Git diff per session (auto, by hook)                     |
-| `knowledge/memory/OPERATOR_DECISIONS.md`         | Canonical operator decisions                             |
-| `knowledge/memory/BACKLOG.md`                    | Open tasks P0-P3                                         |
+- Do not persist raw transcripts, reflections, DRIFT, session summaries or shadow backlogs in repo.
+- Do not mirror `LAST_SESSION.md` outside `knowledge/memory/`.
+- Do not recreate `top-code-memory/` or repo-local `memory-bank/`.
+- New durable operator decisions go to `OPERATOR_DECISIONS.md` with `[ACTIVE]` status.
+- Backlog contains only open work, status and next action.

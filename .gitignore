@@ -22,6 +22,11 @@
 !.cursor/hooks/
 !.cursor/hooks/*.js
 !.cursorignore
+!.mcp.json
+!.claude/
+/.claude/*
+!/.claude/settings.json
+!CLAUDE.md
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml

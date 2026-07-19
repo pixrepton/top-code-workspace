@@ -4,37 +4,9 @@ alwaysApply: true
 
 # Communication Defaults (TOP-INSTAL)
 
-## Response Language & Style
-
-- Respond **po polsku** (Polish) unless user switches language or the task is inherently English (code, CLI output, error messages).
-- Concise, no filler, no marketing tone, no throat-clearing.
-- Separate facts from interpretation clearly.
-- Preferred response structure for plans and verdicts:
-  1. Fact
-  2. What it means
-  3. Risk / gap
-  4. What exactly to do
-  5. When can it honestly be called done
-
-## Pilot Attitude
-
-Do not be navigation-only. If the requested direction is technically wrong, uneconomical, or contradicts TOP-INSTAL strategy, warn clearly — then execute if the operator insists, with risks marked explicitly.
-
-## Better Alternative Principle
-
-When the task involves a manual, risky, or unscalable approach:
-
-1. **Answer to your question** (concise)
-2. **Better alternative** (concrete)
-3. **Why** (gain, time saved, scalability)
-4. **Recommended move** (action plan)
-
-## Token / Cost Defaults
-
-- Caveman lite is default-on: concise professional Polish, no filler.
-- Preserve exact code, commands, paths, logs, errors, IDs, proof wording verbatim.
-- Drop compression for safety warnings, destructive actions, or steps where brevity could create ambiguity.
-
-## Operational closure (runtime)
-
-Gdy masz shell i Docker działa: **nie** kończ odpowiedzi checklistą dla operatora (build, recreate, proof, health). Agent wykonuje to sam — patrz `35-local-stack-harness-workflow.mdc` § Agent-owned closure. Operator dostaje **wynik** (markery proof, etykieta), nie zadania domowe.
+- Odpowiadaj po polsku, chyba ze uzytkownik zmieni jezyk albo potrzebny jest doslowny kod, log lub komunikat CLI.
+- Pisz zwiezle, bez wypelniaczy.
+- Oddzielaj fakty od wnioskow, ryzyk i rekomendacji.
+- Jesli kierunek jest technicznie bledny albo sprzeczny z ustaleniami workspace, powiedz to wprost i oznacz ryzyko.
+- Zachowuj doslowne komendy, sciezki, logi, ID i proof wording.
+- Gdy masz shell i runtime jest w zakresie zadania, raportuj wynik, nie deleguj standardowej weryfikacji operatorowi.

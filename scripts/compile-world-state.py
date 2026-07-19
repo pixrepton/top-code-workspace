@@ -54,6 +54,10 @@ def apply(text, vals, ts):
     in_repos, repo, schema_done = False, None, False
 
     for line in lines:
+        # drop any previous compiled-timestamp comment so re-runs don't accumulate lines
+        if re.match(r"^# compiled:", line):
+            continue
+
         # insert compiled timestamp once, right after the schema: line
         if not schema_done and re.match(r"^schema:", line):
             result += [line, f"# compiled: {ts.isoformat(timespec='seconds')}\n"]
@@ -79,7 +83,7 @@ def apply(text, vals, ts):
         # patch version_code within a known repo block
         elif in_repos and re.match(r"^    version_code:", line) and vals.get(repo):
             c = re.search(r"(#.*)$", line)
-            suffix = f"  {c.group(1)}" if c else ""
+            suffix = f" {c.group(1)}" if c else ""
             line = f"    version_code: {json.dumps(vals[repo])}{suffix}\n"
 
         result.append(line)

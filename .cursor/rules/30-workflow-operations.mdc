@@ -3,43 +3,34 @@ description: "Workflow router: cold-start, runtime defaults, browser preferences
 alwaysApply: false
 ---
 
-# Workflow router (TOP-INSTAL)
+# Workflow Router
 
-## Cold-start
+## Cold-Start
 
-Postepuj zgodnie z `knowledge/INDEX.md` § Prawidlowy cold-start.
-Tam jest kanoniczna lista krokow i dokumentow do przeczytania.
+Use `knowledge/INDEX.md` as the single documentation entry point. Conflict order:
+`knowledge/memory/OPERATOR_DECISIONS.md` > repo rules > this file.
 
-Konflikt instrukcji: `knowledge/memory/OPERATOR_DECISIONS.md` > reguly repo > ten plik.
+## Runtime Default
 
-## Runtime default
+Local Docker only (`:8766` gmail-agent Node B, `:8090` Daszek, `:8091` kalk-top, `:8000` RAG, `:54129` mailbox PG). Production is suspended; do not use VPS/SSH/prod deploy unless the operator explicitly resumes production work.
 
-Local Docker only (`:8766` gmail-agent Node B host, `:8000` RAG, `:54129` Postgres). Gate B lokalny = domyślny done. **Produkcja zawieszona** (2026-06-17) — VPS/SSH/prod deploy poza zakresem; `world-state.deferred_production`. Tylko gdy operator jawnie wznowi firmę i poprosi.
+Harness: `.cursor/rules/35-local-stack-harness-workflow.mdc`.
 
-Harness (sync / preflight / verify): `35-local-stack-harness-workflow.mdc`
+## Browser
 
-## Browser (operator preference)
+Firefox first for URL opening and UI automation. See `knowledge/memory/OPERATOR_DECISIONS.md`.
 
-Otwieranie URL i automatyzacja UI: **Firefox pierwszy** (`OPERATOR_DECISIONS` §2026-06-18). Playwright MCP: `--browser=firefox`. Windows: `Start-Process firefox -ArgumentList '<url>'` (fallback: pełna ścieżka `%ProgramFiles%\Mozilla Firefox\firefox.exe`).
+## Memory
 
-## Memory (session boundaries)
+- Start: `powershell -File scripts/run-session-start-hooks.ps1` then read `C:\top-code-session-scratch\SESSION_START_CONTEXT.md` unless `TOP_CODE_SESSION_SCRATCH` overrides it.
+- Stop: update canonical memory only, then run `powershell -File scripts/run-session-stop-hooks.ps1`.
+- Persistent memory: only `knowledge/memory/{OPERATOR_DECISIONS,BACKLOG,ACTIVE_WORKSPACE,LAST_SESSION}.md`.
+- Scratch outputs: `C:\top-code-session-scratch\` or `TOP_CODE_SESSION_SCRATCH`.
 
-Operator steruje startem i końcem sesji komendami głosowymi:
+See `.cursor/rules/16-session-memory-protocol.mdc`.
 
-- **Start:** `powershell -File scripts/run-session-start-hooks.ps1` → `top-code-memory/SESSION_START_CONTEXT.md`
-- **Koniec:** mirror `LAST_SESSION` → `powershell -File scripts/run-session-stop-hooks.ps1`
+## On Demand
 
-Szczegóły: `16-session-memory-protocol.mdc` (alwaysApply: true)
-
-- Nowy system: `top-code-memory/` (auto-archiwizowany przez hooki końca)
-- Decyzje operatora → `knowledge/memory/OPERATOR_DECISIONS.md` z `[ACTIVE]`
-- Governance: `knowledge/MEMORY_GOVERNANCE.md`
-
-## On demand (nie ładuj domyślnie)
-
-- Grafy (GitNexus / Graphify / UA): skill `code-intelligence-router` + `knowledge/docs/CODE_INTELLIGENCE_STACK.md`
-- MCP matrix i zasady: `knowledge/MCP_POLICY.md`
-- Dokumentacja (warstwy, CBM, utrzymanie): `knowledge/DOCUMENTATION_POLICY.md`
-- Serena: `initial_instructions` po restarcie MCP
-
-Nie ładuj: `_graphify-corpus/`, pełny `graph.json`, `mirror/repos/` do kontekstu.
+- Tooling / MCP / plugins / graph generation: `knowledge/TOOLING_POLICY.md`.
+- Documentation maintenance: `knowledge/DOCUMENTATION_POLICY.md`.
+- Do not load generated corpora, full graph outputs, mirrored repos or raw transcripts into context by default.

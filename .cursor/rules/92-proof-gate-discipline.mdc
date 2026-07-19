@@ -1,51 +1,38 @@
 ---
-description: Gate A commands per repo i etykiety proof — definicja "done" dla każdego repo w ekosystemie TOP-INSTAL
+description: Gate A commands per repo and proof labels; always-on definition of honest completion
 alwaysApply: true
 ---
 
 # Proof gate discipline
 
-Nie pisz "done", "zaimplementowano" ani "gotowe" dopóki nie uruchomisz Gate A dla zmienionego repo.
+- Nie pisz `done`, `zaimplementowano` ani `gotowe` bez adekwatnej weryfikacji dla zmienionego repo.
+- Gate B nigdy nie zastepuje Gate A.
 
-## Hierarchia weryfikacji
+## Gate A
 
-| Krok | Co                                                                  | Kiedy obowiązkowe                    | Etykieta po sukcesie            |
-| ---- | ------------------------------------------------------------------- | ------------------------------------ | ------------------------------- |
-| 1    | ReadLints (zmienione pliki)                                         | Zawsze po edycji                     | — (nie „done”)                  |
-| 2    | **Gate A** — testy per repo (poniżej)                               | Zawsze przed „gotowe”                | `confirmed by local tests`      |
-| 3    | **Gate B** — `scripts/preflight-local-stack.ps1` + smoke cross-repo | Tylko gdy spełniony trigger § Gate B | `proven_local` (razem z Gate A) |
-
-**Zasada:** Gate B **nigdy** nie zastępuje Gate A. Sam preflight bez testów repo = nadal `not proven` dla kodu w repo.
-
-## Gate A — komendy per repo
-
-```
+```text
 gmail-agent:          python -m pytest tools/gmail_audit/tests -q
 kalk-top:             npm run proof
 rag-chat-asystent:    python -m pytest backend/tests -q
 daszek:               php -l <zmieniony plik> && node --check public/app.js
 cieplo-orchestrator:  python -m pytest tests/ -q
-top-instal-generator: php -l <zmieniony plik>   # gdy dotykasz PHP
-fast-kalk:            php -l <zmieniony plik>   # gdy dotykasz pluginu WP
+top-instal-generator: php -l <zmieniony plik>
+fast-kalk:            php -l <zmieniony plik>
 ```
 
-Wiele repo w jednej sesji: Gate A **w każdym** dotkniętym repo, osobno.
+Wiele repo w jednej sesji: uruchamiasz Gate A osobno w kazdym dotknietym repo.
 
-## Gate B (lokalny smoke) — uruchamiaj tylko gdy
+## Gate B
 
-- Zmiana dotyka Dockera, endpointów API (`:8766` Node B host, `:8000`, `:8090`, `:54129`) lub bridge Node A ↔ Node B
-- Zmiana dotyka operational feed, Daszek bridge drain, RAG widget → backend, fast-kalk → kalk-top
-- Operator jawnie prosi o smoke ekosystemu
+Uruchamiaj tylko gdy zmiana dotyka Dockera, endpointow runtime, bridge Node A <-> Node B, operational feed, albo operator jawnie prosi o smoke ekosystemu.
 
-**Komenda:** `scripts/preflight-local-stack.ps1` (root workspace). Uzupełniająco, gdy dotyczy: repo-specific smoke (`_local_smoke_run.py`, `daszek_local_133_proof.py`, `daszek_os_event_w0_proof.py` — patrz runbooki w `gmail-agent/docs/runbooks/`).
+Komenda bazowa: `scripts/preflight-local-stack.ps1`, uzupelniana repo-specific smoke gdy task tego wymaga.
 
-**Agent sam uruchamia Gate B** — patrz `35-local-stack-harness-workflow.mdc` § Agent-owned closure. Nie kończ sesji „gotowe” z instrukcją dla operatora „uruchom proof / recreate”, jeśli masz shell.
+Nie uruchamiaj Gate B dla docs-only albo czystego refactoru bez runtime.
 
-**Nie uruchamiaj Gate B** dla: czystego refactoru bez runtime, docs-only, zmian w `knowledge/` bez wpływu na stack.
+## Etykiety
 
-## Etykiety dowodowe — stosuj zawsze przy raportowaniu wyniku
-
-- `proven_local` — Gate A green **oraz** Gate B green (gdy Gate B był wymagany/trigger spełniony)
-- `confirmed by local tests` — Gate A green, Gate B nie dotyczy lub nie uruchomiony
-- `not proven` — brak Gate A, albo test/smoke fail, albo tylko ReadLints
-- `proven_historical_vps` / `historical` — archiwum VPS; nie mieszać z bieżącym lokalnym proof (patrz `CONTROL_PLANE.md`)
+- `proven_local` - Gate A green oraz Gate B green, gdy Gate B byl wymagany
+- `confirmed by local tests` - Gate A green, Gate B nie dotyczy albo nie byl potrzebny
+- `not proven` - brak Gate A albo test/smoke fail
+- `historical` / `proven_historical_vps` - archiwalne proofy, nie biezacy lokalny stan

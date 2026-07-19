@@ -1,5 +1,5 @@
-# Run session-end hooks manually (operator: "uruchom hooki końca sesji").
-# Same pipeline as .cursor/hooks.json sessionEnd — does not inject into chat.
+# Run session-end hooks manually.
+# Writes only scratch closeout data; no repo-local memory store.
 param(
     [string]$TranscriptPath = ''
 )
@@ -10,17 +10,6 @@ $ErrorActionPreference = 'Stop'
 $root = $env:TOP_CODE_ROOT
 if (-not $root) { throw 'TOP_CODE_ROOT not set (run via resolve-paths.ps1).' }
 
-if (-not $TranscriptPath) {
-    $projectsRoot = Join-Path $env:USERPROFILE '.cursor\projects'
-    if (Test-Path $projectsRoot) {
-        $latest = Get-ChildItem -Path $projectsRoot -Recurse -Filter '*.jsonl' -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -notmatch '\\subagents\\' } |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
-        if ($latest) { $TranscriptPath = $latest.FullName }
-    }
-}
-
 $stdinObj = @{
     manual          = $true
     status          = 'completed'
@@ -30,14 +19,7 @@ $stdinObj = @{
 if ($TranscriptPath) { $stdinObj.transcript_path = $TranscriptPath }
 
 $stdin = $stdinObj | ConvertTo-Json -Compress
-
-$hooks = @(
-    'session-stop-reflect.js',
-    'session-stop-arch-refresh.js',
-    'session-stop-engram.js',
-    'session-stop-parse-transcript.js',
-    'session-stop-auto-review.js'
-)
+$hooks = @('session-stop-arch-refresh.js')
 
 Write-Host 'Session closeout hooks (manual)' -ForegroundColor Cyan
 foreach ($hook in $hooks) {
@@ -50,4 +32,6 @@ foreach ($hook in $hooks) {
     $stdin | node $hookPath
 }
 
-Write-Host "Done. Log: top-code-memory/SESSION_CLOSEOUT.log" -ForegroundColor Green
+$scratchDir = $env:TOP_CODE_SESSION_SCRATCH
+if (-not $scratchDir) { $scratchDir = 'C:\top-code-session-scratch' }
+Write-Host "Done. Log: $(Join-Path $scratchDir 'SESSION_CLOSEOUT.log')" -ForegroundColor Green

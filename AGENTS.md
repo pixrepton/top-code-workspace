@@ -1,189 +1,182 @@
-# AGENTS.md — TOP-INSTAL Ecosystem Router
+# AGENTS.md — TOP-INSTAL Workspace Router
 
-Status: active workspace router for `top-code workspace`.
-Keep this file short. Deep docs live in `knowledge/` and per-repo `AGENTS.md`.
+Status: active router for `top-code workspace`.
 
-## What this workspace is
+This workspace contains nested, independent Git repositories.
 
-Multi-repo TOP-INSTAL AI-OS: HVAC automation across WordPress (Node A), backends (Node B / RAG), and cross-repo contracts.
+Treat the root workspace Git state and every nested repository Git state separately.
 
-**OS guide:** `knowledge/docs/OS_README.md`
-**Workspace onboarding (router):** `knowledge/docs/WORKSPACE_ONBOARDING.md`
-**AI-DEV onboarding:** `knowledge/docs/ai-dev-onboarding-path.md`
-**Stan dla zewnętrznych asystentów:** `knowledge/memory/ACTIVE_WORKSPACE.md`
-**Atlas (cross-repo):** `knowledge/SYSTEM_ATLAS.md`
-**Operator environment:** `knowledge/docs/AGENT_OPERATOR_ENVIRONMENT.md`
-**Active decisions (read first):** `knowledge/memory/OPERATOR_DECISIONS.md`
-**Open backlog (agent-maintained):** `knowledge/memory/BACKLOG.md`
-**Doc policy (how to write/update docs):** `knowledge/DOCUMENTATION_POLICY.md`
-**MCP policy (how/when to use MCP servers):** `knowledge/MCP_POLICY.md`
-**Plugin policy (how/when to use plugins):** `knowledge/PLUGIN_POLICY.md`
-**Error handling policy (debug/escalate/report):** `knowledge/ERROR_HANDLING_POLICY.md`
-**Security policy (secrets/tokens/creds):** `knowledge/SECURITY_POLICY.md`
-**Session memory policy (cross-session persistence):** `knowledge/SESSION_MEMORY_POLICY.md`
-**Workspace lifecycle policy (start/maintain/stop):** `knowledge/WORKSPACE_LIFECYCLE_POLICY.md`
-**Code intelligence (grafy):** `knowledge/docs/CODE_INTELLIGENCE_STACK.md`
+## Core Invariants
 
-## Deployment model
+- `gmail-agent` / Node B is the operational Source of Truth for cases, engagements, mailbox policy and runtime truth.
+- `daszek` is projection-only UI and bounded HITL. It is not a write Source of Truth.
+- `kalk-top` owns HVAC logic and `OfferDTO`. Do not duplicate `OfferDTO`, sizing, pricing or HVAC decision logic elsewhere.
+- `cieplo-orchestrator` is a separate worker and pipeline with its own database. It is not a second Source of Truth for cases.
+- Current proven runtime evidence and executable behavior win over stale documentation.
+- A currently running behavior may still be a bug. Treat runtime as evidence of what happens, not automatic proof of what should happen.
+- Do not claim success without current, reproducible proof.
+- Default operational scope is local Docker only.
+- No VPS, SSH, production mutation, deploy or legacy host work unless explicitly requested by the operator.
+- The active stability freeze defined in `knowledge/memory/OPERATOR_DECISIONS.md` remains binding.
 
-| Tier            | Meaning                                                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **active**      | Local Docker — `:8766` gmail-agent Node B, `:8090` Daszek, `:8091` kalk-top, `:8000` RAG, `:54129` mailbox PG, `:54130` GraphStore PG |
-| **production**  | **Suspended** (2026-06-17) — firma w zawieszeniu; brak VPS. Agent nie pracuje nad prod deploy dopóki operator nie powiadomi.          |
-| **legacy_prod** | Historical dual VPS — do not use for new proof                                                                                        |
-| **target_prod** | One unified VPS (frozen future) — plan w `knowledge/rfc/P2-cieplo-php-ingress-retirement.md` (jedyny aktywny RFC dot. prod)           |
+## Cold-Start
 
-**Agent default:** work to Gate B locally. No SSH/VPS/prod deploy unless operator explicitly resumes business and asks.
+The canonical cold-start order lives exclusively in:
 
-Machine map: `knowledge/SYSTEM_ATLAS.md` (maszyny i topologia)
+`knowledge/INDEX.md` §Cold-Start
 
-## Logical products
+Follow that sequence.
 
-| Product              | Folder                  | Node | Entry AGENTS                                                                                                                              |
-| -------------------- | ----------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| gmail-agent AI       | `gmail-agent/`          | B    | `gmail-agent/AGENTS.md` · deep [`gmail-agent/docs/core/PROJECT_README.md`](gmail-agent/docs/core/PROJECT_README.md)                       |
-| Daszek UI            | `daszek/`               | A    | [`daszek/docs/core/PROJECT_README.md`](daszek/docs/core/PROJECT_README.md) · runbook [`daszek/README-DASZEK.md`](daszek/README-DASZEK.md) |
-| RAG backend          | `rag-chat-asystent/`    | B    | `rag-chat-asystent/AGENTS.md` (Graph RAG: `docs/GRAPH_RAG_RUNTIME.md`)                                                                    |
-| RAG widget WP        | `rag-widget/`           | A    | `rag-widget/AGENTS.md`                                                                                                                    |
-| WP mail bridge       | `wp-bridges/`           | A    | `wp-bridges/AGENTS.md`                                                                                                                    |
-| kalk-top             | `kalk-top/`             | A    | `kalk-top/AGENTS.md`                                                                                                                      |
-| Cieplo worker        | `cieplo-orchestrator/`  | B    | `cieplo-orchestrator/AGENTS.md`                                                                                                           |
-| Generator            | `top-instal-generator/` | A    | `top-instal-generator/AGENTS.md`                                                                                                          |
-| fast-kalk            | `fast-kalk/`            | A    | `fast-kalk/AGENTS.md`                                                                                                                     |
-| Cross-repo knowledge | `knowledge/`            | meta | `knowledge/INDEX.md` (cold-start)                                                                                                         |
+Do not duplicate or recreate the cold-start sequence in this file or elsewhere.
 
-## Latest closure state (2026-07-10)
+Manual session start:
 
-pytest `tools/gmail_audit/tests`: **1256 passed** (GREEN) — metryki w `knowledge/memory/ACTIVE_WORKSPACE.md`.
-Proof operacyjny lokalny: LPS § `GATE_B_GAPS_CLOSED` (CT-FU-5 materialize, e2e 12/12).
-Dokumentacja warstwowa: `WORKSPACE_ONBOARDING.md` + `daszek/docs/core/PROJECT_README.md` (faza 2).
+`scripts/run-session-start-hooks.ps1`
 
-Full session-by-session detail: `knowledge/memory/LAST_SESSION.md`
-Do not re-read the raw session log here — it lives there by design
-(see `knowledge/SESSION_MEMORY_POLICY.md`).
+Then read:
 
-## Cold-start
+`C:\top-code-session-scratch\SESSION_START_CONTEXT.md`
 
-**Start sesji (operator):** „uruchom hooki startu sesji” → `scripts/run-session-start-hooks.ps1` → przeczytaj `top-code-memory/SESSION_START_CONTEXT.md`.
+unless `TOP_CODE_SESSION_SCRATCH` overrides that location.
 
-1. **`knowledge/INDEX.md`** — jedyny punkt startowy (zawiera prawidlowy cold-start)
-2. **`knowledge/docs/WORKSPACE_ONBOARDING.md`** — router portów, oś gmail↔daszek, ścieżki czytania
-3. This file (AGENTS.md) — router ekosystemu
-4. Target repo deep manual: `gmail-agent/docs/core/PROJECT_README.md` lub `daszek/docs/core/PROJECT_README.md`
-5. Target repo `AGENTS.md` + `memory-bank/last-agent-handoff.md`
-6. GitNexus MCP — `query` / `impact` only
-7. Serena MCP — symbol navigation / refactors
-8. Source + tests
+## Memory
 
-## Modes (reguły w `.cursor/rules/*.mdc`)
+Persistent project memory lives only in:
 
-- **Execution:** respect As-Is; no new HTTP edges without approval; report contract impact
-- **Discovery:** RFC in `knowledge/rfc/` before cross-repo code
+- `knowledge/memory/OPERATOR_DECISIONS.md`
+- `knowledge/memory/BACKLOG.md`
+- `knowledge/memory/ACTIVE_WORKSPACE.md`
+- `knowledge/memory/LAST_SESSION.md`
 
-## Ownership (non-negotiable)
+Do not create or restore:
 
-- `OfferDTO` / HVAC → **kalk-top**
-- Mailbox case / policy → **gmail-agent**
-- Operator UI projection → **daszek** (not SoT)
-- RAG retrieval / ingest → **rag-chat-asystent** (not widget)
-- RAG chat UI on WWW → **rag-widget** (HTTP client only)
-- Cieplo workflow → **cieplo-orchestrator** (separate DB)
-- PDF/DOCX → **top-instal-generator**
+- `top-code-memory/`
+- repo-local `memory-bank/`
+- autonomous memory stores,
+- transcript stores,
+- reflection stores,
+- shadow backlogs,
+- parallel decision logs.
 
-## Local endpoints
+Do not write new persistent memory without an explicit operator instruction.
 
-```text
-gmail-agent API   http://127.0.0.1:8766   # host port; container listens on 8765; 8765 if GMAIL_AGENT_NODEB_PORT unset
-RAG backend       http://127.0.0.1:8000
-Daszek sandbox    http://127.0.0.1:8090
-kalk-top runtime  http://127.0.0.1:8091
-Postgres mailbox  localhost:54129         # gmail-agent / mailbox_memory
-Postgres GraphStore localhost:54130       # rag-chat-asystent graphstore-postgres
-rag-widget dev    API URL → http://127.0.0.1:8000
-```
+## Repo Routing
 
-Preflight: `scripts/preflight-local-stack.ps1`
+- `gmail-agent/` — Node B; mailbox/case runtime; operational Source of Truth for cases, decisions and execution.
+- `daszek/` — Node A; operator projection UI and bounded HITL.
+- `kalk-top/` — owner of HVAC logic, sizing, pricing and `OfferDTO`.
+- `cieplo-orchestrator/` — separate Cieplo pipeline and worker with its own database.
+- `rag-chat-asystent/` — RAG backend, ingest and retrieval.
+- `rag-widget/` — WordPress RAG surface and adapters.
+- `top-instal-generator/` — PDF/DOCX generation.
 
-**Harness workflow (cross-repo, versioned in workspace root git):**
+If a task crosses repository boundaries:
 
-```text
-zmiana portów/kluczy → scripts/sync-local-stack-env.ps1 → recreate worker+Daszek jeśli tokeny
-start sesji / proof     → scripts/preflight-local-stack.ps1 (-FullStack = cały stack)
-większy gate            → scripts/verify-local-gates.ps1
-agent closure           → build/recreate + proof script samemu; raport dopiero po *_PROOF_OK
-```
+1. Identify the affected contracts.
+2. State which component owns each piece of data or logic.
+3. Preserve existing Source of Truth boundaries.
+4. Avoid duplicating domain logic across services.
+5. Verify the cross-service flow, not only isolated unit behavior.
 
-Details: `scripts/README.md` · agent rules `35-local-stack-harness-workflow.mdc` (§ Agent-owned closure), `92-proof-gate-discipline.mdc`
+## Workspace and Git Discipline
 
-## Proof tiers
+The workspace may already contain unrelated or pre-existing changes.
 
-| Tier   | Meaning                                                            |
-| ------ | ------------------------------------------------------------------ |
-| Gate A | pytest / npm test / compileall                                     |
-| Gate B | local smoke (`_local_smoke_run.py`, doctor, preflight-local-stack) |
-| Gate C | VPS — **disabled by default**                                      |
+Always separate your edits from existing modifications.
 
-Labels: `proven_local` | `confirmed by local tests` | `historical` | `not proven`
+Do not treat the workspace as a monorepo for status, diff review or history analysis.
 
-**Master proof (2026-06-20):** `MAX_STACK_10_PROOF_OK` via `gmail-agent/tools/gmail_audit/scripts/verify-max-stack.ps1` (requires `GRAPHSTORE_DSN` for temporal sub-proofs).
+Check Git state in the specific repository being modified.
 
-## Cross-repo routing
+Do not run unless explicitly requested:
 
-| Task                 | Start in            | Also read                    |
-| -------------------- | ------------------- | ---------------------------- |
-| Mail case, Skrzat    | gmail-agent         | daszek if UI                 |
-| Daszek feed/bridge   | daszek              | gmail-agent runbooks         |
-| Calculator, OfferDTO | kalk-top            | docs/contracts               |
-| Cieplo → PDF         | cieplo-orchestrator | kalk-top contracts           |
-| RAG ingest/retrieval | rag-chat-asystent   | not rag-widget               |
-| RAG widget UI        | rag-widget          | WIDGET_BACKEND_COMPATIBILITY |
-| New HTTP edge        | knowledge/rfc/      | SYSTEM_ATLAS                 |
+- `git reset`
+- `git clean`
+- `git commit`
+- `git push`
+- production deploys
+- destructive workspace cleanup
 
-After REST contract changes: `gitnexus group sync topinstal-workspace --verbose` (operator/agent terminal)
+Do not overwrite or revert changes you did not create unless the operator explicitly requests it.
 
-## Knowledge (docs + code map)
+## Stability and Change Discipline
 
-- **Agent canon (SoT):** `knowledge/world-state.yaml` → `knowledge/CONTROL_PLANE.md`
-- **Code detail (VIEW):** `knowledge/docs/CODEBASE_SNAPSHOT.md`
-- **Graphify:** `knowledge/graphify/`
-- **Understand Anything** (static graph): `.understand-anything/knowledge-graph.json` — check `meta.json` for freshness
+Prefer the smallest correct change.
 
-## Serena MCP (symbolic code / LSP)
+For protected or stability-sensitive runtime, use:
 
-Active for the **whole monorepo** via `serena` in root `.cursor/mcp.json` (`--context ide --project ${workspaceFolder}`).
+diagnosis → root cause → RED proof → minimal fix → GREEN proof → relevant regression → full required gates → runtime proof / parity → review.
 
-- Project config: `.serena/project.yml` (languages: python, typescript, php, powershell)
-- Cache: `.serena/cache/` (gitignored); memories: `.serena/memories/` (commit conventions only when useful)
-- Use Serena for **symbol navigation**, **cross-file rename**, **replace_symbol_body**, **references**, **diagnostics** on real product code
-- Keep Cursor built-ins for trivial one-line edits; do not index `_graphify-corpus/` or `_md_audit/`
-- After MCP reload, call `initial_instructions` once per session if tools are not auto-loaded
-- Governance: `gmail-agent/docs/dev/MCP_OPERATING_MODEL.md` (Serena = allowed for this workspace)
+Do not use a passing unit test as proof of end-to-end correctness when the affected behavior crosses services, databases, workers or UI projections.
 
-## Memory writes
+Do not expand a fix into an architectural redesign unless the existing architecture is itself the demonstrated root cause.
 
-| Scope              | Where                                                                   |
-| ------------------ | ----------------------------------------------------------------------- |
-| Operator decisions | `knowledge/memory/OPERATOR_DECISIONS.md`                                |
-| Session engram     | `top-code-memory/` (auto-archived) + `knowledge/memory/LAST_SESSION.md` |
-| Single repo        | `<repo>/memory-bank/agent-handover.md`                                  |
-| Cross-repo         | `knowledge/timeline/YYYY-MM.md`                                         |
+Classify newly discovered problems as:
 
-See `knowledge/MEMORY_GOVERNANCE.md`
+- required blocker for the current task,
+- or backlog item.
 
-## Agent rules
+Fix only blockers needed to complete the current scope.
 
-- Git commit/push: only when operator explicitly asks
-- No secrets in chat or commits
-- Surgical diffs; match repo conventions
-- `karpathy-guidelines` for implementation
-- **Browser:** Firefox first for opening URLs and Playwright (see `OPERATOR_DECISIONS` §2026-06-18; `.cursor/mcp.json` playwright `--browser=firefox`)
+## Evidence Hierarchy
 
-## Architectural gaps (do not fix silently)
+When sources disagree, reason explicitly from the strongest available evidence.
 
-D1 RAG ∉ Cieplo pipeline · D2 mail → no OfferDTO · ~~D3 dual Gmail pollers~~ (RESOLVED 2026-07-02: signal_worker consolidated, cieplo poller disabled) · D4 Daszek = projection
+Prefer, in order of relevance:
 
-## Repo cleanup (2026-07-02)
+1. current reproducible runtime evidence,
+2. executable tests and deterministic proofs,
+3. current implementation and configuration,
+4. active operator decisions,
+5. current canonical documentation,
+6. stale historical documentation.
 
-Freed ~3.5 GB across repos (model caches, proof script sprawl, nested duplicates, `__pycache__`). ~166 tracked files removed from gmail-agent alone. Details: `knowledge/timeline/2026-07.md`.
+Runtime evidence describes what the system actually does.
 
-Evolution: `knowledge/EVOLUTION_BOUNDARIES.md`
+It does not automatically prove that the behavior is correct.
+
+Never silently reconcile conflicting sources by guessing.
+
+## Tool Discipline
+
+Use specialized tools when they provide materially better information than raw file scanning.
+
+For code discovery, architecture, dependencies, call paths and impact analysis, follow the Claude Code adapter rules in `CLAUDE.md`.
+
+For known files, configuration and documentation, direct file reads are appropriate.
+
+For proof, prefer deterministic commands and existing repository gates over narrative confidence.
+
+If a specialized tool is unavailable, stale or incomplete, state that explicitly before using a fallback.
+
+## Scope Boundary
+
+The default task boundary is the current request.
+
+Do not:
+
+- redesign adjacent systems without necessity,
+- introduce new infrastructure for hypothetical future problems,
+- add parallel workflow systems,
+- create new memory layers,
+- perform production work without authorization.
+
+When a better long-term solution exists but exceeds current scope, record it only in the canonical backlog and only when explicitly instructed to update project memory.
+
+## Completion Standard
+
+A task is not complete merely because code was changed.
+
+Completion requires the level of proof appropriate to the change.
+
+For stability-sensitive work, report clearly:
+
+- what changed,
+- root cause,
+- tests executed,
+- regressions checked,
+- runtime or integration proof,
+- remaining uncertainty,
+- final status: PASS, PARTIAL or FAIL.
+
+Never report PASS when required proof is missing.

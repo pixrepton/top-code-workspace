@@ -1,5 +1,5 @@
 # Run session-start hooks manually (operator: "uruchom hooki startu sesji").
-# Writes top-code-memory/SESSION_START_CONTEXT.md for the agent to read.
+# Writes SESSION_START_CONTEXT.md to TOP_CODE_SESSION_SCRATCH or C:\top-code-session-scratch.
 param()
 
 $ErrorActionPreference = 'Stop'
@@ -77,16 +77,17 @@ foreach ($spec in $hookSpecs) {
     $sections += ''
 }
 
-$memoryDir = Join-Path $root 'top-code-memory'
-if (-not (Test-Path $memoryDir)) {
-    New-Item -ItemType Directory -Path $memoryDir -Force | Out-Null
+$scratchDir = $env:TOP_CODE_SESSION_SCRATCH
+if (-not $scratchDir) { $scratchDir = 'C:\top-code-session-scratch' }
+if (-not (Test-Path $scratchDir)) {
+    New-Item -ItemType Directory -Path $scratchDir -Force | Out-Null
 }
 
-$contextPath = Join-Path $memoryDir 'SESSION_START_CONTEXT.md'
-$logPath = Join-Path $memoryDir 'SESSION_START.log'
+$contextPath = Join-Path $scratchDir 'SESSION_START_CONTEXT.md'
+$logPath = Join-Path $scratchDir 'SESSION_START.log'
 
 Set-Content -Path $contextPath -Value ($sections -join "`n") -Encoding UTF8
 Add-Content -Path $logPath -Value (($logLines -join "`n") + "`n")
 
-Write-Host "Done. Context: top-code-memory/SESSION_START_CONTEXT.md" -ForegroundColor Green
-Write-Host "Log: top-code-memory/SESSION_START.log" -ForegroundColor Green
+Write-Host "Done. Context: $contextPath" -ForegroundColor Green
+Write-Host "Log: $logPath" -ForegroundColor Green

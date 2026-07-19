@@ -7,7 +7,7 @@ globs: ["**/*.py", "**/*.md", "**/*.yml", "**/*.yaml"]
 
 Zanim wyciagniesz wniosek architektoniczny lub zaproponujesz zmiane:
 
-1. **Przeczytaj** `knowledge/ARCHITECTURE_DISCOVERY_POLICY.md`
+1. **Przeczytaj** `knowledge/CONTROL_PLANE.md` i `knowledge/TOOLING_POLICY.md`
 2. **Sprawdz** artefakty w `knowledge/runtime/`
 3. **Zapytaj** Codebase Memory MCP (CBM: query_graph, trace_path)
 4. **Oznacz** kazdy wniosek [GRAF], [KOD], [RUNTIME], [DOK] lub [WNIOSEK]

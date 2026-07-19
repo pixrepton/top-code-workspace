@@ -1,113 +1,15 @@
 ---
-description: Wymusza precyzję, minimalność zmian i weryfikację kodu przez agenta AI w Cursorze
-alwaysApply: true
+description: Precyzja zmian i weryfikacja implementacji; load for implementation-heavy sessions
+alwaysApply: false
 ---
 
-# AI Coding Agent — Zasady precyzji i jakości
+# AI Coding Agent - precision rules
 
-## Read Before Code
+Load for implementation-heavy sessions. Keep out of default cold-start.
 
-Przed edycją jakiegokolwiek pliku użyj narzędzia Read, aby przeczytać jego aktualną zawartość.
-Nie zakładaj, że znasz zawartość pliku z poprzednich kroków lub kontekstu.
-
-## Surgical Edits — minimalne chirurgiczne zmiany
-
-Wprowadzaj wyłącznie zmiany niezbędne do realizacji zadania.
-Nie modyfikuj linii poza bezpośrednim zakresem zadania.
-Nie zmieniaj formatowania, wcięć ani kolejności elementów, które nie są częścią zadania.
-Każda edycja powinna być możliwie jak najmniejsza i skupiona.
-
-## Zakaz placeholderów i kodu niekompletnego
-
-Nigdy nie generuj kodu zawierającego:
-
-- `// TODO: implement later`
-- `... rest of the code ...`
-- `pass  # implement`
-- `throw new Error("not implemented")`
-- Puste ciała funkcji bez uzasadnienia
-
-Kod musi być w pełni funkcjonalny i gotowy do uruchomienia.
-
-## Zakaz komentarzy-narratorów
-
-Nie dodawaj komentarzy opisujących oczywiste działanie kodu:
-
-- `// Import the module`
-- `// Define the function`
-- `// Return the result`
-- `// Handle the error`
-
-Komentarze są dozwolone wyłącznie dla nieoczywistych decyzji architektonicznych,
-kompromisów lub zewnętrznych ograniczeń, które kod sam w sobie nie wyraża.
-
-## Weryfikacja po zmianach
-
-Po każdej zmianie kodu użyj narzędzia ReadLints na zmodyfikowanych plikach.
-Jeśli pojawiają się błędy, napraw je natychmiast zanim zgłosisz zakończenie zadania.
-Nie informuj użytkownika o sukcesie, zanim linter nie potwierdzi braku błędów.
-
-### Gate A — definicja „done”
-
-ReadLints to minimum, nie dowód ukończenia. Przed słowami „done”, „zaimplementowano” lub „gotowe” uruchom Gate A
-dla zmienionego repo zgodnie z `92-proof-gate-discipline.mdc` (pytest / `npm run proof` / `php -l` itd.).
-Etykiety proof (`proven_local`, `confirmed by local tests`, `not proven`) stosuj zgodnie z regułą 92.
-
-Gate B (`scripts/preflight-local-stack.ps1`, smoke cross-repo) **nie zastępuje** Gate A — szczegóły i kiedy uruchamiać: wyłącznie `92-proof-gate-discipline.mdc` § Gate B.
-
-## Kontekst — katalogi poza zasięgiem
-
-Nie czytaj, nie edytuj i nie cytuj plików z katalogów wykluczonych w `.cursorignore` i `search.exclude`, m.in.:
-
-- `_graphify-corpus/` (mirror — źródło prawdy to repo kanoniczne)
-- `.serena/cache/`, `graphify-out/`, `_md_audit/`
-- `.understand-anything/intermediate/`, `.understand-anything/tmp/`, `.understand-anything/cache/`
-- `**/node_modules/`, `**/.gitnexus/`
-
-Grafy i analizy kodu: skill `code-intelligence-router` + MCP na żądanie — nie flat-load całych grafów do kontekstu.
-Zob. też `30-workflow-operations.mdc` (sekcja „On demand”).
-
-### Nowy katalog cache / artefaktów — checklista (3 pliki)
-
-Gdy tool, skrypt lub MCP zacznie zapisywać **regenerowalne** dane poza kodem produktowym, zaktualizuj **wszystkie trzy** miejsca w tej samej sesji:
-
-| Plik                                                                                  | Cel                                                                       |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `.cursorignore`                                                                       | Agent nie ładuje katalogu do kontekstu (`Read` / `@`)                     |
-| `.gitignore`                                                                          | Git nie śledzi artefaktów                                                 |
-| `%APPDATA%\Cursor\User\settings.json` → `search.exclude` **i** `files.watcherExclude` | IDE nie indeksuje ani nie watchuje (Windows: ten sam glob w obu kluczach) |
-
-Wzorzec globu: `**/nazwa-katalogu/**` (spójny z istniejącymi wpisami w workspace).
-
-**Kryterium:** katalog jest cache/mirror/build output — nie źródło prawdy runtime. Jeśli to kod produktowy lub dokumentacja kanoniczna (`knowledge/` poza `graphify-out/`), **nie** dodawaj do ignore.
-
-Po dodaniu wpisu: krótko wspomnij w handoff/timeline, jeśli dotyczy workflow całego ekosystemu.
-
-## Automatyczne triggerowanie skilli
-
-Agent automatycznie uruchamia poniższe skille bez pytania operatora:
-
-| Trigger                        | Skill                           | Akcja                              |
-| ------------------------------ | ------------------------------- | ---------------------------------- |
-| Rozpoczęcie nowego zadania     | brainstorming                   | natychmiastowa eksploracja wymagań |
-| Plan obejmuje >3 pliki         | writing-plans → executing-plans | plan → delegacja do subagenta      |
-| Debugowanie >2 minuty          | systematic-debugging            | strukturalne debugowanie           |
-| Przed zgłoszeniem "gotowe"     | verification-before-completion  | sprawdź zanim powiesz "done"       |
-| Po 30+ minutach pracy          | verification-before-completion  | sprawdź stan                       |
-| Nowa funkcjonalność bez testów | test-driven-development         | test najpierw, potem kod           |
-| Koniec implementacji           | requesting-code-review          | poproś o review                    |
-| Refactor >1 plik               | receiving-code-review           | przeanalizuj zanim zmienisz        |
-| Wyniki danych z MCP            | canvas                          | renderuj w canvas                  |
-| Zmiany w API/DB                | gitnexus-impact-analysis        | impact analysis                    |
-| Cross-repo zmiana              | cross-repo-contract-safety      | walidacja kontraktów               |
-| Duży blok kodu AI              | deslop                          | wyczyść slop przed commitem        |
-| Po każdej zmianie kodu         | check-compiler-errors           | kompilacja/testy                   |
-| Działanie w przeglądarce       | control-ui                      | automatyzacja przez MCP            |
-| Praca z CLI/TUI                | control-cli                     | harness terminalowy                |
-| Nowa biblioteka/zależność      | context7 + docs-researcher      | dokumentacja + weryfikacja         |
-
-## Raportowanie ryzyk
-
-Jeśli podczas edycji zauważysz potencjalny błąd, regresję lub lukę bezpieczeństwa
-w kodzie poza bezpośrednim zakresem zadania — zgłoś to użytkownikowi.
-Nie ignoruj problemu i nie naprawiaj go cicho bez informacji.
+- Read the current file before editing it.
+- Make the smallest change that solves the task.
+- Do not leave placeholders or partial implementations.
+- Do not add narrator comments.
+- After code changes, run the relevant verification before reporting success.
+- Ignore generated caches and mirrors excluded from workspace context.

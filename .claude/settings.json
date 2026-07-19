@@ -1,0 +1,18 @@
+{
+  "enableAllProjectMcpServers": false,
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": false,
+    "superpowers@claude-plugins-official": false,
+    "context7@claude-plugins-official": false,
+    "claude-code-setup@claude-plugins-official": false
+  },
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers-marketplace"
+      }
+    }
+  },
+  "autoMemoryEnabled": false
+}

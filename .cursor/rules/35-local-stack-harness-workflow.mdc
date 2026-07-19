@@ -1,66 +1,28 @@
 ---
-description: Cross-repo local stack harness — sync, preflight, verify gates (scripts/)
-alwaysApply: true
+description: Cross-repo local stack harness - sync, preflight, verify gates (scripts/)
+alwaysApply: false
 ---
 
 # Local stack harness workflow
 
-Harness lives in workspace root `scripts/` (meta-repo git). Requires `TOP_CODE_ROOT` = workspace folder (`resolve-paths.ps1` sets it automatically).
+Load when the task touches runtime, Docker, API edges, local proofs, or stack health.
+
+Harness lives in workspace root `scripts/` and assumes `TOP_CODE_ROOT` = workspace folder.
 
 ## When to run
 
-| Trigger                                                      | Command                                                   |
-| ------------------------------------------------------------ | --------------------------------------------------------- |
-| Po zmianie portów, kluczy LLM, tokenów Node B / Daszek       | `pwsh -File scripts/sync-local-stack-env.ps1`             |
-| Start sesji, przed smoke/eval, przed etykietą `proven_local` | `pwsh -File scripts/preflight-local-stack.ps1`            |
-| Gmail + Daszek + mailbox/GraphStore PG                       | `pwsh -File scripts/preflight-local-stack.ps1 -FullStack` |
-| Większy Gate A+B (preflight + pytest)                        | `pwsh -File scripts/verify-local-gates.ps1`               |
+| Trigger                                                | Command                                                   |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| Po zmianie portow, kluczy, tokenow Node B / Daszek     | `pwsh -File scripts/sync-local-stack-env.ps1`             |
+| Przed smoke lub etykieta `proven_local`                | `pwsh -File scripts/preflight-local-stack.ps1`            |
+| Gmail + Daszek + mailbox/GraphStore PG                 | `pwsh -File scripts/preflight-local-stack.ps1 -FullStack` |
+| Wiekszy Gate A+B                                       | `pwsh -File scripts/verify-local-gates.ps1`               |
 
-## Po sync — gdy zmieniły się tokeny
+## Closure rule
 
-Recreate kontenerów: `gmail-agent-worker`, Daszek WordPress (`docker compose ... up -d --force-recreate`). Bez tego typowy błąd: Daszek **401** `Invalid Node B service token`.
+Po zmianach runtime / Docker / API / bridge agent sam wykonuje build, recreate, preflight i proof zamiast delegowac to operatorowi.
 
-## Agent-owned closure (obowiązkowe — nie deleguj operatorowi)
+## Related
 
-Po zmianach runtime / Docker / API / bridge **agent sam domyka weryfikację** w tej samej sesji. **Zakaz** kończyć odpowiedź frazami typu „warto by zrobić”, „Ty możesz uruchomić”, „po zakończeniu buildu zrób recreate” — jeśli agent ma shell, **robi to sam**.
-
-### Sekwencja zamknięcia (kolejność)
-
-1. **Gate A** — pytest / compile per dotknięte repo (`92-proof-gate-discipline.mdc`)
-2. **Stack** — jeśli kontener nie ma nowego kodu:
-   - `docker compose build` (tylko zmieniony serwis) — **zakaz** `docker cp` / hot-patch (patrz `36-docker-procedure.mdc`)
-   - **Poczekaj** na build w tle (`Await` / poll terminala) — nie zostawiaj w toku
-   - `docker compose ... up -d --force-recreate` dla dotkniętych serwisów
-3. **Preflight** — `scripts/preflight-local-stack.ps1 -FullStack` gdy dotyczy Daszek / Node B / PG
-4. **Gate B proof** — uruchom właściwy skrypt smoke (nie tylko health):
-   - Daszek HITL + feed: `gmail-agent/tools/gmail_audit/scripts/daszek_local_133_proof.py`
-   - Daszek os_event W0: `gmail-agent/tools/gmail_audit/scripts/daszek_os_event_w0_proof.py`
-   - Inne: runbook w `gmail-agent/docs/runbooks/` lub repo-specific `_local_smoke_run.py`
-   - `NODE_B_REGISTRY_BASE_URL=http://127.0.0.1:8766` gdy proof woła Node B z hosta
-5. **Raport** — dopiero po stdout proof (`*_PROOF_OK`) lub jawnym fail z logiem: co przeszło, markery, etykieta `proven_local` / `not proven`
-
-### Czego agent NIE przerzuca na operatora
-
-- `docker compose build` / `up -d --force-recreate` / restart kontenerów
-- Odpalenie proof scriptów i interpretacja wyniku
-- Naprawa typowych problemów (stary obraz, 404 REST regex, token mismatch po sync)
-- Sprawdzenie `:8766/health`, `:8090`, mailbox PG `:54129`
-
-### Wyjątki (jedyne uzasadnione „zrób Ty”)
-
-- Brak Docker Desktop / brak dostępu do shell (agent musi zgłosić **bloker**, nie checklistę)
-- Akcja wyłącznie w przeglądarce bez skryptu proof (rzadko; preferuj proof API)
-- Operator jawnie prosi: „nie dotykaj Dockera” / „tylko plan”
-
-## Preflight exit codes
-
-- `0` — core OK (FullStack: wszystko OK)
-- `1` — Docker niedostępny (hard fail)
-- `2` — `-FullStack`: część serwisów down (soft warn)
-
-## Powiązane
-
-- Gate A/B etykiety: `92-proof-gate-discipline.mdc`
-- Epistemika `proven_local`: `knowledge/CONTROL_PLANE.md`
-- Produkcja zawieszona (2026-06-17): `OPERATOR_DECISIONS` — Docker lokalny = jedyny aktywny cel; brak prod deploy w backlogu
-- Domyślny Node B host: `:8766` (`GMAIL_AGENT_NODEB_PORT` w `gmail-agent/.env.vps`)
+- Proof labels: `92-proof-gate-discipline.mdc`
+- Docker rebuild rule: `36-docker-procedure.mdc`
