@@ -1,12 +1,6 @@
 # TOP-INSTAL workspace meta-repo (sparse): harness + agent rules + local compose.
 *
 
-# knowledge/archive — stale/old docs moved out of knowledge/
-!knowledge/
-/knowledge/*
-!/knowledge/archive/
-!/knowledge/archive/**
-
 !.gitignore
 !AGENTS.md
 !scripts/
@@ -27,6 +21,7 @@
 /.claude/*
 !/.claude/settings.json
 !CLAUDE.md
+!workspace-repos.lock.json
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml

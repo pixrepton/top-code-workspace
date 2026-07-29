@@ -21,7 +21,7 @@ if ($missing.Count -gt 0) {
     exit 1
 }
 
-foreach ($f in @('AGENTS.md', 'ECOSYSTEM_MAP.yaml', 'knowledge/memory/OPERATOR_DECISIONS.md', '.cursorignore')) {
+foreach ($f in @('AGENTS.md', 'knowledge/memory/OPERATOR_DECISIONS.md', '.cursorignore')) {
     $p = Join-Path $root $f
     if (-not (Test-Path $p)) {
         Write-Host "Missing: $f" -ForegroundColor Red
@@ -88,6 +88,9 @@ if (Test-Path $ecoPath) {
             }
         }
     }
+}
+else {
+    $warns += 'ECOSYSTEM_MAP.yaml missing - deprecated as parallel SoT; canonical state is knowledge/world-state.yaml'
 }
 
 # Stale Desktop\knowledge paths in active docs (sample)
