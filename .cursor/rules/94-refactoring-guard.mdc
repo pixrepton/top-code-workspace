@@ -1,17 +1,15 @@
 ---
-description: Bariery bezpieczenstwa przed refaktoringiem. Uzyj gdy pytasz "czy moge to zrefaktorowac?".
+description: "Cursor-only adapter for conservative refactoring safety"
 alwaysApply: false
 ---
 
-(Cursor IDE; dla Claude Code obowiazuje root `CLAUDE.md` §Tool routing.)
+Cursor-only adapter. Use before structural refactors, renames, extractions, or ownership-moving changes.
 
 ## Pipeline
 
-1. Uruchom rule impact-analysis (91-impact-analysis.mdc): pelna analiza.
-2. Sprawdz kontrakty (93-contract-validation.mdc), jesli zmiana dotyczy API.
-3. CBM `trace_path` — czy zmieniany symbol jest uzywany w innych repo (upstream/downstream)?
-4. `rg`/direct reads jako kontrola kompletnosci.
-5. Sprawdz idempotencje: szukaj `ON CONFLICT`, `idempotency_key`, replay safety.
-6. Sprawdz ARCHITECTURE_DECISIONS.md lub aktywne decyzje operatora.
+1. Run the local impact and contract checks first.
+2. Confirm the current owner, invariants, and idempotency or replay boundaries in source.
+3. Prefer the smallest causal change over symbolic cleanup.
+4. Prove the refactor with focused tests in the owning repo.
 
-Refactoring wewnatrz jednego repo wymaga lokalnych testow. Refactoring cross-repo wymaga RFC lub jawnej decyzji operatora. Nie uruchamiaj pelnego reindexu CBM bez potrzeby.
+Do not use stale graphs, historical audits, or broad reindexing as a substitute for source verification.

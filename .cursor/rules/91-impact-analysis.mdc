@@ -1,19 +1,16 @@
 ---
-description: Pipeline analizy ryzyka przed zmianami. Uzyj gdy pytasz "co sie zepsuje jak zmienie X?" lub potrzebujesz zrozumiec zaleznosci miedzyrepo.
+description: "Cursor-only adapter for impact analysis before shared-symbol or contract edits"
 alwaysApply: false
 ---
 
-Zawsze wykonuj przed refaktoringiem zmieniajacym strukture danych, API, lub kontrakty miedzyrepo.
-
-Ta regula dotyczy Cursor IDE / natywnego agenta Cursora. Dla Claude Code obowiazuje root `CLAUDE.md` §Tool routing.
+Cursor-only adapter. Use it before refactors or edits that change shared symbols, data structures, APIs, or cross-repo contracts.
 
 ## Pipeline
 
-1. CBM `search_code`/`search_graph` (project, symbol) — znajdz wszystkie uzycia.
-2. CBM `trace_path` (project, symbol, callee) — kto wola ten symbol (upstream).
-3. CBM `trace_path` (project, caller, symbol) — co ten symbol wola (downstream).
-4. CBM `query_graph` z MATCH na Function/Class — sprawdz kontrakty API.
-5. Potwierdz aktywny kontrakt w AGENTS.md, knowledge/ i runtime proofach; dokladne literaly i config zweryfikuj `rg`/`Read`.
-6. GitNexus pozostaje wylaczony jako automatyczny tooling; nie uruchamiaj go bez osobnej decyzji operatora.
+1. Name the owner and active contract from `AGENTS.md` and `source-of-truth.md`.
+2. Inspect current source and Git usage in the owning repo first.
+3. Use graph or index tools only for the explicit repo and only when freshness is proved.
+4. Verify callers, callees, literals, and config in source with `rg` or direct reads.
+5. Finish with focused tests or existing repo gates.
 
-CBM jest narzedziem pomocniczym (graf statyczny), nie SoT — source code i runtime proof wygrywaja przy sprzecznosci. Nie uzywaj archiwalnych dokumentow runtime/ jako prawdy.
+Graph results support impact analysis; they do not replace source, tests, or runtime proof.

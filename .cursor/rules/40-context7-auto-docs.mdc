@@ -1,29 +1,16 @@
 ---
-description: "Auto-use Context7 MCP for library/framework documentation lookups"
+description: "Cursor-only adapter for current library or framework documentation lookups"
 alwaysApply: false
 ---
 
-# Context7 — Auto Documentation Lookup
+# Current Docs Routing
 
-Cursor-native rule. For Claude Code sessions the canonical tool is the `ctx7` CLI (see root `CLAUDE.md` §Tool routing and the operator's global `context7.md` rule) — do not use this MCP-based workflow there to avoid duplicating the same lookup with two different tools.
+Cursor-only adapter. Codex and Claude follow root `AGENTS.md`, `knowledge/TOOLING_POLICY.md`, and their own host rules.
 
-Whenever a question involves a **library, framework, SDK, API, CLI tool, or cloud service**, always use the Context7 MCP server to fetch current documentation — even for well-known tools like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot.
+When the task is about a library, framework, SDK, API, CLI tool, or cloud service, use one current documentation tool and cite the current docs.
 
-**Use Context7 for:**
+- Prefer Context7 in Cursor when it is available and current.
+- Do not duplicate the same lookup through multiple doc tools.
+- For local code, configs, tests, or repo contracts, use source reads instead of docs tooling.
 
-- API syntax and method signatures
-- Configuration options
-- Installation and setup
-- Version migration
-- CLI usage
-- Library-specific debugging
-
-**Do NOT use Context7 for:** general programming concepts, refactoring, writing scripts from scratch, debugging business logic, or code review.
-
-## Workflow
-
-1. Call `resolve-library-id` with the library name and the user's query.
-2. Use the returned library ID to call `query-docs` with a focused, specific query.
-3. Base your answer on the retrieved documentation — do not rely solely on training data.
-
-Never skip this step assuming you already know the answer. Library APIs change frequently.
+Do not use docs tooling as a substitute for current implementation truth.

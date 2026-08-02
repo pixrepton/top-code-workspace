@@ -1,28 +1,17 @@
 ---
-description: "Architecture-First: przed praca architektoniczna uruchom Discovery Pipeline"
+description: "Cursor-only adapter for architecture or topology reasoning"
 globs: ["**/*.py", "**/*.md", "**/*.yml", "**/*.yaml"]
 ---
 
-## Architecture-First Mandate
+## Architecture Routing
 
-Ta regula dotyczy wylacznie Cursor IDE / natywnego agenta Cursora. Dla Claude Code jedynym kanonicznym routerem jest root `CLAUDE.md` §Tool routing (zgodny z aktywna decyzja operatora RESTORATION-TOOLING-1 w `knowledge/memory/OPERATOR_DECISIONS.md`).
+Cursor-only adapter. Canon lives in root `AGENTS.md`, `knowledge/INDEX.md`, and the target repo `AGENTS.md`.
 
-Zanim wyciagniesz wniosek architektoniczny lub zaproponujesz zmiane:
+Before drawing an architectural conclusion or proposing a structural change:
 
-1. Przeczytaj `knowledge/CONTROL_PLANE.md`, `knowledge/TOOLING_POLICY.md` i wlasciwy AGENTS.md.
-2. Sprawdz aktualne runtime proofy i artefakty w `knowledge/runtime/`, jesli istnieja.
-3. Dla structural discovery / call paths / architektury: Codebase Memory MCP first (`search_graph`, `trace_path`, `query_graph`, `get_architecture`).
-4. Dla dokladnych literalow, configu, dynamic dispatch lub gdy graf zwraca puste sciezki mimo dowodow uzycia: `rg`/`Read`.
-5. Oznacz kazdy wniosek `[RUNTIME]`, `[KOD]`, `[GRAF]`, `[DOK]` lub `[WNIOSEK]`.
+1. Read the routed owner and evidence documents first.
+2. Verify current code, Git state, tests, and runtime before promoting a document claim.
+3. Use graph or index tools only when they materially improve discovery and freshness for the explicit repo is proved.
+4. Confirm every important claim in current source.
 
-## Zakazy
-
-- Nie wyciagaj wnioskow architektonicznych z samych nazw plikow lub folderow.
-- Nie zakladaj, ze funkcja jest aktywna; sprawdz feature flagi i runtime.
-- Nie zmieniaj kodu bez sprawdzenia blast radius.
-
-## Dowod
-
-- `[RUNTIME]` > `[KOD]` > `[GRAF]` > `[DOK]` > `[WNIOSEK]`.
-- Jesli runtime i kod sa sprzeczne: runtime opisuje faktyczne zachowanie, ale nie zawsze poprawnosc.
-- Jesli graf i kod sa sprzeczne: potwierdz w kodzie/runtime przed wnioskiem.
+Runtime and current code outrank graphs, maintained docs, and historical views.

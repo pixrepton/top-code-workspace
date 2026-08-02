@@ -1,39 +1,21 @@
 ---
-description: "Session memory protocol - canonical memory only"
-alwaysApply: true
+description: "Canonical memory boundary and manual session scripts when continuity or memory updates matter"
+alwaysApply: false
 ---
 
-# Session Memory Protocol
+# Session Memory Boundary
 
-Canonical persistent memory lives only in:
+Cursor adapter only. Project policy lives in root `AGENTS.md` and `knowledge/INDEX.md`.
+
+Persistent project memory remains only:
 
 - `knowledge/memory/OPERATOR_DECISIONS.md`
 - `knowledge/memory/BACKLOG.md`
 - `knowledge/memory/ACTIVE_WORKSPACE.md`
 - `knowledge/memory/LAST_SESSION.md`
 
-`top-code-memory/`, repo-local `memory-bank/`, transcript stores and reflection stores are not active memory systems.
+Use the manual session scripts only when the operator explicitly starts or ends a session boundary task.
 
-## Start
-
-Operator command: "uruchom hooki startu sesji"
-
-1. Run `powershell -File scripts/run-session-start-hooks.ps1`.
-2. Read `C:\top-code-session-scratch\SESSION_START_CONTEXT.md`, unless `TOP_CODE_SESSION_SCRATCH` points elsewhere.
-3. Cold-start from `knowledge/INDEX.md`, then the four canonical memory files above as needed.
-
-## Stop
-
-Operator command: "koniec sesji czatu. uruchom hooki konca sesji"
-
-1. Update only the four canonical memory files when there is live state to record.
-2. Run `powershell -File scripts/run-session-stop-hooks.ps1`.
-3. Scratch closeout is written outside repo: `C:\top-code-session-scratch\SESSION_CLOSEOUT.log` by default.
-
-## Rules
-
-- Do not persist raw transcripts, reflections, DRIFT, session summaries or shadow backlogs in repo.
+- Do not create shadow memory, transcript stores or repo-local memory banks.
 - Do not mirror `LAST_SESSION.md` outside `knowledge/memory/`.
-- Do not recreate `top-code-memory/` or repo-local `memory-bank/`.
-- New durable operator decisions go to `OPERATOR_DECISIONS.md` with `[ACTIVE]` status.
-- Backlog contains only open work, status and next action.
+- When continuity matters, follow the cold-start route from `knowledge/INDEX.md`.

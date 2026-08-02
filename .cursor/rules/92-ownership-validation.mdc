@@ -1,16 +1,15 @@
 ---
-description: Weryfikacja wlasciciela komponentu i Source of Truth. Uzyj gdy pytasz "kto jest wlascicielem?" lub "czy to jest SoT?".
+description: "Cursor-only adapter for ownership and Source-of-Truth checks"
 alwaysApply: false
 ---
 
-SoT nigdy nie jest projekcja. Projekcja nigdy nie jest SoT. (Cursor IDE; dla Claude Code obowiazuje root `CLAUDE.md` §Tool routing.)
+Projection is not Source of Truth. Ownership lives in the routed contracts, not in generated views.
 
 ## Pipeline
 
-1. AGENTS.md root i repo: kalk-top=OfferDTO/HVAC, gmail-agent=case runtime, daszek=projection.
-2. world-state.yaml repos.*.role, jesli istnieje i jest aktualny.
-3. CBM `query_graph`(project, "MATCH (c:Class) WHERE ...") — kto zapisuje/odczytuje storage; CBM `search_code`(project, "INSERT INTO|UPDATE|DELETE FROM") — weryfikacja write path.
-4. `rg`/direct reads jako kontrola kompletnosci i dla dokladnych literalow.
+1. Read root and repo `AGENTS.md`, then `source-of-truth.md`.
+2. Use `world-state.yaml` only as a hint when its freshness is qualified.
+3. Confirm write paths, storage, and consumers in current source.
+4. Use graph or index tools only when they materially help and are fresh for the explicit repo.
 
-CBM zapytuj zawsze z jawnym `project` odpowiadajacym aktywnemu repo z tego pipeline'u (kalk-top/gmail-agent/daszek/cieplo-orchestrator) — `CBM_ALLOWED_ROOT` ogranicza tylko nowe indeksowanie, nie widocznosc zapytan miedzy juz zaindeksowanymi projektami we wspoldzielonym cache.
-Nie uzywaj archiwalnych runtime/BOUNDARY*MAP.md ani runtime/WRITE_EXECUTOR_GRAPH.md jako prawdy.
+Current code and runtime win over stale topology notes, graphs, or archives.
