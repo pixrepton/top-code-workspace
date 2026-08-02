@@ -1,0 +1,47 @@
+{
+  "description": "Project-scoped AI-OS Codex lifecycle hooks for checkpoint refresh and compact resume.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "commandWindows": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "statusMessage": "Refreshing AI-OS task context",
+            "additionalContextLimit": 900,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "commandWindows": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "statusMessage": "Refreshing AI-OS task checkpoint",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "other",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "commandWindows": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
