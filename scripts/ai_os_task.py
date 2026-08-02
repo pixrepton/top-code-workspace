@@ -15,9 +15,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ai_os_task_ownership import (
+    OWNERSHIP_BASELINE_VERSION,
+    OwnershipError,
+    assess_ownership,
+    capture_ownership_baseline,
+    empty_ownership_baseline,
+    scope_contains,
+)
+
 
 WORKSPACE = Path(__file__).resolve().parents[1]
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+LEGACY_SCHEMA_VERSION = 1
 ALLOWED_STATUSES = {
     "INITIALIZED",
     "IN_PROGRESS",
@@ -183,29 +193,6 @@ def config_hash(repo: str, values: list[str]) -> str:
     return sha256_bytes(parts)
 
 
-def collect_git_state(scope: list[dict[str, str]]) -> tuple[list[str], list[str], list[str]]:
-    staged: list[str] = []
-    unstaged: list[str] = []
-    untracked: list[str] = []
-    for item in scope:
-        repo = item["repo"]
-        path = repo_path(repo)
-        rel = item["path"]
-        lines = run(["git", "status", "--porcelain", "--untracked-files=all", "--", rel], path).stdout.splitlines()
-        for line in lines:
-            code = line[:2]
-            file_path = normalize_rel(line[3:] if len(line) > 3 else "")
-            qualified = f"{repo}:{file_path}"
-            if code == "??":
-                untracked.append(qualified)
-                continue
-            if code[0] != " ":
-                staged.append(qualified)
-            if code[1] != " ":
-                unstaged.append(qualified)
-    return sorted(set(staged)), sorted(set(unstaged)), sorted(set(untracked))
-
-
 def validate_checkpoint(data: dict[str, Any]) -> None:
     required = {
         "schema_version": int,
@@ -224,6 +211,9 @@ def validate_checkpoint(data: dict[str, Any]) -> None:
         "own_staged_files": list,
         "own_unstaged_files": list,
         "own_untracked_files": list,
+        "ownership_baseline": dict,
+        "adopted_baseline_scope": list,
+        "ownership_conflicts": list,
         "decisions": list,
         "completed_steps": list,
         "gates": list,
@@ -244,6 +234,38 @@ def validate_checkpoint(data: dict[str, Any]) -> None:
         raise TaskError(f"invalid status: {data['status']}")
     if data["task_class"] not in ALLOWED_CLASSES:
         raise TaskError(f"invalid task_class: {data['task_class']}")
+    if data["ownership_baseline"].get("version") != OWNERSHIP_BASELINE_VERSION:
+        raise TaskError("unsupported ownership_baseline version")
+
+
+def migrate_pristine_legacy_checkpoint(data: dict[str, Any]) -> dict[str, Any]:
+    activity_keys = (
+        "own_staged_files",
+        "own_unstaged_files",
+        "own_untracked_files",
+        "decisions",
+        "completed_steps",
+        "gates",
+        "commits",
+        "blockers",
+    )
+    pristine = (
+        data.get("status") == "INITIALIZED"
+        and data.get("current_phase") == "task-start"
+        and data.get("current_shas") == data.get("baseline_shas")
+        and all(not data.get(key) for key in activity_keys)
+    )
+    if not pristine:
+        raise TaskError(
+            "legacy checkpoint schema_version 1 has no ownership baseline; "
+            "start a new checkpoint (historical state was not modified)"
+        )
+    migrated = dict(data)
+    migrated["schema_version"] = SCHEMA_VERSION
+    migrated["ownership_baseline"] = empty_ownership_baseline(data["started_at_utc"])
+    migrated["adopted_baseline_scope"] = []
+    migrated["ownership_conflicts"] = []
+    return migrated
 
 
 def atomic_write(data: dict[str, Any], path: Path | None = None) -> None:
@@ -265,16 +287,29 @@ def load_checkpoint() -> dict[str, Any]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise TaskError(f"checkpoint is corrupt JSON: {path}: {exc}") from exc
+    if data.get("schema_version") == LEGACY_SCHEMA_VERSION:
+        data = migrate_pristine_legacy_checkpoint(data)
+        atomic_write(data)
     validate_checkpoint(data)
     return data
 
 
 def refresh_git_fields(data: dict[str, Any]) -> None:
     data["current_shas"] = {repo: git_head(repo) for repo in data["target_repositories"]}
-    staged, unstaged, untracked = collect_git_state(data["declared_write_scope"])
-    data["own_staged_files"] = staged
-    data["own_unstaged_files"] = unstaged
-    data["own_untracked_files"] = untracked
+    try:
+        ownership = assess_ownership(
+            {repo: repo_path(repo) for repo in data["target_repositories"]},
+            data["declared_write_scope"],
+            data["ownership_baseline"],
+            data["adopted_baseline_scope"],
+            state_dir(),
+        )
+    except OwnershipError as exc:
+        raise TaskError(str(exc)) from exc
+    data["own_staged_files"] = ownership["staged"]
+    data["own_unstaged_files"] = ownership["unstaged"]
+    data["own_untracked_files"] = ownership["untracked"]
+    data["ownership_conflicts"] = ownership["conflicts"]
     data["updated_at_utc"] = utc_now()
 
 
@@ -302,18 +337,36 @@ def print_summary(data: dict[str, Any], prefix: str = "TASK") -> None:
     print(f"next: {data['next_action'] or '<none>'}")
     if data["blockers"]:
         print(f"blockers: {len(data['blockers'])}")
+    if data["ownership_conflicts"]:
+        print(f"ownership_conflicts: {len(data['ownership_conflicts'])}")
     mismatches = git_mismatches(data)
     if mismatches:
         print("git_state_mismatch: " + "; ".join(mismatches))
 
 
 def new_checkpoint(args: argparse.Namespace) -> int:
-    if checkpoint_path().exists() and not args.replace:
+    existing = checkpoint_path().exists()
+    if existing and not args.replace:
         raise TaskError(f"checkpoint already exists; use task-status/task-resume or --replace: {checkpoint_path()}")
-    repos = args.repo or sorted({item["repo"] for item in parse_scope(args.scope)})
     scope = parse_scope(args.scope)
+    adopted = parse_scope(args.adopt_baseline or [])
+    for item in adopted:
+        if not scope_contains(scope, item):
+            raise TaskError(f"adopted baseline path must be inside declared scope: {item['repo']}:{item['path']}")
+    repos = args.repo or sorted({item["repo"] for item in scope})
     baseline = {repo: git_head(repo) for repo in repos}
     now = utc_now()
+    try:
+        ownership_baseline = capture_ownership_baseline(
+            {repo: repo_path(repo) for repo in repos},
+            scope,
+            baseline,
+            adopted,
+            state_dir(),
+            now,
+        )
+    except OwnershipError as exc:
+        raise TaskError(str(exc)) from exc
     data: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "task_id": args.task_id,
@@ -331,6 +384,9 @@ def new_checkpoint(args: argparse.Namespace) -> int:
         "own_staged_files": [],
         "own_unstaged_files": [],
         "own_untracked_files": [],
+        "ownership_baseline": ownership_baseline,
+        "adopted_baseline_scope": adopted,
+        "ownership_conflicts": [],
         "decisions": [],
         "completed_steps": [],
         "gates": [],
@@ -519,6 +575,8 @@ def closure_issues(data: dict[str, Any]) -> list[str]:
         issues.append("own unstaged files remain: " + ", ".join(data["own_unstaged_files"]))
     if data["own_untracked_files"]:
         issues.append("own untracked files remain: " + ", ".join(data["own_untracked_files"]))
+    if data["ownership_conflicts"]:
+        issues.extend(data["ownership_conflicts"])
     if not data["commits"]:
         issues.append("no created commits recorded")
     for commit in data["commits"]:
@@ -651,6 +709,11 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--class", dest="task_class", choices=sorted(ALLOWED_CLASSES), required=True)
     start.add_argument("--repo", action="append")
     start.add_argument("--scope", action="append", required=True, help="repo:path")
+    start.add_argument(
+        "--adopt-baseline",
+        action="append",
+        help="repo:path already dirty at task start that this task is explicitly authorized to own",
+    )
     start.add_argument("--next", dest="next_action", default="")
     start.add_argument("--summary", default="")
     start.add_argument("--replace", action="store_true")
