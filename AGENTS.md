@@ -141,11 +141,21 @@ Never silently reconcile conflicting sources by guessing.
 
 Use specialized tools when they provide materially better information than raw file scanning.
 
-For code discovery, architecture, dependencies, call paths and impact analysis, follow the Claude Code adapter rules in `CLAUDE.md`.
+For code discovery, architecture, dependencies, call paths and impact analysis,
+follow the applicable repository AGENTS.md,
+`knowledge/system-atlas/tooling/CODEX_EXECUTION_MAP.md`,
+and the relevant maintained tool instructions.
+CLAUDE.md files are Claude Code adapters, not canonical project policy.
+
+Treat `knowledge/`, especially `knowledge/gitnexus/`, and maintained code-intelligence indexes such as Codebase Memory MCP as operational support for routing, impact analysis and cross-repo discovery. Their results stay advisory until freshness is proved and the result is verified in current source.
 
 For known files, configuration and documentation, direct file reads are appropriate.
 
 For proof, prefer deterministic commands and existing repository gates over narrative confidence.
+
+After substantial code, contract, topology or workflow changes, explicitly assess whether GitNexus indexes/group views, Codebase Memory indexes/graphs and affected maintained files in `knowledge/` need refresh.
+
+If refresh is feasible within the current local scope, perform the minimal required refresh or update and report what was refreshed, what remains stale and what is still only advisory.
 
 If a specialized tool is unavailable, stale or incomplete, state that explicitly before using a fallback.
 
