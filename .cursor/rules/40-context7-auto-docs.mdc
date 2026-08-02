@@ -5,6 +5,8 @@ alwaysApply: false
 
 # Context7 — Auto Documentation Lookup
 
+Cursor-native rule. For Claude Code sessions the canonical tool is the `ctx7` CLI (see root `CLAUDE.md` §Tool routing and the operator's global `context7.md` rule) — do not use this MCP-based workflow there to avoid duplicating the same lookup with two different tools.
+
 Whenever a question involves a **library, framework, SDK, API, CLI tool, or cloud service**, always use the Context7 MCP server to fetch current documentation — even for well-known tools like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot.
 
 **Use Context7 for:**

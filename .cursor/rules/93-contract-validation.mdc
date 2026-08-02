@@ -3,12 +3,14 @@ description: Sprawdzanie kontraktow miedzy repozytoriami. Uzyj gdy zmieniasz end
 alwaysApply: false
 ---
 
+(Cursor IDE; dla Claude Code obowiazuje root `CLAUDE.md` §Tool routing.)
+
 ## Pipeline
 
-1. TOPINSTAL-KERNEL-GRAPH.yaml — graf zaleznosci HTTP (kanoniczny, nie archiwalny)
-2. CBM search_code w kazdym repozytorium — znajdz HTTP callers (requests.get, httpx, wp_remote_post)
-3. CBM search_code — znajdz REST endpoints (FastAPI route, WordPress REST API)
+1. TOPINSTAL-KERNEL-GRAPH.yaml lub aktualny dokument kontraktu HTTP, jesli istnieje.
+2. CBM `search_code`/`search_graph` w kazdym repozytorium (jawny `project`): znajdz HTTP callers (`requests.get`, `httpx`, `wp_remote_post`, fetch) i REST endpoints (FastAPI route, WordPress REST API).
+3. `rg`/direct reads jako kontrola kompletnosci — dokladne literaly, dynamiczne URL-e, config.
 4. Porownaj: czy kazdy endpoint ma callerow i kazdy caller ma endpoint?
-5. Sprawdz feature flagi w world-state.yaml jesli endpoint jest warunkowy
+5. Sprawdz feature flagi, jesli endpoint jest warunkowy.
 
-Nowa krawedz HTTP wymaga RFC. Nie dodawaj "przy okazji".
+Nowa krawedz HTTP wymaga RFC lub jawnej decyzji operatora. Nie dodawaj "przy okazji". Nie uruchamiaj auto-reindexu CBM bez potrzeby (patrz `INDEX ONCE → QUERY MANY TIMES → REFRESH WHEN NEEDED` w OPERATOR_DECISIONS.md).

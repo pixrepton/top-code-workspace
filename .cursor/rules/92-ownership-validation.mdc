@@ -3,14 +3,14 @@ description: Weryfikacja wlasciciela komponentu i Source of Truth. Uzyj gdy pyta
 alwaysApply: false
 ---
 
-SoT nigdy nie jest projekcja. Projekcja nigdy nie jest SoT.
+SoT nigdy nie jest projekcja. Projekcja nigdy nie jest SoT. (Cursor IDE; dla Claude Code obowiazuje root `CLAUDE.md` §Tool routing.)
 
 ## Pipeline
 
-1. AGENTS.md (root) §Ownership — szybka odpowiedz (kalk-top=OfferDTO, gmail-agent=case, daszek=projection)
-2. world-state.yaml repos.\*.role — kanoniczny ownership
-3. CBM query_graph(project, "MATCH (c:Class) WHERE ...") — kto zapisuje/odczytuje storage
-4. CBM search_code(project, "INSERT INTO|UPDATE|DELETE FROM") — weryfikacja write path
+1. AGENTS.md root i repo: kalk-top=OfferDTO/HVAC, gmail-agent=case runtime, daszek=projection.
+2. world-state.yaml repos.*.role, jesli istnieje i jest aktualny.
+3. CBM `query_graph`(project, "MATCH (c:Class) WHERE ...") — kto zapisuje/odczytuje storage; CBM `search_code`(project, "INSERT INTO|UPDATE|DELETE FROM") — weryfikacja write path.
+4. `rg`/direct reads jako kontrola kompletnosci i dla dokladnych literalow.
 
-Nie uzywaj archiwalnych runtime/BOUNDARY*MAP.md ani runtime/WRITE_EXECUTOR_GRAPH.md.
-Jesli potrzebujesz listy write executors: CBM search_code(gmail-agent, "execute*") lub spytaj CBM o funkcje.
+CBM zapytuj zawsze z jawnym `project` odpowiadajacym aktywnemu repo z tego pipeline'u (kalk-top/gmail-agent/daszek/cieplo-orchestrator) — `CBM_ALLOWED_ROOT` ogranicza tylko nowe indeksowanie, nie widocznosc zapytan miedzy juz zaindeksowanymi projektami we wspoldzielonym cache.
+Nie uzywaj archiwalnych runtime/BOUNDARY*MAP.md ani runtime/WRITE_EXECUTOR_GRAPH.md jako prawdy.

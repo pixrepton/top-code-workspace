@@ -23,11 +23,13 @@ Nie twórz alternatywnych memory banków, reflection/transcript stores, shadow b
 
 ## Tool routing
 
-Dobieraj narzędzie do zadania.
+Dobieraj narzędzie do zadania. Ten router jest jedynym kanonicznym źródłem dla Claude Code — `.cursor/rules/*.mdc` to reguły natywne Cursora, nie są automatycznie ładowane do sesji Claude Code (`.cursor/hooks.json` ma puste `sessionStart`/`sessionEnd`) i mają jedynie charakter pomocniczy/informacyjny, nawet jeśli deklarują inaczej.
 
 ### Codebase Memory MCP
 
-Dla discovery kodu, symboli, zależności, call paths, architektury, impact i blast-radius domyślnie używaj Codebase Memory MCP przed ręcznym skanowaniem repo.
+Dla discovery kodu, symboli, zależności, call paths, architektury, impact i blast-radius domyślnie używaj Codebase Memory MCP przed ręcznym skanowaniem repo (zgodnie z aktywną decyzją operatora `RESTORATION-TOOLING-1` w `knowledge/memory/OPERATOR_DECISIONS.md`: `INDEX ONCE → QUERY MANY TIMES → REFRESH WHEN NEEDED`).
+
+Zawsze wywołuj CBM z jawnym `project` odpowiadającym repo, którego dotyczy zadanie (patrz §Repo-level AGENTS.md). `CBM_ALLOWED_ROOT` w `.mcp.json` ogranicza wyłącznie nowe indeksowanie (obecnie `gmail-agent`) — **nie** ogranicza widoczności zapytań we współdzielonym cache (`CBM_CACHE_DIR`), który może zawierać zaindeksowane inne repo. Nie traktuj samej obecności projektu w `list_projects` jako uprawnienia do jego odpytywania poza granicami ownership zadania.
 
 Dobieraj narzędzie do pytania:
 
@@ -65,6 +67,10 @@ Używaj dla rzeczywistych flow Daszka/UI, E2E, DOM, formularzy, interakcji i zac
 ### OpenAI Docs MCP
 
 Używaj dla aktualnej dokumentacji OpenAI API i produktów OpenAI. Nie opieraj implementacji aktualnych API na pamięci modelu, gdy dostępne jest źródło oficjalne.
+
+### Dokumentacja bibliotek/frameworków (Context7)
+
+Kanoniczne narzędzie: CLI `ctx7` (`npx ctx7@latest library ...` → `npx ctx7@latest docs ...`), zgodnie z globalną regułą operatora. Nie duplikuj tego przez MCP connector `Context7` ani skill `find-docs` w tym samym zapytaniu — wybierz jedno narzędzie na jedno pytanie. `.cursor/rules/40-context7-auto-docs.mdc` jest regułą Cursora i nie zastępuje tego routingu w Claude Code.
 
 ### Bash
 

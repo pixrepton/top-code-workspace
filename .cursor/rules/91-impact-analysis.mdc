@@ -5,12 +5,15 @@ alwaysApply: false
 
 Zawsze wykonuj przed refaktoringiem zmieniajacym strukture danych, API, lub kontrakty miedzyrepo.
 
+Ta regula dotyczy Cursor IDE / natywnego agenta Cursora. Dla Claude Code obowiazuje root `CLAUDE.md` §Tool routing.
+
 ## Pipeline
 
-1. CBM search_code(project, symbol) — znajdz wszystkie uzycia
-2. CBM trace_path(project, symbol, callee) — kto wola ten symbol (upstream)
-3. CBM trace_path(project, caller, symbol) — co ten symbol wola (downstream)
-4. CBM query_graph z MATCH na Function/Class — sprawdz kontrakty API
-5. Jesli zmiana cross-repo → GitNexus MCP impact analysis
+1. CBM `search_code`/`search_graph` (project, symbol) — znajdz wszystkie uzycia.
+2. CBM `trace_path` (project, symbol, callee) — kto wola ten symbol (upstream).
+3. CBM `trace_path` (project, caller, symbol) — co ten symbol wola (downstream).
+4. CBM `query_graph` z MATCH na Function/Class — sprawdz kontrakty API.
+5. Potwierdz aktywny kontrakt w AGENTS.md, knowledge/ i runtime proofach; dokladne literaly i config zweryfikuj `rg`/`Read`.
+6. GitNexus pozostaje wylaczony jako automatyczny tooling; nie uruchamiaj go bez osobnej decyzji operatora.
 
-Nie uzywaj archiwalnych dokumentow runtime/. CBM jest wystarczajacy.
+CBM jest narzedziem pomocniczym (graf statyczny), nie SoT — source code i runtime proof wygrywaja przy sprzecznosci. Nie uzywaj archiwalnych dokumentow runtime/ jako prawdy.

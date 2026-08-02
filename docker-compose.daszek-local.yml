@@ -24,6 +24,7 @@ services:
       WORDPRESS_DB_NAME: daszek
       WORDPRESS_DB_USER: daszek
       WORDPRESS_DB_PASSWORD: daszek_local
+      HVAC_RAG_API_URL: http://host.docker.internal:8000
       WORDPRESS_CONFIG_EXTRA: |
         define('DASZEK_NODE_B_API_BASE', 'http://host.docker.internal:8766');
         if (getenv('DASZEK_NODE_B_API_TOKEN')) {
@@ -34,6 +35,9 @@ services:
         }
         if (getenv('DASZEK_NODE_B_SERVICE_TOKEN')) {
           define('DASZEK_NODE_B_SERVICE_TOKEN', getenv('DASZEK_NODE_B_SERVICE_TOKEN'));
+        }
+        if (getenv('HVAC_RAG_API_URL')) {
+          define('HVAC_RAG_API_URL', getenv('HVAC_RAG_API_URL'));
         }
     env_file:
       - path: .env.daszek-local
