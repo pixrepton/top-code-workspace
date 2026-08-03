@@ -53,3 +53,15 @@
 # everything under scripts/ recursively, including __pycache__).
 scripts/**/__pycache__/
 scripts/**/*.pyc
+
+# Root hygiene: keep session junk / proof dumps out of the workspace root even if
+# a later allowlist entry accidentally un-ignores them.
+/monitor.log
+/*.log
+/.tmp-cookies.txt
+/ctfu5-browser-*.png
+/.mcp.json.backup-*
+/tmp/
+/.artifacts/
+/.pytest_cache/
+/.ruff_cache/

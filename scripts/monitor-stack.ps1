@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
     Stack health monitor for TOP-INSTAL AI-OS.
-    Checks all major services and logs failures to monitor.log.
+    Checks all major services and logs failures to tmp/monitor.log.
 
 .DESCRIPTION
     Run periodically using Task Scheduler, cron, or a systemd timer
@@ -13,12 +13,17 @@
 
 param(
     [int]$TimeoutSec = 10,
-    [string]$LogPath = "monitor.log",
+    [string]$LogPath = "",
     [string]$AgentBaseUrl = "http://localhost:8765",
     [string]$RagBaseUrl = "http://localhost:8000",
     [string]$DaszekBaseUrl = "http://localhost:8090",
     [string]$KalkBaseUrl = "http://localhost:8091"
 )
+
+$workspaceRoot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($LogPath)) {
+    $LogPath = Join-Path $workspaceRoot "tmp\monitor.log"
+}
 
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 $results = @()

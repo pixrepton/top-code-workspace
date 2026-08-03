@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $monitorScript = Join-Path $root 'scripts\monitor-stack.ps1'
-$logPath = Join-Path $root 'monitor.log'
+$logPath = Join-Path $root 'tmp\monitor.log'
 
 if (-not (Test-Path $monitorScript)) {
     throw "Missing $monitorScript"
