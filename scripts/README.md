@@ -15,6 +15,45 @@ Cross-repo PowerShell harness for local Docker stack. Versioned in the workspace
 | `session-closeout.ps1`       | Session end checklist helper                                                              |
 | `compile-world-state.py`     | World-state compile helper                                                                |
 | `load-secrets.ps1`           | Inject Bitwarden vault secrets into .env (Phase 1: cookies). Requires `BWS_ACCESS_TOKEN`. |
+| `ai_os_task.py`              | Shared checkpoint, ownership, gate, task-branch and scoped local commit engine for Codex and Claude Code. |
+| `ai_os_codex_hook.py`        | Codex lifecycle adapter for checkpoint refresh/resume.                                  |
+| `ai_os_claude_hook.py`       | Claude Code write/Git guard and completion adapter.                                     |
+
+
+## Agent task and Git workflow
+
+All agent write tasks use the same engine:
+
+```powershell
+# Initialize exact repo:path scope and local-only publication
+python scripts/ai_os_task.py task-start `
+  --task-id RP-XX `
+  --title "Bounded repair" `
+  --class MEDIUM `
+  --repo gmail-agent `
+  --scope gmail-agent:path/to/file.py `
+  --publication-mode LOCAL_ONLY
+
+# Leave the default/protected branch before the first write
+python scripts/ai_os_task.py task-branch `
+  --repo gmail-agent `
+  --name repair/RP-XX-bounded-repair
+
+# Run the task-specific proof
+python scripts/ai_os_task.py task-gate --gate-id focused --repo gmail-agent --scope path/to/file.py -- python -m pytest path/to/test.py -q
+
+# Plan and create a scoped local commit without absorbing foreign staged state
+python scripts/ai_os_task.py task-commit-plan --repo gmail-agent --json
+python scripts/ai_os_task.py task-commit --repo gmail-agent --message "fix(scope): describe the completed result"
+
+# Rerun final gates after the commit, then close
+python scripts/ai_os_task.py task-checkpoint --status READY_TO_CLOSE --next=
+python scripts/ai_os_task.py task-close --validate-only
+python scripts/ai_os_task.py task-close --summary "Closed with final committed proof."
+```
+
+Do not use raw `git add` or raw `git commit` for agent work. The canonical
+policy is `knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`.
 
 ## MAX-STACK master proof (gmail-agent)
 

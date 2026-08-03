@@ -1,5 +1,5 @@
 {
-  "description": "Project-scoped AI-OS Codex lifecycle hooks for checkpoint refresh and compact resume.",
+  "description": "Project-scoped AI-OS Codex lifecycle hooks. Shared Git decisions remain in scripts/ai_os_task.py; hooks refresh and resume checkpoint state.",
   "hooks": {
     "SessionStart": [
       {
@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
-            "commandWindows": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "command": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
+            "commandWindows": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
             "statusMessage": "Refreshing AI-OS task context",
             "additionalContextLimit": 900,
             "timeout": 5
@@ -22,8 +22,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
-            "commandWindows": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "command": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
+            "commandWindows": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
             "statusMessage": "Refreshing AI-OS task checkpoint",
             "timeout": 5
           }
@@ -36,8 +36,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
-            "commandWindows": "python -X utf8 \"C:/Users/compg/Desktop/top-code workspace/scripts/ai_os_codex_hook.py\"",
+            "command": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
+            "commandWindows": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
             "timeout": 3
           }
         ]

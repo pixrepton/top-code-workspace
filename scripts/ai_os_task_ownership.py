@@ -318,3 +318,89 @@ def assess_ownership(
         "untracked": sorted(own["untracked"]),
         "conflicts": sorted(set(conflicts)),
     }
+
+
+def _remove_foreign_delta(combined: State, base: State, foreign: State) -> tuple[State | None, str]:
+    """Derive task-only state by removing the task-start foreign delta from combined state."""
+    if foreign == base:
+        return combined, ""
+    if base[0] == "missing":
+        if foreign[0] == "missing":
+            return combined, ""
+        return None, "cannot isolate task changes from a file that was foreign and untracked at task start"
+    if foreign[0] == "missing":
+        return None, "cannot isolate task changes across a pre-existing foreign deletion"
+    if combined[0] == "missing":
+        return None, "cannot preserve a pre-existing foreign delta when the task deletes the path"
+    if combined == foreign:
+        return base, ""
+    if not all(state[0] == "file" for state in (combined, base, foreign)):
+        return None, "non-file baseline delta cannot be subtracted safely"
+    if any(b"\0" in (state[1] or b"") for state in (combined, base, foreign)):
+        return None, "binary baseline delta cannot be subtracted safely"
+    with tempfile.TemporaryDirectory(prefix="ai-os-ownership-subtract-") as tmp_raw:
+        tmp = Path(tmp_raw)
+        combined_file = tmp / "combined"
+        foreign_file = tmp / "foreign"
+        base_file = tmp / "base"
+        combined_file.write_bytes(combined[1] or b"")
+        foreign_file.write_bytes(foreign[1] or b"")
+        base_file.write_bytes(base[1] or b"")
+        proc = subprocess.run(
+            ["git", "merge-file", "-p", str(combined_file), str(foreign_file), str(base_file)],
+            capture_output=True,
+        )
+    if proc.returncode == 0:
+        return ("file", proc.stdout), ""
+    if proc.returncode == 1:
+        return None, "task change overlaps a pre-existing foreign hunk"
+    detail = proc.stderr.decode(errors="replace").strip()
+    return None, f"three-way ownership subtraction failed: {detail or proc.returncode}"
+
+
+def prepare_owned_commit_states(
+    repo_name: str,
+    repo_root: Path,
+    owned_paths: list[str],
+    baseline: dict[str, Any],
+    adopted: list[dict[str, str]],
+    state_root: Path,
+) -> dict[str, dict[str, State]]:
+    """Build task-only commit states and post-commit real-index states per path.
+
+    The returned commit state excludes pre-existing dirty work captured at task
+    start. The post_index state reapplies any pre-existing staged delta on top
+    of the new task commit, so the user's index remains semantically unchanged.
+    """
+    if baseline.get("version") != OWNERSHIP_BASELINE_VERSION:
+        raise OwnershipError(f"unsupported ownership baseline version: {baseline.get('version')}")
+    snapshot_directory = baseline.get("snapshot_directory", "")
+    entries = {
+        normalize_rel(entry["path"]): entry
+        for entry in baseline.get("entries", [])
+        if entry.get("repo") == repo_name
+    }
+    result: dict[str, dict[str, State]] = {}
+    for raw_path in sorted(set(owned_paths)):
+        path = normalize_rel(raw_path)
+        combined = _state_from_worktree(repo_root, path)
+        entry = entries.get(path)
+        if entry is None or entry.get("adopted") or is_adopted(repo_name, path, adopted):
+            commit_state = combined
+            post_index_state = combined
+        else:
+            base = _state_from_descriptor(entry["head"], state_root, snapshot_directory)
+            foreign_index = _state_from_descriptor(entry["index"], state_root, snapshot_directory)
+            foreign_worktree = _state_from_descriptor(entry["worktree"], state_root, snapshot_directory)
+            commit_state, subtract_error = _remove_foreign_delta(combined, base, foreign_worktree)
+            if subtract_error or commit_state is None:
+                raise OwnershipError(f"{qualified(repo_name, path)}: {subtract_error}")
+            post_index_state, index_error = _merge_expected(commit_state, base, foreign_index)
+            if index_error or post_index_state is None:
+                raise OwnershipError(f"{qualified(repo_name, path)}: cannot preserve staged baseline: {index_error}")
+        if commit_state[0] not in {"file", "symlink", "missing"}:
+            raise OwnershipError(f"{qualified(repo_name, path)}: unsupported commit state {commit_state[0]}")
+        if post_index_state[0] not in {"file", "symlink", "missing"}:
+            raise OwnershipError(f"{qualified(repo_name, path)}: unsupported post-index state {post_index_state[0]}")
+        result[path] = {"commit": commit_state, "post_index": post_index_state}
+    return result
