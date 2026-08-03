@@ -134,11 +134,51 @@ if (-not $coreOk) { $warn++ }
 
 
 
+function Ensure-KalkTopRuntime {
+    $healthUrl = 'http://127.0.0.1:8091/index.php?rest_route=/'
+    if (Test-HttpHealth 'kalk-top runtime' $healthUrl) {
+        return $true
+    }
+
+    $startScript = Join-Path $env:TOP_CODE_ROOT 'kalk-top\scripts\start-runtime-wp.ps1'
+    if (-not (Test-Path -LiteralPath $startScript)) {
+        Write-Host "[FAIL] missing bootstrap script: $startScript" -ForegroundColor Red
+        return $false
+    }
+
+    Write-Host '[..] starting kalk-top runtime-wp via start-runtime-wp.ps1' -ForegroundColor Cyan
+    try {
+        # Non-blocking launch + health poll: avoids -Wait hanging on the long-lived php -S child.
+        Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$startScript`"" `
+            -WindowStyle Hidden | Out-Null
+    }
+    catch {
+        Write-Host "[FAIL] start-runtime-wp.ps1: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
+
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 1
+        try {
+            $r = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 3
+            if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 400) {
+                Write-Host "[OK] kalk-top runtime (after bootstrap) $healthUrl" -ForegroundColor Green
+                return $true
+            }
+        }
+        catch {}
+    }
+
+    Write-Host "[FAIL] kalk-top runtime did not become healthy within 30s" -ForegroundColor Red
+    return $false
+}
+
 if ($FullStack) {
 
     if (-not (Test-HttpHealth 'Daszek sandbox' 'http://127.0.0.1:8090/wp-json/')) { $warn++ }
 
-    if (-not (Test-HttpHealth 'kalk-top runtime' 'http://127.0.0.1:8091/index.php?rest_route=/')) { $warn++ }
+    if (-not (Ensure-KalkTopRuntime)) { $warn++ }
 
     if (-not (Test-TcpPort 'GraphStore Postgres' '127.0.0.1' 54130)) { $warn++ }
 
