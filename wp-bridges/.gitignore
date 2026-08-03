@@ -1,0 +1,12 @@
+﻿# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+**/__MACOSX
+
+# IDE
+.vscode/
+.idea/
+
+# GitNexus cache
+.gitnexus/

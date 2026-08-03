@@ -6,6 +6,10 @@
   ],
   "settings": {
     "search.exclude": {
+      "archive-codex-and-claude/**": true,
+      "_review_bundle/**": true,
+      "_review_current/**": true,
+      "screenshots-test/**": true,
       "_graphify-corpus/**": true,
       "graphify-out/**": true,
       "knowledge/graphify/graphify-out/**": true,
@@ -24,6 +28,10 @@
       "_md_audit/**": true
     },
     "files.watcherExclude": {
+      "archive-codex-and-claude/**": true,
+      "_review_bundle/**": true,
+      "_review_current/**": true,
+      "screenshots-test/**": true,
       "_graphify-corpus/**": true,
       ".understand-anything/intermediate/**": true,
       ".understand-anything/tmp/**": true,

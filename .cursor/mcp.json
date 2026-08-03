@@ -6,11 +6,7 @@
         "--from",
         "codebase-memory-mcp==0.9.0",
         "codebase-memory-mcp"
-      ],
-      "env": {
-        "CBM_ALLOWED_ROOT": "C:/Users/compg/Desktop/top-code workspace",
-        "CBM_CACHE_DIR": "C:/ai-os-codebase-memory"
-      }
+      ]
     },
     "gitnexus": {
       "command": "gitnexus",
@@ -22,10 +18,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@playwright/mcp@0.0.78",
-        "--browser=firefox",
-        "--allowed-hosts",
-        "www.topinstal.com.pl,topinstal.com.pl,127.0.0.1,localhost"
+        "@playwright/mcp@0.0.78"
       ]
     },
     "codescene": {
@@ -33,11 +26,23 @@
       "args": [
         "-y",
         "@codescene/codehealth-mcp@1.4.1"
-      ],
-      "env": {
-        "CS_DISABLE_VERSION_CHECK": "1",
-        "CS_ENABLED_TOOLS": "explain_code_health,explain_code_health_productivity,code_health_review,code_health_score,pre_commit_code_health_safeguard,analyze_change_set,code_health_refactoring_business_case,verify_installation,get_config"
-      }
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@3.2.5"
+      ]
+    },
+    "serena": {
+      "command": "serena",
+      "args": [
+        "start-mcp-server",
+        "--context",
+        "ide",
+        "--project-from-cwd"
+      ]
     }
   }
 }

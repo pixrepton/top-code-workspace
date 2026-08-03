@@ -13,9 +13,6 @@ knowledge/graphify/_semantic-batch/
 .understand-anything/tmp/
 .understand-anything/cache/
 
-# GitNexus per-repo index caches (regenerate: knowledge/gitnexus/reindex-workspace.ps1)
-**/.gitnexus/
-
 # Dependency trees and runtime caches — not product code
 **/node_modules/
 **/vendor/
@@ -25,9 +22,6 @@ knowledge/graphify/_semantic-batch/
 **/__pycache__/
 **/.pytest_cache/
 **/.agent-tooling-cache/
-
-# Serena LSP cache
-.serena/cache/
 
 # Legacy backup with identical duplicates of rules and AGENTS.md
 kalk-top/backup-tekstowe/

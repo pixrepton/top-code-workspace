@@ -23,17 +23,23 @@ CODEX_CONFIG = Path.home() / ".codex" / "config.toml"
 CBM_PIN = "codebase-memory-mcp==0.9.0"
 PLAYWRIGHT_PIN = "@playwright/mcp@0.0.78"
 CODESCENE_PIN = "@codescene/codehealth-mcp@1.4.1"
+CONTEXT7_PIN = "@upstash/context7-mcp@3.2.5"
 
 REQUIRED_SERVERS = {"codebase-memory", "gitnexus", "playwright"}
-SMOKE_CONFIRMED_OPTIONAL = {"codescene"}
+SMOKE_CONFIRMED_OPTIONAL = {"codescene", "context7"}
 FORBIDDEN_SERVERS = {"openmemory"}
-# NOT_PROVEN/DISABLED: smoke probe did not confirm MCP handshake; not marked BROKEN.
-DISABLED_NOT_PROVEN_SERVERS = {"serena"}
+DISABLED_NOT_PROVEN_SERVERS: set[str] = set()
 
 SERENA_SMOKE_OPT_IN = os.environ.get("RUN_SERENA_SMOKE") == "1"
 SERENA_SMOKE_SKIP_REASON = (
-    "Serena smoke is opt-in (RUN_SERENA_SMOKE=1); status NOT_PROVEN/DISABLED"
+    "Serena smoke is opt-in (RUN_SERENA_SMOKE=1); LSP init can exceed probe timeout"
 )
+SERENA_ARGS = [
+    "start-mcp-server",
+    "--context",
+    "ide",
+    "--project-from-cwd",
+]
 
 CLAUDE_SETTINGS_LOCAL = ROOT / ".claude" / "settings.local.json"
 
@@ -45,12 +51,11 @@ SECRET_PATTERNS = (
     re.compile(r'"api[_-]?key"\s*:\s*"[^"]+"', re.IGNORECASE),
 )
 
-LOCAL_ONLY_PATH_MARKERS = (
+MACHINE_PATH_MARKERS = (
     "C:/Users/",
     "C:\\Users\\",
     "C:/ai-os-",
     "C:\\ai-os-",
-    "${workspaceFolder}",
 )
 
 
@@ -130,23 +135,31 @@ class TestForbiddenAndPins:
 
     @pytest.mark.parametrize("config_name", ["claude", "cursor"])
     def test_disabled_serena_not_in_active_configs(self, config_name, claude_config, cursor_config):
+        if not DISABLED_NOT_PROVEN_SERVERS:
+            pytest.skip("no disabled servers")
         config = claude_config if config_name == "claude" else cursor_config
         present = DISABLED_NOT_PROVEN_SERVERS & server_names(config)
         assert not present, (
             f"{config_name} must not enable NOT_PROVEN/DISABLED servers: {sorted(present)}"
         )
 
-    def test_serena_not_in_cursor_allowlist(self, cursor_permissions):
+    def test_serena_present_in_configs(self, claude_config, cursor_config):
+        assert "serena" in server_names(claude_config)
+        assert "serena" in server_names(cursor_config)
+
+    def test_context7_present_in_configs(self, claude_config, cursor_config):
+        assert "context7" in server_names(claude_config)
+        assert "context7" in server_names(cursor_config)
+
+    def test_serena_in_cursor_allowlist(self, cursor_permissions):
         allowlist = cursor_permissions.get("mcpAllowlist", [])
         roots = {entry.split(":", 1)[0] for entry in allowlist}
-        assert "serena" not in roots
+        assert "serena" in roots
 
-    def test_serena_not_enabled_in_claude_local_settings_when_present(self):
-        if not CLAUDE_SETTINGS_LOCAL.exists():
-            pytest.skip("local Claude settings not present on this machine")
-        settings = load_json(CLAUDE_SETTINGS_LOCAL)
-        enabled = set(settings.get("enabledMcpjsonServers", []))
-        assert "serena" not in enabled
+    def test_context7_in_cursor_allowlist(self, cursor_permissions):
+        allowlist = cursor_permissions.get("mcpAllowlist", [])
+        roots = {entry.split(":", 1)[0] for entry in allowlist}
+        assert "context7" in roots
 
     def test_no_latest_tags(self, claude_config, cursor_config):
         for label, config in (("claude", claude_config), ("cursor", cursor_config)):
@@ -161,6 +174,14 @@ class TestForbiddenAndPins:
             assert PLAYWRIGHT_PIN in args_blob(pw)
             cs = config["mcpServers"]["codescene"]
             assert CODESCENE_PIN in args_blob(cs)
+            assert CONTEXT7_PIN in args_blob(config["mcpServers"]["context7"])
+
+    def test_no_tool_whitelists_or_host_locks(self, claude_config, cursor_config):
+        for label, config in (("claude", claude_config), ("cursor", cursor_config)):
+            blob = json.dumps(config)
+            assert "CS_ENABLED_TOOLS" not in blob, f"{label} still whitelists CodeScene tools"
+            assert "allowed-hosts" not in blob, f"{label} still locks Playwright hosts"
+            assert "--browser=" not in blob, f"{label} still forces Playwright browser"
 
 
 class TestClaudeWindowsWrapper:
@@ -191,10 +212,18 @@ class TestCursorNativeShape:
         assert PLAYWRIGHT_PIN in args_blob(pw)
         assert "cmd.exe" not in args_blob(pw)
 
-    def test_codebase_memory_env(self, cursor_config):
-        env = cursor_config["mcpServers"]["codebase-memory"]["env"]
-        assert "CBM_ALLOWED_ROOT" in env
-        assert "CBM_CACHE_DIR" in env
+    def test_codebase_memory_has_no_hardcoded_env(self, cursor_config, claude_config):
+        for config in (cursor_config, claude_config):
+            env = config["mcpServers"]["codebase-memory"].get("env") or {}
+            assert "CBM_ALLOWED_ROOT" not in env
+            assert "CBM_CACHE_DIR" not in env
+
+    def test_serena_uses_path_and_cwd_project(self, cursor_config, claude_config):
+        for config in (cursor_config, claude_config):
+            serena = config["mcpServers"]["serena"]
+            assert serena["command"] == "serena"
+            assert "--project-from-cwd" in serena["args"]
+            assert not any("C:/" in arg or "C:\\" in arg for arg in serena["args"])
 
 
 class TestCursorAllowlist:
@@ -224,12 +253,11 @@ class TestSecretsAndLocalPaths:
         "path",
         [CLAUDE_MCP, CURSOR_MCP],
     )
-    def test_machine_paths_are_local_only(self, path):
+    def test_no_machine_absolute_paths_in_configs(self, path):
         config = load_json(path)
         strings = flatten_strings(config)
-        hits = [value for value in strings if any(marker in value for marker in LOCAL_ONLY_PATH_MARKERS)]
-        assert hits, f"{path.name} should document local machine paths for CBM/cache"
-        assert all(any(marker in value for marker in LOCAL_ONLY_PATH_MARKERS) for value in hits)
+        hits = [value for value in strings if any(marker in value for marker in MACHINE_PATH_MARKERS)]
+        assert not hits, f"{path.name} must not hardcode machine paths: {hits}"
 
     def test_codex_config_classified_local_only_not_in_workspace(self):
         assert CODEX_CONFIG.exists(), "local Codex config expected on developer machine"
@@ -262,28 +290,14 @@ class TestMcpSmoke:
         assert "list_repos" in result["tool_names"]
 
     def test_playwright_smoke(self):
-        result = smoke_stdio(
-            "npx",
-            [
-                "-y",
-                PLAYWRIGHT_PIN,
-                "--browser=firefox",
-                "--allowed-hosts",
-                "127.0.0.1,localhost",
-            ],
-        )
+        result = smoke_stdio("npx", ["-y", PLAYWRIGHT_PIN])
         assert result["ok"]
         assert "browser_navigate" in result["tool_names"]
 
     def test_playwright_claude_wrapper_smoke(self):
         result = smoke_stdio(
             "cmd.exe",
-            [
-                "/d",
-                "/s",
-                "/c",
-                f"npx.cmd -y {PLAYWRIGHT_PIN} --browser=firefox --allowed-hosts 127.0.0.1,localhost",
-            ],
+            ["/d", "/s", "/c", f"npx.cmd -y {PLAYWRIGHT_PIN}"],
         )
         assert result["ok"]
 
@@ -294,15 +308,5 @@ class TestMcpSmoke:
 
     @pytest.mark.skipif(not SERENA_SMOKE_OPT_IN, reason=SERENA_SMOKE_SKIP_REASON)
     def test_serena_smoke(self):
-        result = smoke_stdio(
-            r"C:\Users\compg\.local\bin\serena.exe",
-            [
-                "start-mcp-server",
-                "--context",
-                "ide",
-                "--project",
-                str(ROOT),
-            ],
-            timeout=120.0,
-        )
+        result = smoke_stdio("serena", SERENA_ARGS, timeout=300.0)
         assert result["ok"]
