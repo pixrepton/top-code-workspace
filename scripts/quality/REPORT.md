@@ -283,7 +283,7 @@ Executed as task `SCRIPTS-QUALITY-REPAIR-1` in three commits on `repair/root-mcp
 | --- | --- |
 | `22b21ea` | `fix(ai-os)` — PID locks, checkpoint RMW lock, commit finalize, ownership wt/index guard (non-foreign), baseline cleanup, Claude/Codex taxonomy |
 | `726abd4` | `fix(scripts)` — token rotate, CBM helpers, row4a/transcript/drift honesty, Bandit MEDIUM (B608/B310), broad Ruff safe cleanup |
-| (this) | `docs(quality)` — repair status |
+| `15db2ae` | `docs(quality)` — repair status |
 
 ### Proof
 
