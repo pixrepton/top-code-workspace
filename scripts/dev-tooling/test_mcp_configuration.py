@@ -27,6 +27,15 @@ CODESCENE_PIN = "@codescene/codehealth-mcp@1.4.1"
 REQUIRED_SERVERS = {"codebase-memory", "gitnexus", "playwright"}
 SMOKE_CONFIRMED_OPTIONAL = {"codescene"}
 FORBIDDEN_SERVERS = {"openmemory"}
+# NOT_PROVEN/DISABLED: smoke probe did not confirm MCP handshake; not marked BROKEN.
+DISABLED_NOT_PROVEN_SERVERS = {"serena"}
+
+SERENA_SMOKE_OPT_IN = os.environ.get("RUN_SERENA_SMOKE") == "1"
+SERENA_SMOKE_SKIP_REASON = (
+    "Serena smoke is opt-in (RUN_SERENA_SMOKE=1); status NOT_PROVEN/DISABLED"
+)
+
+CLAUDE_SETTINGS_LOCAL = ROOT / ".claude" / "settings.local.json"
 
 SECRET_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
@@ -118,6 +127,26 @@ class TestForbiddenAndPins:
     def test_no_openmemory(self, claude_config, cursor_config):
         assert FORBIDDEN_SERVERS.isdisjoint(server_names(claude_config))
         assert FORBIDDEN_SERVERS.isdisjoint(server_names(cursor_config))
+
+    @pytest.mark.parametrize("config_name", ["claude", "cursor"])
+    def test_disabled_serena_not_in_active_configs(self, config_name, claude_config, cursor_config):
+        config = claude_config if config_name == "claude" else cursor_config
+        present = DISABLED_NOT_PROVEN_SERVERS & server_names(config)
+        assert not present, (
+            f"{config_name} must not enable NOT_PROVEN/DISABLED servers: {sorted(present)}"
+        )
+
+    def test_serena_not_in_cursor_allowlist(self, cursor_permissions):
+        allowlist = cursor_permissions.get("mcpAllowlist", [])
+        roots = {entry.split(":", 1)[0] for entry in allowlist}
+        assert "serena" not in roots
+
+    def test_serena_not_enabled_in_claude_local_settings_when_present(self):
+        if not CLAUDE_SETTINGS_LOCAL.exists():
+            pytest.skip("local Claude settings not present on this machine")
+        settings = load_json(CLAUDE_SETTINGS_LOCAL)
+        enabled = set(settings.get("enabledMcpjsonServers", []))
+        assert "serena" not in enabled
 
     def test_no_latest_tags(self, claude_config, cursor_config):
         for label, config in (("claude", claude_config), ("cursor", cursor_config)):
@@ -263,7 +292,7 @@ class TestMcpSmoke:
         assert result["ok"]
         assert "get_config" in result["tool_names"]
 
-    @pytest.mark.skip(reason="Serena MCP did not complete smoke within timeout; enable after fix")
+    @pytest.mark.skipif(not SERENA_SMOKE_OPT_IN, reason=SERENA_SMOKE_SKIP_REASON)
     def test_serena_smoke(self):
         result = smoke_stdio(
             r"C:\Users\compg\.local\bin\serena.exe",
