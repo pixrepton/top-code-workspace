@@ -19,173 +19,33 @@ Wymaga:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
-import webbrowser
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from rotate_google_token_env import load_env, write_env  # noqa: E402
+from rotate_google_token_oauth import (  # noqa: E402
+    device_code_flow,
+    refresh_token,
+    request_device_code,
+    revoke_token,
+    test_token,
+)
+
+GOOGLE_ENV_CANDIDATES = (
+    Path("gmail-agent/tools/gmail_audit/.env"),
+    Path("gmail-agent/tools/gmail_audit/.env.local-vps"),
+)
+DASZEK_ENV_CANDIDATES = (
+    Path("gmail-agent/.env.vps"),
+    Path("gmail-agent/tools/gmail_audit/.env"),
+    Path(".env"),
+)
 
 
-def load_env(env_path: Path) -> dict[str, str]:
-    """Wczytaj .env jako słownik, pomijając komentarze."""
-    env: dict[str, str] = {}
-    if not env_path.is_file():
-        print(f"  ERROR: Nie znaleziono pliku {env_path}")
-        return env
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        env[key.strip()] = val.strip().strip('"').strip("'")
-    return env
-
-
-def write_env(env_path: Path, env: dict[str, str]) -> None:
-    """Nadpisz plik .env, zachowując strukturę."""
-    lines: list[str] = []
-    written_keys: set[str] = set()
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            lines.append(line)
-            continue
-        if "=" in stripped:
-            key = stripped.split("=", 1)[0].strip()
-            if key in env and key not in written_keys:
-                lines.append(f"{key}={env[key]}")
-                written_keys.add(key)
-                continue
-        lines.append(line)
-    # Dopisz brakujące klucze na końcu
-    for key, val in env.items():
-        if key not in written_keys:
-            lines.append(f"{key}={val}")
-            written_keys.add(key)
-    content = "\n".join(lines) + "\n"
-    tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
-    tmp_path.write_text(content, encoding="utf-8")
-    os.replace(tmp_path, env_path)
-
-
-def refresh_token(client_id: str, client_secret: str, refresh_token: str) -> dict[str, Any] | None:
-    """Odświeża token, zwraca dict {'access_token', ...} lub None."""
-    import requests  # type: ignore[import-not-found]
-
-    resp = requests.post(
-        "https://oauth2.googleapis.com/token",
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=15,
-    )
-    if resp.status_code == 200:
-        return resp.json()
-    print(f"  REFRESH FAILED ({resp.status_code}): {resp.text[:200]}")
-    return None
-
-
-def revoke_token(access_token: str) -> bool:
-    """Unieważnia token. Zwraca True jeśli sukces."""
-    import requests  # type: ignore[import-not-found]
-
-    resp = requests.post(
-        "https://oauth2.googleapis.com/revoke",
-        params={"token": access_token},
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=10,
-    )
-    return resp.status_code == 200
-
-
-def device_code_flow(client_id: str) -> dict[str, Any] | None:
-    """Przepływ OAuth device code.
-
-    Zwraca dict {'refresh_token': ..., 'access_token': ...} lub None.
-    """
-    import time
-
-    import requests  # type: ignore[import-not-found]
-
-    # Krok 1: Zainicjuj device code flow
-    resp = requests.post(
-        "https://oauth2.googleapis.com/device/code",
-        data={
-            "client_id": client_id,
-            "scope": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly",
-        },
-        timeout=15,
-    )
-    if resp.status_code != 200:
-        print(f"  DEVICE CODE FAILED ({resp.status_code}): {resp.text[:200]}")
-        return None
-
-    device_data = resp.json()
-    print(f"\n  Otwieram przeglądarkę: {device_data.get('verification_url', '')}")
-    print(f"  Kod: {device_data.get('user_code', '')}")
-    print("  (Jeśli przeglądarka nie otworzyła się automatycznie, kliknij link powyżej)")
-    webbrowser.open(device_data.get("verification_url", ""))
-
-    # Krok 2: Czekaj na autoryzację (poll)
-    device_code = device_data.get("device_code", "")
-    interval = int(device_data.get("interval", 5))
-    expires_in = int(device_data.get("expires_in", 1800))
-    deadline = time.time() + expires_in
-
-    while time.time() < deadline:
-        time.sleep(interval)
-        poll = requests.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "client_id": client_id,
-                "device_code": device_code,
-                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-            },
-            timeout=15,
-        )
-        poll_data = poll.json()
-        if poll.status_code == 200:
-            return poll_data
-        error = poll_data.get("error", "")
-        if error == "authorization_pending":
-            continue  # Czekamy dalej
-        if error == "slow_down":
-            interval += 5
-            continue
-        print(f"  POLL ERROR: {error}")
-        return None
-
-    print("  TIMEOUT: Nie doczekano się autoryzacji.")
-    return None
-
-
-def test_token(client_id: str, client_secret: str, token_refresh: str) -> bool:
-    """Testuje token: odświeża i czyta 1 wiadomość z Gmail API."""
-    import requests  # type: ignore[import-not-found]
-
-    token_data = refresh_token(client_id, client_secret, token_refresh)
-    if not token_data:
-        return False
-    access_token = token_data.get("access_token", "")
-
-    resp = requests.get(
-        "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1",
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=15,
-    )
-    if resp.status_code == 200:
-        print(f"  TEST OK: Odczytano {len(resp.json().get('messages', []))} wiadomości.")
-        return True
-    print(f"  TEST FAILED ({resp.status_code}): {resp.text[:200]}")
-    return False
-
-
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Rotacja tokena OAuth (Google lub Daszek Bridge)")
     parser.add_argument(
         "--service",
@@ -213,171 +73,209 @@ def main() -> int:
         action="store_true",
         help="Tylko sprawdź czy token jest ważny, nie zmieniaj niczego",
     )
-    args = parser.parse_args()
+    return parser
 
-    # ── Service: Daszek Bridge Token ────────────────────────────────────
-    if args.service == "daszek":
-        import secrets
 
-        # Znajdź plik .env
-        env_path: Path | None = None
-        if args.env_file:
-            env_path = Path(args.env_file).resolve()
-        else:
-            candidates = [
-                Path("gmail-agent/.env.vps"),
-                Path("gmail-agent/tools/gmail_audit/.env"),
-                Path(".env"),
-            ]
-            for c in candidates:
-                if c.is_file():
-                    env_path = c.resolve()
-                    break
-        if not env_path or not env_path.is_file():
-            print("ERROR: Nie znaleziono pliku .env. Podaj --env-file.")
-            return 1
+def resolve_env_path(explicit: str, candidates: Iterable[Path]) -> Path | None:
+    """Zwroc istniejacy plik .env: jawny --env-file albo pierwszy kandydat."""
+    if explicit:
+        path = Path(explicit).resolve()
+        return path if path.is_file() else None
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
 
-        print("=== Rotacja tokena Daszek Bridge ===")
-        print(f"  Plik .env: {env_path}")
-        env = load_env(env_path)
 
-        current_token = env.get("DASZEK_BRIDGE_TOKEN", "")
-        if not current_token:
-            print("ERROR: Brak DASZEK_BRIDGE_TOKEN w .env")
-            return 1
+# ── Service: Daszek Bridge Token ────────────────────────────────────────
 
-        new_token = secrets.token_urlsafe(32)
-        print(f"  Obecny token: {current_token[:16]}...")
-        print(f"  Nowy token:   {new_token}")
 
-        if args.validate_only:
-            print(f"\n  [VALIDATE-ONLY] Token istnieje ({len(current_token)} znaków). Nic nie zmieniam.")
-            return 0
+def rotate_daszek(args: argparse.Namespace) -> int:
+    import secrets
 
-        env["DASZEK_BRIDGE_TOKEN"] = new_token
-        write_env(env_path, env)
-        print("\n=== ROTACJA UDANA ===")
-        print(f"  Nowy DASZEK_BRIDGE_TOKEN zapisany do {env_path}")
-        print("  Zaktualizuj również token w Daszku (WordPress config) lub zsynchronizuj przez sync-local-stack-env.ps1")
-        return 0
-
-    # ── Service: Google OAuth ───────────────────────────────────────────
-
-    # Znajdź plik .env
-    env_path: Path | None = None
-    if args.env_file:
-        env_path = Path(args.env_file).resolve()
-    else:
-        candidates = [
-            Path("gmail-agent/tools/gmail_audit/.env"),
-            Path("gmail-agent/tools/gmail_audit/.env.local-vps"),
-        ]
-        for c in candidates:
-            if c.is_file():
-                env_path = c.resolve()
-                break
-
-    if not env_path or not env_path.is_file():
+    env_path = resolve_env_path(args.env_file, DASZEK_ENV_CANDIDATES)
+    if env_path is None:
         print("ERROR: Nie znaleziono pliku .env. Podaj --env-file.")
         return 1
 
-    print("=== Rotacja tokena Google OAuth ===")
+    print("=== Rotacja tokena Daszek Bridge ===")
     print(f"  Plik .env: {env_path}")
     env = load_env(env_path)
-    if not env:
+
+    current_token = env.get("DASZEK_BRIDGE_TOKEN", "")
+    if not current_token:
+        print("ERROR: Brak DASZEK_BRIDGE_TOKEN w .env")
         return 1
 
+    new_token = secrets.token_urlsafe(32)
+    print(f"  Obecny token: {current_token[:16]}...")
+    print(f"  Nowy token:   {new_token}")
+
+    if args.validate_only:
+        print(f"\n  [VALIDATE-ONLY] Token istnieje ({len(current_token)} znaków). Nic nie zmieniam.")
+        return 0
+
+    env["DASZEK_BRIDGE_TOKEN"] = new_token
+    write_env(env_path, env)
+    print("\n=== ROTACJA UDANA ===")
+    print(f"  Nowy DASZEK_BRIDGE_TOKEN zapisany do {env_path}")
+    print("  Zaktualizuj również token w Daszku (WordPress config) lub zsynchronizuj przez sync-local-stack-env.ps1")
+    return 0
+
+
+# ── Service: Google OAuth — etapy ───────────────────────────────────────
+
+
+def google_credentials(env: dict[str, str]) -> tuple[str, str, str] | None:
+    """Zwroc (client_id, client_secret, refresh_token) albo None po wypisaniu bledu."""
     client_id = env.get("GOOGLE_CLIENT_ID", "")
     client_secret = env.get("GOOGLE_CLIENT_SECRET", "")
     old_refresh_token = env.get("GOOGLE_REFRESH_TOKEN", "")
-
     if not client_id or not client_secret:
         print("ERROR: Brak GOOGLE_CLIENT_ID lub GOOGLE_CLIENT_SECRET w .env")
-        return 1
+        return None
     if not old_refresh_token:
         print("ERROR: Brak GOOGLE_REFRESH_TOKEN w .env")
-        return 1
+        return None
+    return client_id, client_secret, old_refresh_token
 
-    # --validate-only: tylko sprawdź token, nic nie zmieniaj
-    if args.validate_only:
-        print("\n[1/1] Walidacja tokena...")
-        token_data = refresh_token(client_id, client_secret, old_refresh_token)
-        if token_data:
-            print(f"  TOKEN WAŻNY: {token_data.get('access_token', '')[:20]}...")
-            return 0
-        print("  TOKEN NIEWAŻNY")
-        return 1
 
+def stage_validate_only(client_id: str, client_secret: str, old_refresh_token: str) -> int:
+    print("\n[1/1] Walidacja tokena...")
+    token_data = refresh_token(client_id, client_secret, old_refresh_token)
+    if token_data:
+        print(f"  TOKEN WAŻNY: {token_data.get('access_token', '')[:20]}...")
+        return 0
+    print("  TOKEN NIEWAŻNY")
+    return 1
+
+
+def stage_refresh_current(client_id: str, client_secret: str, old_refresh_token: str) -> str:
+    """Odswiez obecny token i zwroc access_token (pusty gdy token wygasl)."""
     print("\n[1/5] Odświeżanie obecnego tokena...")
     token_data = refresh_token(client_id, client_secret, old_refresh_token)
-    old_access_token = ""
-    if token_data:
-        print(f"  Token ważny. Odświeżony access_token: {token_data.get('access_token', '')[:20]}...")
-        old_access_token = token_data.get("access_token", "")
-    else:
+    if not token_data:
         print("  Token nieważny lub wygasł. Kontynuuję...")
+        return ""
+    print(f"  Token ważny. Odświeżony access_token: {token_data.get('access_token', '')[:20]}...")
+    return token_data.get("access_token", "")
 
-    # --non-interactive: tylko test, żadnego przepływu OAuth
-    if args.non_interactive:
-        print("\n[NON-INTERACTIVE] Rotacja wymaga interakcji użytkownika.")
-        print("  Uruchom bez --non-interactive, aby wykonać pełną rotację.")
-        print("  Lub użyj --print-url-only aby dostać URL do autoryzacji.")
-        return 0
 
-    print("\n[2/5] Przepływ OAuth — nowy token...")
+def stage_report_non_interactive() -> int:
+    print("\n[NON-INTERACTIVE] Rotacja wymaga interakcji użytkownika.")
+    print("  Uruchom bez --non-interactive, aby wykonać pełną rotację.")
+    print("  Lub użyj --print-url-only aby dostać URL do autoryzacji.")
+    return 0
 
-    # --print-url-only: wydrukuj URL i zakończ
-    if args.print_url_only:
-        import requests
 
-        resp = requests.post(
-            "https://oauth2.googleapis.com/device/code",
-            data={
-                "client_id": client_id,
-                "scope": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly",
-            },
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            print(f"ERROR: Nie udało się uzyskać URL: {resp.text[:200]}")
-            return 1
-        device_data = resp.json()
-        print(f"\n  URL: {device_data.get('verification_url', '')}")
-        print(f"  Kod: {device_data.get('user_code', '')}")
-        print(f"  Po autoryzacji uruchom: python scripts/rotate_google_token.py --env-file {env_path}")
-        return 0
+def stage_print_url(client_id: str, env_path: Path) -> int:
+    device_data, _status_code, body = request_device_code(client_id)
+    if device_data is None:
+        print(f"ERROR: Nie udało się uzyskać URL: {body}")
+        return 1
+    print(f"\n  URL: {device_data.get('verification_url', '')}")
+    print(f"  Kod: {device_data.get('user_code', '')}")
+    print(f"  Po autoryzacji uruchom: python scripts/rotate_google_token.py --env-file {env_path}")
+    return 0
 
+
+def stage_acquire_refresh_token(client_id: str) -> str | None:
     result = device_code_flow(client_id)
     if not result:
         print("ERROR: Nie uzyskano nowego tokena.")
-        return 1
-
+        return None
     new_refresh_token = result.get("refresh_token", "")
     if not new_refresh_token:
         print("ERROR: Odpowiedź OAuth nie zawiera refresh_token.")
         print(f"  Otrzymano: {list(result.keys())}")
-        return 1
+        return None
+    return new_refresh_token
 
+
+def stage_persist(env_path: Path, env: dict[str, str], new_refresh_token: str) -> None:
     print("\n[3/5] Zapis nowego tokena do .env...")
     env["GOOGLE_REFRESH_TOKEN"] = new_refresh_token
     write_env(env_path, env)
     print("  Nowy refresh_token zapisany.")
 
+
+def stage_verify(client_id: str, client_secret: str, new_refresh_token: str) -> bool:
     print("\n[4/5] Test nowego tokena...")
-    if not test_token(client_id, client_secret, new_refresh_token):
-        print("\n=== ROTACJA ZAKOŃCZONA, ALE TEST NIE PRZESZEDŁ ===")
-        print("Sprawdź czy zakresy OAuth są poprawne.")
+    if test_token(client_id, client_secret, new_refresh_token):
+        return True
+    print("\n=== ROTACJA ZAKOŃCZONA, ALE TEST NIE PRZESZEDŁ ===")
+    print("Sprawdź czy zakresy OAuth są poprawne.")
+    return False
+
+
+def stage_revoke(old_access_token: str) -> None:
+    if not old_access_token:
+        return
+    print("\n[5/5] Unieważnianie starego tokena...")
+    if revoke_token(old_access_token):
+        print("  Stary token unieważniony.")
+    else:
+        print("  Nie udało się unieważnić (token mógł być już nieważny).")
+
+
+GoogleContext = tuple[Path, dict[str, str], tuple[str, str, str]]
+
+
+def load_google_context(env_file: str) -> GoogleContext | None:
+    """Zwroc (env_path, env, credentials) albo None po wypisaniu bledu."""
+    env_path = resolve_env_path(env_file, GOOGLE_ENV_CANDIDATES)
+    if env_path is None:
+        print("ERROR: Nie znaleziono pliku .env. Podaj --env-file.")
+        return None
+
+    print("=== Rotacja tokena Google OAuth ===")
+    print(f"  Plik .env: {env_path}")
+    env = load_env(env_path)
+    if not env:
+        return None
+
+    credentials = google_credentials(env)
+    if credentials is None:
+        return None
+    return env_path, env, credentials
+
+
+def rotate_google(args: argparse.Namespace) -> int:
+    context = load_google_context(args.env_file)
+    if context is None:
+        return 1
+    env_path, env, credentials = context
+    client_id, client_secret, old_refresh_token = credentials
+
+    if args.validate_only:
+        return stage_validate_only(client_id, client_secret, old_refresh_token)
+
+    old_access_token = stage_refresh_current(client_id, client_secret, old_refresh_token)
+    if args.non_interactive:
+        return stage_report_non_interactive()
+
+    print("\n[2/5] Przepływ OAuth — nowy token...")
+    if args.print_url_only:
+        return stage_print_url(client_id, env_path)
+
+    new_refresh_token = stage_acquire_refresh_token(client_id)
+    if new_refresh_token is None:
         return 1
 
-    if old_access_token:
-        print("\n[5/5] Unieważnianie starego tokena...")
-        if revoke_token(old_access_token):
-            print("  Stary token unieważniony.")
-        else:
-            print("  Nie udało się unieważnić (token mógł być już nieważny).")
+    stage_persist(env_path, env, new_refresh_token)
+    if not stage_verify(client_id, client_secret, new_refresh_token):
+        return 1
 
+    stage_revoke(old_access_token)
     print("\n=== ROTACJA UDANA ===")
     return 0
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if args.service == "daszek":
+        return rotate_daszek(args)
+    return rotate_google(args)
 
 
 if __name__ == "__main__":
