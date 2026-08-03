@@ -80,24 +80,61 @@ If a task crosses repository boundaries:
 
 ## Workspace and Git Discipline
 
-The workspace may already contain unrelated or pre-existing changes.
+The workspace contains independent Git repositories. Resolve and operate on the
+exact repository root for every status, branch, diff, gate, commit and remote
+action. Never infer nested repository state from workspace-root Git.
 
-Always separate your edits from existing modifications.
+For every task that writes files:
 
-Do not treat the workspace as a monorepo for status, diff review or history analysis.
+1. Start or resume the Wave 01 checkpoint with exact `repo:path` scope.
+2. Capture and preserve the pre-existing staged, unstaged and untracked state.
+3. Create a task branch before the first write when the current branch is the
+   default/protected branch.
+4. Use the shared task engine for write guards, gates, commit planning and
+   commits.
+5. Finish with no task-owned residue and with every created commit recorded.
 
-Check Git state in the specific repository being modified.
+An operator request to fix, implement, migrate, configure, update or complete a
+repair package authorizes safe local branch creation and scoped local commits
+needed to finish that task. The agent does not ask separately for every local
+commit.
 
-Do not run unless explicitly requested:
+Local commit authorization does not authorize push, PR creation, merge,
+deployment, VPS work or any other external/live write. Publication mode is
+recorded in the checkpoint:
 
-- `git reset`
-- `git clean`
-- `git commit`
-- `git push`
-- production deploys
-- destructive workspace cleanup
+- `LOCAL_ONLY` — local branch and local commits only; default.
+- `PUBLISH` — push and draft PR are in scope; merge is not.
+- `SHIP` — prepare and verify a merge-ready PR; merge and deployment remain
+  separate operator-approved actions.
 
-Do not overwrite or revert changes you did not create unless the operator explicitly requests it.
+Do not use raw `git add` or `git commit` for agent work. Use:
+
+- `scripts/ai_os_task.py task-commit-plan --repo <repo> --json`
+- `scripts/ai_os_task.py task-commit --repo <repo> --message "<message>"`
+
+The wrapper must isolate task-owned content, preserve foreign staged state,
+block secrets and ownership conflicts, verify the final commit paths and record
+the resulting SHA in the checkpoint.
+
+Do not run:
+
+- `git reset`;
+- `git clean`;
+- destructive `git restore` or `git checkout -- <path>`;
+- force push;
+- stash deletion;
+- forced branch deletion;
+- history rewriting or automatic amend/rebase cleanup.
+
+Do not overwrite, revert, stage or commit changes you did not create or
+explicitly adopt. When multiple agents share one working tree, the main agent
+owns staging and commits. A subagent may commit only in an explicitly isolated
+worktree and branch.
+
+Read the canonical procedure in:
+
+`knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`
 
 ## Stability and Change Discipline
 
@@ -178,19 +215,19 @@ Full route tables and high-risk protocol:
 
 ### Choose the route
 
-| Need | First tool | Next step |
-| --- | --- | --- |
-| Unknown area or concept | GitNexus `query` | process / cluster / context |
-| Architecture / workflow | GitNexus resources / process | Serena for key symbols |
-| Concrete symbol | Serena `find_symbol` | `find_referencing_symbols` |
-| Dependencies / blast radius | GitNexus `impact` | Serena references |
-| Exact call graph / custom edges | CBM `get_graph_schema` → `trace_path` / `query_graph` | Serena for code |
-| Public API / MCP tool / cross-repo contract | GitNexus `route_map` / `tool_map` / group contracts | `shape_check` / `api_impact` + contract test |
-| Type / interface / DTO | Serena | CBM `IMPLEMENTS` / `USES_TYPE` at high risk |
-| Refactor | CodeScene review + GitNexus impact | edit via Serena |
-| Rename | Serena rename | GitNexus rename only as fallback |
-| Debugging | GitNexus query / trace | Serena → CBM → runtime |
-| Before commit | tests → GitNexus `detect_changes` | CodeScene `pre_commit_code_health_safeguard` |
+| Need                                        | First tool                                            | Next step                                    |
+| ------------------------------------------- | ----------------------------------------------------- | -------------------------------------------- |
+| Unknown area or concept                     | GitNexus `query`                                      | process / cluster / context                  |
+| Architecture / workflow                     | GitNexus resources / process                          | Serena for key symbols                       |
+| Concrete symbol                             | Serena `find_symbol`                                  | `find_referencing_symbols`                   |
+| Dependencies / blast radius                 | GitNexus `impact`                                     | Serena references                            |
+| Exact call graph / custom edges             | CBM `get_graph_schema` → `trace_path` / `query_graph` | Serena for code                              |
+| Public API / MCP tool / cross-repo contract | GitNexus `route_map` / `tool_map` / group contracts   | `shape_check` / `api_impact` + contract test |
+| Type / interface / DTO                      | Serena                                                | CBM `IMPLEMENTS` / `USES_TYPE` at high risk  |
+| Refactor                                    | CodeScene review + GitNexus impact                    | edit via Serena                              |
+| Rename                                      | Serena rename                                         | GitNexus rename only as fallback             |
+| Debugging                                   | GitNexus query / trace                                | Serena → CBM → runtime                       |
+| Before commit                               | tests → GitNexus `detect_changes`                     | CodeScene `pre_commit_code_health_safeguard` |
 
 ### Standard change path
 
@@ -210,6 +247,15 @@ Full route tables and high-risk protocol:
 For public API, DTO, data, auth, policy/HITL, cross-repo contract or side effects require GitNexus impact/contract tools, Serena references, CBM as independent graph confirmation, plus test or runtime proof.
 
 CodeScene is not a dependency oracle. Graphs are not runtime proof. Do not run four tools when one canonical answer is clear. When tools disagree, verify current code and runtime.
+
+### Index scope (do not invent one mega-index)
+
+- **CBM:** per-repo graphs only; always pass explicit `project=` (path-derived IDs on this host). No `workspace-root` meta-index.
+- **GitNexus:** true Git repos + root shell; cross-repo via group `topinstal-workspace`. Embeddings temporarily `DISABLED_DUE_TO_UPSTREAM_BUG` on 1.6.9. `wp-bridges` is not a separate GitNexus project.
+- **Serena:** per-repo `.serena/project.yml`; root is only `top-code-workspace-shell`.
+- **CodeScene:** no durable index; on-demand quality analysis.
+
+Full mapping and freshness rules: `knowledge/system-atlas/tooling/CODE_INTELLIGENCE_ROUTER.md`.
 
 ## Scope Boundary
 

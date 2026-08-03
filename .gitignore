@@ -3,6 +3,15 @@
 
 !.gitignore
 !AGENTS.md
+!.cbmignore
+!.serena/
+!.serena/project.yml
+!.serena/.gitignore
+!wp-bridges/
+!wp-bridges/.cbmignore
+!wp-bridges/.serena/
+!wp-bridges/.serena/project.yml
+!wp-bridges/.serena/.gitignore
 !scripts/
 !scripts/**
 !docker-compose.cieplo-local.yml
