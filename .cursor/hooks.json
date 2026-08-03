@@ -2,6 +2,11 @@
   "version": 1,
   "hooks": {
     "sessionStart": [],
-    "sessionEnd": []
+    "sessionEnd": [
+      {
+        "command": "node .cursor/hooks/session-stop-arch-refresh.js",
+        "timeout": 30
+      }
+    ]
   }
 }
