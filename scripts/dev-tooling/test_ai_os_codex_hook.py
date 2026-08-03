@@ -222,6 +222,16 @@ def test_precompact_blocks_corrupt_checkpoint(hook_repo):
     assert "corrupt" in data["stopReason"].lower()
 
 
+def test_session_start_blocks_corrupt_checkpoint(hook_repo):
+    _name, repo, _nested, env = hook_repo
+    start_task(hook_repo)
+    path = active_checkpoint_path(env)
+    path.write_text("{broken", encoding="utf-8")
+    _proc, data = run_hook(hook_payload("SessionStart", repo), env=env)
+    assert data["continue"] is False
+    assert "corrupt" in data["stopReason"].lower()
+
+
 def test_precompact_refresh_preserves_status_and_phase(hook_repo):
     _name, repo, _nested, env = hook_repo
     start_task(hook_repo)

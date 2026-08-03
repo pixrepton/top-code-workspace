@@ -179,6 +179,18 @@ def empty_ownership_baseline(captured_at_utc: str) -> dict[str, Any]:
     }
 
 
+def delete_ownership_baseline(state_root: Path, baseline: dict[str, Any] | None) -> None:
+    """Remove ownership snapshot directory referenced by a checkpoint baseline."""
+    if not baseline:
+        return
+    name = str(baseline.get("snapshot_directory") or "").strip()
+    if not name or "/" in name or "\\" in name or name in {".", ".."}:
+        return
+    target = state_root / name
+    if target.is_dir() and target.name.startswith("ownership-baseline-"):
+        shutil.rmtree(target, ignore_errors=True)
+
+
 State = tuple[str, bytes | None]
 
 
@@ -385,6 +397,23 @@ def prepare_owned_commit_states(
         path = normalize_rel(raw_path)
         combined = _state_from_worktree(repo_root, path)
         entry = entries.get(path)
+        # Guard staged≠worktree only when there is no foreign baseline to isolate.
+        # Shared-file foreign hunks intentionally leave index≠worktree.
+        if entry is None or entry.get("adopted") or is_adopted(repo_name, path, adopted):
+            index_state = _state_from_git(repo_root, "", path)
+            head_state = _state_from_git(repo_root, "HEAD", path)
+
+            def _canon(state: State) -> State:
+                kind, data = state
+                if kind == "file" and data is not None:
+                    return (kind, _canonical_worktree_bytes(data))
+                return state
+
+            if _canon(index_state) != _canon(head_state) and _canon(index_state) != _canon(combined):
+                raise OwnershipError(
+                    f"{qualified(repo_name, path)}: staged index differs from worktree; "
+                    "stage or discard so index and worktree agree before task-commit"
+                )
         if entry is None or entry.get("adopted") or is_adopted(repo_name, path, adopted):
             commit_state = combined
             post_index_state = combined

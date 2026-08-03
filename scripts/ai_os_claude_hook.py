@@ -197,9 +197,13 @@ def handle_post_write(cwd: Path) -> int:
     try:
         data = task_json(cwd)
         if data and data.get("status") in ACTIVE_STATUSES:
-            refresh(cwd, strict=False)
-    except Exception:
-        return 0
+            ok, detail = refresh(cwd, strict=False)
+            if not ok and detail:
+                print(f"AI-OS post-write refresh warning: {detail}", file=sys.stderr)
+    except subprocess.TimeoutExpired as exc:
+        print(f"AI-OS post-write refresh timed out: {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 - never fail the editor tool
+        print(f"AI-OS post-write refresh error: {exc}", file=sys.stderr)
     return 0
 
 
@@ -213,6 +217,8 @@ def handle_task_completed(cwd: Path) -> int:
             plan = json.loads(proc.stdout or "{}")
         except json.JSONDecodeError:
             return block((proc.stderr or proc.stdout).strip() or f"commit plan failed for {repo}")
+        if proc.returncode != 0 and not plan.get("verdict"):
+            return block((proc.stderr or proc.stdout).strip() or f"commit plan failed for {repo}")
         verdict = plan.get("verdict")
         if verdict == "COMMIT_READY":
             paths = ", ".join(plan.get("owned_paths") or [])
@@ -222,6 +228,11 @@ def handle_task_completed(cwd: Path) -> int:
             )
         if verdict == "BLOCKED":
             return block(f"Task cannot complete: {'; '.join(plan.get('reasons') or ['commit plan blocked'])}")
+        if verdict == "NO_COMMIT":
+            continue
+        return block(
+            f"Task cannot complete: unexpected commit-plan verdict for {repo}: {verdict!r}"
+        )
     closure = run_task(["task-close", "--validate-only", "--json"], cwd)
     try:
         result = json.loads(closure.stdout or "{}")

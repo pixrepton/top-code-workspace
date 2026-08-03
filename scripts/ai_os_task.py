@@ -23,6 +23,7 @@ from ai_os_task_ownership import (
     assess_ownership,
     capture_ownership_baseline,
     collect_raw_git_state,
+    delete_ownership_baseline,
     empty_ownership_baseline,
     prepare_owned_commit_states,
     scope_contains,
@@ -48,7 +49,10 @@ PASSING_GATE_VERDICTS = {"PASS", "DEDUPLICATED"}
 REGISTRY_LOCK_NAME = "registry.lock"
 REGISTRY_LOCK_STALE_SECONDS = 30
 REGISTRY_LOCK_TIMEOUT_SECONDS = 10
+REPO_COMMIT_LOCK_TIMEOUT_SECONDS = 10
+TASK_CHECKPOINT_LOCK_TIMEOUT_SECONDS = 10
 TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_HELD_FILE_LOCKS: set[str] = set()
 FROZEN_PATHS = {
     "knowledge": {
         "system-atlas/workflows/WORKFLOW_REGISTRY.yaml",
@@ -169,31 +173,101 @@ def scopes_conflict(left: list[dict[str, str]], right: list[dict[str, str]]) -> 
     return pairs
 
 
-class RegistryLock:
-    def __init__(self) -> None:
-        self.path = state_dir() / "locks" / REGISTRY_LOCK_NAME
-        self.fd: int | None = None
+def _pid_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
 
-    def __enter__(self) -> "RegistryLock":
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)) == 0:
+                return False
+            return int(exit_code.value) == STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _read_lock_pid(path: Path) -> int | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith("pid="):
+            raw = line.split("=", 1)[1].strip().split()[0]
+            try:
+                return int(raw)
+            except ValueError:
+                return None
+    return None
+
+
+class FilePidLock:
+    """Exclusive file lock with PID liveness checks (reentrant in-process)."""
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        label: str,
+        timeout_seconds: float,
+        allow_wait: bool = True,
+    ) -> None:
+        self.path = path
+        self.label = label
+        self.timeout_seconds = timeout_seconds
+        self.allow_wait = allow_wait
+        self.fd: int | None = None
+        self._nested = False
+        self._key = ""
+
+    def __enter__(self) -> "FilePidLock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        deadline = time.time() + REGISTRY_LOCK_TIMEOUT_SECONDS
-        while time.time() < deadline:
+        self._key = str(self.path.resolve())
+        if self._key in _HELD_FILE_LOCKS:
+            self._nested = True
+            return self
+        deadline = time.time() + self.timeout_seconds
+        while True:
             try:
                 self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.write(self.fd, f"pid={os.getpid()} time={utc_now()}\n".encode())
+                _HELD_FILE_LOCKS.add(self._key)
                 return self
-            except FileExistsError:
-                try:
-                    age = time.time() - self.path.stat().st_mtime
-                    if age > REGISTRY_LOCK_STALE_SECONDS:
+            except FileExistsError as exc:
+                owner_pid = _read_lock_pid(self.path)
+                if owner_pid is not None and not _pid_is_alive(owner_pid):
+                    try:
                         self.path.unlink()
                         continue
-                except FileNotFoundError:
-                    continue
+                    except FileNotFoundError:
+                        continue
+                if not self.allow_wait:
+                    age = time.time() - self.path.stat().st_mtime if self.path.exists() else 0.0
+                    raise TaskError(
+                        f"{self.label} already exists: {self.path} "
+                        f"(pid={owner_pid if owner_pid is not None else '?'} age {age:.0f}s)"
+                    ) from exc
+                if time.time() >= deadline:
+                    raise TaskError(f"{self.label} timeout: {self.path}") from exc
                 time.sleep(0.05)
-        raise TaskError(f"registry lock timeout: {self.path}")
 
     def __exit__(self, exc_type, exc, tb) -> None:
+        if self._nested:
+            return
         if self.fd is not None:
             os.close(self.fd)
             self.fd = None
@@ -201,6 +275,28 @@ class RegistryLock:
             self.path.unlink()
         except FileNotFoundError:
             pass
+        _HELD_FILE_LOCKS.discard(self._key)
+
+
+class RegistryLock(FilePidLock):
+    def __init__(self) -> None:
+        super().__init__(
+            state_dir() / "locks" / REGISTRY_LOCK_NAME,
+            label="registry lock",
+            timeout_seconds=REGISTRY_LOCK_TIMEOUT_SECONDS,
+            allow_wait=True,
+        )
+
+
+class TaskCheckpointLock(FilePidLock):
+    def __init__(self, task_id: str) -> None:
+        safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", task_id)
+        super().__init__(
+            state_dir() / "locks" / f"task-{safe}.lock",
+            label="task checkpoint lock",
+            timeout_seconds=TASK_CHECKPOINT_LOCK_TIMEOUT_SECONDS,
+            allow_wait=True,
+        )
 
 
 def list_active_task_ids() -> list[str]:
@@ -259,7 +355,9 @@ def resolve_task_id(explicit: str | None = None) -> str:
 
 
 def load_checkpoint(task_id: str | None = None) -> dict[str, Any]:
-    migrate_legacy_checkpoint()
+    if legacy_checkpoint_path().exists():
+        with RegistryLock():
+            migrate_legacy_checkpoint()
     resolved = resolve_task_id(task_id)
     path = active_task_path(resolved)
     if not path.exists():
@@ -283,7 +381,9 @@ def load_checkpoint(task_id: str | None = None) -> dict[str, Any]:
 
 
 def load_all_active_checkpoints(*, exclude: str | None = None) -> list[dict[str, Any]]:
-    migrate_legacy_checkpoint()
+    if legacy_checkpoint_path().exists():
+        with RegistryLock():
+            migrate_legacy_checkpoint()
     excluded = sanitize_task_id(exclude) if exclude else None
     checkpoints: list[dict[str, Any]] = []
     for task_id in list_active_task_ids():
@@ -568,11 +668,24 @@ def atomic_write(data: dict[str, Any], path: Path | None = None) -> None:
     validate_checkpoint(data)
     target = path or active_task_path(data["task_id"])
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
-    loaded = json.loads(tmp.read_text(encoding="utf-8"))
-    validate_checkpoint(loaded)
-    os.replace(tmp, target)
+
+    def _write() -> None:
+        tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        tmp.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        loaded = json.loads(tmp.read_text(encoding="utf-8"))
+        validate_checkpoint(loaded)
+        os.replace(tmp, target)
+
+    # Serialize RMW on active checkpoint files; archive/summary writes stay unlocked.
+    if target.parent == tasks_active_dir():
+        with TaskCheckpointLock(str(data["task_id"])):
+            _write()
+    else:
+        _write()
 
 
 def refresh_git_fields(data: dict[str, Any]) -> None:
@@ -644,6 +757,13 @@ def new_checkpoint(args: argparse.Namespace) -> int:
             raise TaskError(
                 f"active task already exists for {task_id}; use task-status/task-resume or --replace: {active_path}"
             )
+        if active_path.exists() and args.replace:
+            try:
+                previous = json.loads(active_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                previous = None
+            if previous:
+                delete_ownership_baseline(state_dir(), previous.get("ownership_baseline"))
         conflicts = find_scope_conflicts(scope, exclude_task_id=task_id if args.replace else None)
         if conflicts:
             first = conflicts[0]
@@ -966,7 +1086,10 @@ def commit_plan_payload(data: dict[str, Any], repo: str) -> dict[str, Any]:
         for conflict in data["ownership_conflicts"]:
             key = conflict.split(": OWNERSHIP_", 1)[0]
             if key in owned_keys and states:
-                warnings.append(f"mixed baseline state isolated by commit wrapper: {key}")
+                warnings.append(
+                    f"mixed baseline state isolated by commit wrapper (soft ownership conflict; "
+                    f"commit proceeds with task-only delta): {key}"
+                )
             else:
                 reasons.append(conflict)
         secret_issues = scan_commit_states_for_secrets(states)
@@ -1094,36 +1217,22 @@ def _set_index_state(
     effective = env or os.environ.copy()
     blob = _write_state_blob(repo_root, path, state)
     if blob is None:
-        _run_git_env(repo_root, ["update-index", "--force-remove", "--", path], effective, check=False)
+        _run_git_env(repo_root, ["update-index", "--force-remove", "--", path], effective)
         return
     mode, oid = blob
     _run_git_env(repo_root, ["update-index", "--add", "--cacheinfo", mode, oid, path], effective)
 
 
-class RepoCommitLock:
+class RepoCommitLock(FilePidLock):
     def __init__(self, repo: str):
         safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", repo)
-        self.path = state_dir() / "locks" / f"git-{safe}.lock"
-        self.fd: int | None = None
-
-    def __enter__(self) -> "RepoCommitLock":
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError as exc:
-            age = time.time() - self.path.stat().st_mtime
-            raise TaskError(f"git commit lock already exists: {self.path} (age {age:.0f}s)") from exc
-        os.write(self.fd, f"pid={os.getpid()} time={utc_now()}\n".encode())
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        if self.fd is not None:
-            os.close(self.fd)
-        try:
-            self.path.unlink()
-        except FileNotFoundError:
-            pass
-
+        super().__init__(
+            state_dir() / "locks" / f"git-{safe}.lock",
+            label="git commit lock",
+            timeout_seconds=REPO_COMMIT_LOCK_TIMEOUT_SECONDS,
+            # Live owner: fail fast. Dead PID: steal inside FilePidLock.
+            allow_wait=False,
+        )
 
 def commit_task(args: argparse.Namespace) -> int:
     message = _validate_commit_message(args.message)
@@ -1168,11 +1277,39 @@ def commit_task(args: argparse.Namespace) -> int:
                 detail = (proc.stderr or proc.stdout).decode(errors="replace").strip()
                 raise TaskError(f"git commit failed: {detail}")
         sha = git_head(args.repo)
-        for path, path_states in states.items():
-            _set_index_state(repo_root, path, path_states["post_index"])
+        record = f"{args.repo}:{sha}"
+        restore_errors: list[str] = []
+        try:
+            # Record SHA before index restore so a later failure still leaves an audit trail.
+            data = load_checkpoint(task_id)
+            if record not in data["commits"]:
+                data["commits"].append(record)
+            data["completed_steps"].append(
+                {
+                    "timestamp": utc_now(),
+                    "text": f"Created scoped local commit {record} on {git_branch(args.repo)}",
+                }
+            )
+            data["current_phase"] = "commit-created"
+            data["last_summary"] = f"scoped local commit {record}"
+            refresh_git_fields(data)
+            atomic_write(data)
+        finally:
+            for path, path_states in states.items():
+                try:
+                    _set_index_state(repo_root, path, path_states["post_index"])
+                except Exception as exc:  # noqa: BLE001 - collect residue, do not hide commit
+                    restore_errors.append(f"{path}: {exc}")
+        if restore_errors:
+            raise TaskError(
+                f"commit {record} was created but index restore left residue: "
+                + "; ".join(restore_errors)
+            )
         changed = {
             normalize_rel(line)
-            for line in run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha], repo_root).stdout.splitlines()
+            for line in run(
+                ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha], repo_root
+            ).stdout.splitlines()
             if line.strip()
         }
         unexpected = sorted(changed - set(owned_paths))
@@ -1181,17 +1318,7 @@ def commit_task(args: argparse.Namespace) -> int:
                 "commit was created but contains paths outside owned scope; do not rewrite history automatically: "
                 + ", ".join(unexpected)
             )
-        record = f"{args.repo}:{sha}"
         data = load_checkpoint(task_id)
-        if record not in data["commits"]:
-            data["commits"].append(record)
-        data["completed_steps"].append(
-            {"timestamp": utc_now(), "text": f"Created scoped local commit {record} on {git_branch(args.repo)}"}
-        )
-        data["current_phase"] = "commit-created"
-        data["last_summary"] = f"scoped local commit {record}"
-        refresh_git_fields(data)
-        atomic_write(data)
         result = {
             "verdict": "COMMITTED",
             "repo": args.repo,
@@ -1382,6 +1509,7 @@ def close_task(args: argparse.Namespace) -> int:
             backup = archive_path.with_name(f"{archive_path.stem}.closed-{int(time.time())}.json")
             shutil.copy2(archive_path, backup)
         atomic_write(data, archive_path)
+        delete_ownership_baseline(state_dir(), data.get("ownership_baseline"))
         if active_path.exists():
             active_path.unlink()
         final = {
@@ -1414,7 +1542,9 @@ def close_task(args: argparse.Namespace) -> int:
 
 def status_task(args: argparse.Namespace) -> int:
     if getattr(args, "all", False):
-        migrate_legacy_checkpoint()
+        if legacy_checkpoint_path().exists():
+            with RegistryLock():
+                migrate_legacy_checkpoint()
         active_ids = list_active_task_ids()
         if args.json:
             print(json.dumps({"active": active_ids}, ensure_ascii=False, indent=2))
@@ -1439,12 +1569,19 @@ def resume_task(args: argparse.Namespace) -> int:
 
 
 def remove_state(args: argparse.Namespace) -> int:
-    migrate_legacy_checkpoint()
+    if legacy_checkpoint_path().exists():
+        with RegistryLock():
+            migrate_legacy_checkpoint()
     if args.task_id:
         task_id = sanitize_task_id(args.task_id)
         removed = False
         for path in (active_task_path(task_id), archive_task_path(task_id), legacy_checkpoint_path()):
             if path.exists():
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    delete_ownership_baseline(state_dir(), payload.get("ownership_baseline"))
+                except (OSError, json.JSONDecodeError, TypeError):
+                    pass
                 if args.archive:
                     backup_dir = state_dir() / "tasks" / "cleanup-backups"
                     backup_dir.mkdir(parents=True, exist_ok=True)

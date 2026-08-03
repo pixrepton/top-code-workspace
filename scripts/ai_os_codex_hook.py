@@ -62,6 +62,18 @@ def run_task(args: list[str], *, cwd: Path, timeout: float) -> subprocess.Comple
     )
 
 
+def classify_task_status_failure(detail: str) -> str:
+    """Map task-status errors to a shared soft/hard miss taxonomy."""
+    lowered = detail.lower()
+    if "corrupt json" in lowered:
+        return "corrupt"
+    if "multiple active tasks" in lowered:
+        return "multiple"
+    if "no active task" in lowered or "checkpoint not found" in lowered:
+        return "missing"
+    return "error"
+
+
 def checkpoint_state(cwd: Path) -> tuple[str, dict[str, Any] | None, str]:
     proc = run_task(["task-status", "--json"], cwd=cwd, timeout=5.0)
     if proc.returncode == 0:
@@ -70,12 +82,7 @@ def checkpoint_state(cwd: Path) -> tuple[str, dict[str, Any] | None, str]:
         except json.JSONDecodeError as exc:
             return "error", None, f"task-status returned invalid JSON: {exc}"
     detail = (proc.stderr or proc.stdout or "").strip()
-    lowered = detail.lower()
-    if "checkpoint not found" in lowered:
-        return "missing", None, detail
-    if "corrupt json" in lowered:
-        return "corrupt", None, detail
-    return "error", None, detail
+    return classify_task_status_failure(detail), None, detail
 
 
 def checkpoint_is_active(data: dict[str, Any]) -> bool:
@@ -153,10 +160,10 @@ def resolve_cwd(payload: dict[str, Any]) -> Path:
 
 def handle_session_start(payload: dict[str, Any], cwd: Path) -> int:
     state, data, detail = checkpoint_state(cwd)
-    if state == "missing":
+    if state in {"missing", "multiple"}:
         return success()
     if state == "corrupt":
-        return success(system_message="AI-OS checkpoint is corrupt; automatic resume skipped.")
+        return stop("AI-OS checkpoint is corrupt; repair it before continuing.")
     if state != "ok" or data is None:
         return success(system_message=f"AI-OS checkpoint refresh failed: {clip(detail, 180)}")
     if not checkpoint_is_active(data):
@@ -196,9 +203,11 @@ def handle_session_end(cwd: Path) -> int:
     if state != "ok" or data is None or not checkpoint_is_active(data):
         return success()
     try:
-        refresh_checkpoint(cwd, timeout=2.5)
+        ok, detail = refresh_checkpoint(cwd, timeout=2.5)
+        if not ok and detail:
+            return success(system_message=f"AI-OS session-end refresh failed: {clip(detail, 180)}")
     except subprocess.TimeoutExpired:
-        return success()
+        return success(system_message="AI-OS session-end refresh timed out.")
     return success()
 
 
