@@ -144,6 +144,7 @@ Use specialized tools when they provide materially better information than raw f
 For code discovery, architecture, dependencies, call paths and impact analysis,
 follow the applicable repository AGENTS.md,
 `knowledge/system-atlas/tooling/CODEX_EXECUTION_MAP.md`,
+`knowledge/system-atlas/tooling/CODE_INTELLIGENCE_ROUTER.md`,
 and the relevant maintained tool instructions.
 CLAUDE.md files are Claude Code adapters, not canonical project policy.
 
@@ -158,6 +159,57 @@ After substantial code, contract, topology or workflow changes, explicitly asses
 If refresh is feasible within the current local scope, perform the minimal required refresh or update and report what was refreshed, what remains stale and what is still only advisory.
 
 If a specialized tool is unavailable, stale or incomplete, state that explicitly before using a fallback.
+
+## Code Intelligence Router
+
+Do not explore code randomly and do not query every MCP tool “just in case”.
+First classify the question, then take the canonical route.
+
+Full route tables and high-risk protocol:
+`knowledge/system-atlas/tooling/CODE_INTELLIGENCE_ROUTER.md`
+
+### Roles
+
+- **GitNexus** — architecture, processes, clusters, dependencies, blast radius, API and cross-repo contracts.
+- **Codebase Memory (CBM)** — raw structural graph, call graph, types, routes, infrastructure, custom graph queries.
+- **Serena** — IDE semantics: symbols, declarations, implementations, references, rename and precise edits.
+- **CodeScene** — maintainability, Code Health, qualitative risk and pre-commit quality gate.
+- **Tests/runtime** — only proof of actual system behavior.
+
+### Choose the route
+
+| Need | First tool | Next step |
+| --- | --- | --- |
+| Unknown area or concept | GitNexus `query` | process / cluster / context |
+| Architecture / workflow | GitNexus resources / process | Serena for key symbols |
+| Concrete symbol | Serena `find_symbol` | `find_referencing_symbols` |
+| Dependencies / blast radius | GitNexus `impact` | Serena references |
+| Exact call graph / custom edges | CBM `get_graph_schema` → `trace_path` / `query_graph` | Serena for code |
+| Public API / MCP tool / cross-repo contract | GitNexus `route_map` / `tool_map` / group contracts | `shape_check` / `api_impact` + contract test |
+| Type / interface / DTO | Serena | CBM `IMPLEMENTS` / `USES_TYPE` at high risk |
+| Refactor | CodeScene review + GitNexus impact | edit via Serena |
+| Rename | Serena rename | GitNexus rename only as fallback |
+| Debugging | GitNexus query / trace | Serena → CBM → runtime |
+| Before commit | tests → GitNexus `detect_changes` | CodeScene `pre_commit_code_health_safeguard` |
+
+### Standard change path
+
+1. Resolve owning repository and Source of Truth.
+2. GitNexus for process, area and blast radius.
+3. Serena for exact symbols and semantic references.
+4. CBM only for raw graph, exact call graph, cross-service edges or a custom query.
+5. For refactor: CodeScene `code_health_review` before editing.
+6. Edit symbolically via Serena when the change is symbol-scoped.
+7. Run required tests and runtime proof.
+8. GitNexus `detect_changes`.
+9. CodeScene `pre_commit_code_health_safeguard`.
+10. Do not declare success from a graph or Code Health alone.
+
+### High-risk and boundaries
+
+For public API, DTO, data, auth, policy/HITL, cross-repo contract or side effects require GitNexus impact/contract tools, Serena references, CBM as independent graph confirmation, plus test or runtime proof.
+
+CodeScene is not a dependency oracle. Graphs are not runtime proof. Do not run four tools when one canonical answer is clear. When tools disagree, verify current code and runtime.
 
 ## Scope Boundary
 
