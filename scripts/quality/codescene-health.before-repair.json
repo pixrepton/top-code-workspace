@@ -1,26 +1,26 @@
 {
   "tool": "code_health_score",
   "scores": {
-    "scripts/ai_os_task.py": 3.72,
-    "scripts/ai_os_task_ownership.py": 6.31,
+    "scripts/ai_os_task.py": 3.98,
+    "scripts/ai_os_task_ownership.py": 6.74,
     "scripts/rotate_google_token.py": 7.26,
-    "scripts/ai_os_claude_hook.py": 7.57,
+    "scripts/ai_os_claude_hook.py": 7.68,
     "scripts/dev-tooling/cbm_mcp_diagnose.py": 8.11,
-    "scripts/row4a_browser_proof.py": 8.43,
+    "scripts/row4a_browser_proof.py": 8.51,
     "scripts/ai_os_codex_hook.py": 8.59,
-    "scripts/parse_transcript.py": 8.83,
-    "scripts/dev-tooling/cbm_index_repos.py": 8.79,
-    "scripts/architecture-drift-check.py": 8.88,
+    "scripts/parse_transcript.py": 8.85,
+    "scripts/architecture-drift-check.py": 8.95,
+    "scripts/dev-tooling/cbm_index_repos.py": 8.95,
     "scripts/rag-quality-proof.py": 9.24,
-    "scripts/report-risk-flags.py": 9.43,
+    "scripts/dev-tooling/test_ai_os_codex_hook.py": 9.38,
+    "scripts/dev-tooling/test_ai_os_git_control.py": 9.38,
+    "scripts/report-risk-flags.py": 9.42,
     "scripts/audit-rag-env.py": 9.48,
+    "scripts/dev-tooling/test_ai_os_parallel_tasks.py": 9.68,
     "scripts/compile-world-state.py": 9.84,
-    "scripts/e2e_full_flow.py": 10.0,
     "scripts/e2e_full_flow_proof.py": 9.84,
     "scripts/monthly_rule_review.py": 9.84,
-    "scripts/refactor_drive_ingest.py": 10.0,
-    "scripts/case_os_master_harness.py": "N/A",
-    "scripts/check_latest_turns_v2.py": "N/A",
+    "scripts/dev-tooling/test_mcp_configuration.py": 9.84,
     "scripts/audit_export_vs_db.py": 10.0,
     "scripts/cleanup_old_events.py": 10.0,
     "scripts/cleanup-precedent-proof-data.py": 10.0,
@@ -29,20 +29,22 @@
     "scripts/dev-tooling/mcp_smoke_probe.py": 10.0,
     "scripts/dev-tooling/test_agent_git_configuration.py": 10.0,
     "scripts/dev-tooling/test_ai_os_claude_hook.py": 10.0,
-    "scripts/dev-tooling/test_ai_os_codex_hook.py": 10.0,
-    "scripts/dev-tooling/test_ai_os_git_control.py": 9.38,
-    "scripts/dev-tooling/test_ai_os_parallel_tasks.py": 9.68,
     "scripts/dev-tooling/test_ai_os_task.py": 10.0,
     "scripts/dev-tooling/test_git_change_control_rules.py": 10.0,
-    "scripts/dev-tooling/test_mcp_configuration.py": 9.84,
+    "scripts/e2e_full_flow.py": 10.0,
     "scripts/export_bootstrap_emails.py": 10.0,
     "scripts/push-kalk-top-heartbeat.py": 10.0,
     "scripts/push-operational-feed-now.py": 10.0,
-    "scripts/smoke-gmail-attachment-find-case.py": 10.0
+    "scripts/refactor_drive_ingest.py": 10.0,
+    "scripts/smoke-gmail-attachment-find-case.py": 10.0,
+    "scripts/case_os_master_harness.py": "N/A",
+    "scripts/check_latest_turns_v2.py": "N/A"
   },
   "unavailable": [
     "scripts/case_os_master_harness.py",
     "scripts/check_latest_turns_v2.py"
   ],
-  "scanned_at": "2026-08-03-post-repair"
+  "notes": [
+    "case_os_master_harness.py and check_latest_turns_v2.py: MCP returned 'Could not determine Code Health score.'"
+  ]
 }

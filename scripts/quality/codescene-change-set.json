@@ -1,7 +1,6 @@
 {
   "tool": "analyze_change_set",
   "base_ref": "master",
-  "git_repository_path": "C:\\Users\\compg\\Desktop\\top-code workspace",
   "quality_gates": "failed",
   "scripts_results": [
     {
@@ -9,7 +8,19 @@
       "verdict": "degraded"
     },
     {
+      "name": "scripts/ai_os_codex_hook.py",
+      "verdict": "stable"
+    },
+    {
+      "name": "scripts/ai_os_task.py",
+      "verdict": "degraded"
+    },
+    {
       "name": "scripts/ai_os_task_ownership.py",
+      "verdict": "degraded"
+    },
+    {
+      "name": "scripts/architecture-drift-check.py",
       "verdict": "degraded"
     },
     {
@@ -21,9 +32,21 @@
       "verdict": "degraded"
     },
     {
+      "name": "scripts/dev-tooling/test_ai_os_codex_hook.py",
+      "verdict": "improved"
+    },
+    {
       "name": "scripts/dev-tooling/test_mcp_configuration.py",
+      "verdict": "degraded"
+    },
+    {
+      "name": "scripts/parse_transcript.py",
+      "verdict": "degraded"
+    },
+    {
+      "name": "scripts/row4a_browser_proof.py",
       "verdict": "degraded"
     }
   ],
-  "note": "First attempt with base_ref=main failed (unknown revision). Retried with master. Only files differing from master appear; other scripts have cs_change=N/A."
+  "note": "Post-repair rescan vs master"
 }

@@ -1,2 +1,1 @@
-scripts\ai_os_task.py:196: unused variable 'exc_type' (100% confidence)
-scripts\ai_os_task.py:1119: unused variable 'exc_type' (100% confidence)
+scripts\ai_os_task.py:268: unused variable 'exc_type' (100% confidence)
