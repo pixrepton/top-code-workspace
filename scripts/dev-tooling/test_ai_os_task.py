@@ -178,7 +178,7 @@ def test_checkpoint_gate_dedupe_and_stale(task_repo):
     assert "DEDUPLICATED" in run_cmd(gate, env=env).stdout
     set_lines(repo, {1: "changed"})
     assert "RUN" in run_cmd(gate, env=env).stdout
-    data = json.loads((Path(env["AI_OS_TASK_STATE_DIR"]) / "current-task.json").read_text(encoding="utf-8"))
+    data = json.loads(active_checkpoint(env["AI_OS_TASK_STATE_DIR"], "unit").read_text(encoding="utf-8"))
     assert [entry["verdict"] for entry in data["gates"]] == ["PASS", "DEDUPLICATED", "PASS"]
 
 
@@ -289,10 +289,14 @@ def test_explicitly_adopted_baseline_must_be_resolved(task_repo):
     assert any("own untracked files remain" in issue for issue in result["issues"])
 
 
+def active_checkpoint(state_dir: str, task_id: str) -> Path:
+    return Path(state_dir) / "tasks" / "active" / f"{task_id}.json"
+
+
 def test_nonpristine_legacy_checkpoint_is_not_synthesized(task_repo):
     _, _, env = task_repo
     start_task(task_repo)
-    checkpoint = Path(env["AI_OS_TASK_STATE_DIR"]) / "current-task.json"
+    checkpoint = active_checkpoint(env["AI_OS_TASK_STATE_DIR"], "unit")
     data = json.loads(checkpoint.read_text(encoding="utf-8"))
     data["schema_version"] = 1
     data["status"] = "ABORTED_WITH_EVIDENCE"

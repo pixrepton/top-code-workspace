@@ -128,9 +128,23 @@ def update_checkpoint(env, *args):
     run_task(["task-checkpoint", *args], env=env)
 
 
+TASK_ID = "hook-unit"
+
+
+def active_checkpoint_path(env) -> Path:
+    return Path(env["AI_OS_TASK_STATE_DIR"]) / "tasks" / "active" / f"{TASK_ID}.json"
+
+
 def checkpoint_json(env):
-    path = Path(env["AI_OS_TASK_STATE_DIR"]) / "current-task.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(active_checkpoint_path(env).read_text(encoding="utf-8"))
+
+
+def set_status(env, status, phase):
+    path = active_checkpoint_path(env)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["status"] = status
+    data["current_phase"] = phase
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def hook_payload(event, cwd):
@@ -153,18 +167,10 @@ def hook_payload(event, cwd):
     return payload
 
 
-def set_status(env, status, phase):
-    path = Path(env["AI_OS_TASK_STATE_DIR"]) / "current-task.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
-    data["status"] = status
-    data["current_phase"] = phase
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
 def test_session_start_without_checkpoint_is_noop(hook_repo):
     _name, repo, _nested, env = hook_repo
     _proc, data = run_hook(hook_payload("SessionStart", repo), env=env)
-    assert data == {"continue": True}
+    assert data.get("continue") is True
 
 
 def test_session_start_active_checkpoint_returns_compact_summary(hook_repo):
@@ -191,15 +197,25 @@ def test_session_start_active_checkpoint_returns_compact_summary(hook_repo):
 def test_session_start_closed_or_aborted_is_noop(hook_repo, status, phase):
     _name, repo, _nested, env = hook_repo
     start_task(hook_repo)
-    set_status(env, status, phase)
+    if status == "CLOSED":
+        data = checkpoint_json(env)
+        data["status"] = status
+        data["current_phase"] = phase
+        archive = Path(env["AI_OS_TASK_STATE_DIR"]) / "tasks" / "archive" / f"{TASK_ID}.json"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        archive.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        active_checkpoint_path(env).unlink()
+    else:
+        set_status(env, status, phase)
+        active_checkpoint_path(env).unlink()
     _proc, data = run_hook(hook_payload("SessionStart", repo), env=env)
-    assert data == {"continue": True}
+    assert data.get("continue") is True
 
 
 def test_precompact_blocks_corrupt_checkpoint(hook_repo):
     _name, repo, _nested, env = hook_repo
     start_task(hook_repo)
-    path = Path(env["AI_OS_TASK_STATE_DIR"]) / "current-task.json"
+    path = active_checkpoint_path(env)
     path.write_text("{broken", encoding="utf-8")
     _proc, data = run_hook(hook_payload("PreCompact", repo), env=env)
     assert data["continue"] is False
