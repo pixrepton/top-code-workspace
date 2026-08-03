@@ -1,0 +1,29 @@
+{
+  "tool": "analyze_change_set",
+  "base_ref": "master",
+  "git_repository_path": "C:\\Users\\compg\\Desktop\\top-code workspace",
+  "quality_gates": "failed",
+  "scripts_results": [
+    {
+      "name": "scripts/ai_os_claude_hook.py",
+      "verdict": "degraded"
+    },
+    {
+      "name": "scripts/ai_os_task_ownership.py",
+      "verdict": "degraded"
+    },
+    {
+      "name": "scripts/dev-tooling/cbm_index_repos.py",
+      "verdict": "degraded"
+    },
+    {
+      "name": "scripts/dev-tooling/cbm_mcp_diagnose.py",
+      "verdict": "degraded"
+    },
+    {
+      "name": "scripts/dev-tooling/test_mcp_configuration.py",
+      "verdict": "degraded"
+    }
+  ],
+  "note": "First attempt with base_ref=main failed (unknown revision). Retried with master. Only files differing from master appear; other scripts have cs_change=N/A."
+}

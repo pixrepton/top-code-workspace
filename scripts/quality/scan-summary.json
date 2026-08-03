@@ -1,0 +1,527 @@
+{
+  "files": [
+    "scripts/ai_os_claude_hook.py",
+    "scripts/ai_os_codex_hook.py",
+    "scripts/ai_os_task.py",
+    "scripts/ai_os_task_ownership.py",
+    "scripts/architecture-drift-check.py",
+    "scripts/audit-rag-env.py",
+    "scripts/audit_export_vs_db.py",
+    "scripts/case_os_master_harness.py",
+    "scripts/check_latest_turns_v2.py",
+    "scripts/cleanup-precedent-proof-data.py",
+    "scripts/cleanup-proof-risk-flag-cases.py",
+    "scripts/cleanup_old_events.py",
+    "scripts/compile-world-state.py",
+    "scripts/dev-tooling/cbm_index_repos.py",
+    "scripts/dev-tooling/cbm_mcp_diagnose.py",
+    "scripts/dev-tooling/cbm_mcp_diagnose_one.py",
+    "scripts/dev-tooling/mcp_smoke_probe.py",
+    "scripts/dev-tooling/test_agent_git_configuration.py",
+    "scripts/dev-tooling/test_ai_os_claude_hook.py",
+    "scripts/dev-tooling/test_ai_os_codex_hook.py",
+    "scripts/dev-tooling/test_ai_os_git_control.py",
+    "scripts/dev-tooling/test_ai_os_parallel_tasks.py",
+    "scripts/dev-tooling/test_ai_os_task.py",
+    "scripts/dev-tooling/test_git_change_control_rules.py",
+    "scripts/dev-tooling/test_mcp_configuration.py",
+    "scripts/e2e_full_flow.py",
+    "scripts/e2e_full_flow_proof.py",
+    "scripts/export_bootstrap_emails.py",
+    "scripts/monthly_rule_review.py",
+    "scripts/parse_transcript.py",
+    "scripts/push-kalk-top-heartbeat.py",
+    "scripts/push-operational-feed-now.py",
+    "scripts/quality/_aggregate_scan.py",
+    "scripts/rag-quality-proof.py",
+    "scripts/refactor_drive_ingest.py",
+    "scripts/report-risk-flags.py",
+    "scripts/rotate_google_token.py",
+    "scripts/row4a_browser_proof.py",
+    "scripts/smoke-gmail-attachment-find-case.py"
+  ],
+  "ruff_counts": {
+    "scripts/ai_os_claude_hook.py": 27,
+    "scripts/ai_os_codex_hook.py": 11,
+    "scripts/ai_os_task.py": 92,
+    "scripts/ai_os_task_ownership.py": 41,
+    "scripts/architecture-drift-check.py": 10,
+    "scripts/audit-rag-env.py": 2,
+    "scripts/audit_export_vs_db.py": 1,
+    "scripts/case_os_master_harness.py": 4,
+    "scripts/check_latest_turns_v2.py": 8,
+    "scripts/cleanup-precedent-proof-data.py": 1,
+    "scripts/cleanup-proof-risk-flag-cases.py": 5,
+    "scripts/cleanup_old_events.py": 8,
+    "scripts/compile-world-state.py": 3,
+    "scripts/dev-tooling/cbm_index_repos.py": 6,
+    "scripts/dev-tooling/cbm_mcp_diagnose.py": 11,
+    "scripts/dev-tooling/cbm_mcp_diagnose_one.py": 1,
+    "scripts/dev-tooling/mcp_smoke_probe.py": 2,
+    "scripts/dev-tooling/test_agent_git_configuration.py": 4,
+    "scripts/dev-tooling/test_ai_os_claude_hook.py": 5,
+    "scripts/dev-tooling/test_ai_os_codex_hook.py": 5,
+    "scripts/dev-tooling/test_ai_os_git_control.py": 7,
+    "scripts/dev-tooling/test_ai_os_parallel_tasks.py": 13,
+    "scripts/dev-tooling/test_ai_os_task.py": 4,
+    "scripts/dev-tooling/test_mcp_configuration.py": 5,
+    "scripts/e2e_full_flow.py": 17,
+    "scripts/e2e_full_flow_proof.py": 5,
+    "scripts/export_bootstrap_emails.py": 1,
+    "scripts/monthly_rule_review.py": 15,
+    "scripts/parse_transcript.py": 7,
+    "scripts/push-kalk-top-heartbeat.py": 2,
+    "scripts/push-operational-feed-now.py": 5,
+    "scripts/quality/_aggregate_scan.py": 3,
+    "scripts/rag-quality-proof.py": 3,
+    "scripts/refactor_drive_ingest.py": 68,
+    "scripts/report-risk-flags.py": 11,
+    "scripts/rotate_google_token.py": 35,
+    "scripts/row4a_browser_proof.py": 23,
+    "scripts/smoke-gmail-attachment-find-case.py": 1
+  },
+  "cc_max": {
+    "scripts/ai_os_claude_hook.py": {
+      "complexity": 18,
+      "rank": "C",
+      "name": "handle_task_completed",
+      "lineno": 206,
+      "type": "function"
+    },
+    "scripts/ai_os_codex_hook.py": {
+      "complexity": 11,
+      "rank": "C",
+      "name": "handle_session_start",
+      "lineno": 154,
+      "type": "function"
+    },
+    "scripts/ai_os_task.py": {
+      "complexity": 26,
+      "rank": "D",
+      "name": "closure_issues",
+      "lineno": 1280,
+      "type": "function"
+    },
+    "scripts/ai_os_task_ownership.py": {
+      "complexity": 24,
+      "rank": "D",
+      "name": "_merge_expected",
+      "lineno": 220,
+      "type": "function"
+    },
+    "scripts/architecture-drift-check.py": {
+      "complexity": 9,
+      "rank": "B",
+      "name": "main",
+      "lineno": 203,
+      "type": "function"
+    },
+    "scripts/audit-rag-env.py": {
+      "complexity": 17,
+      "rank": "C",
+      "name": "main",
+      "lineno": 39,
+      "type": "function"
+    },
+    "scripts/cleanup-precedent-proof-data.py": {
+      "complexity": 6,
+      "rank": "B",
+      "name": "main",
+      "lineno": 16,
+      "type": "function"
+    },
+    "scripts/cleanup-proof-risk-flag-cases.py": {
+      "complexity": 8,
+      "rank": "B",
+      "name": "main",
+      "lineno": 62,
+      "type": "function"
+    },
+    "scripts/compile-world-state.py": {
+      "complexity": 14,
+      "rank": "C",
+      "name": "apply",
+      "lineno": 52,
+      "type": "function"
+    },
+    "scripts/e2e_full_flow.py": {
+      "complexity": 8,
+      "rank": "B",
+      "name": "test_rag_query",
+      "lineno": 154,
+      "type": "function"
+    },
+    "scripts/e2e_full_flow_proof.py": {
+      "complexity": 8,
+      "rank": "B",
+      "name": "check_docker_stack",
+      "lineno": 35,
+      "type": "function"
+    },
+    "scripts/monthly_rule_review.py": {
+      "complexity": 8,
+      "rank": "B",
+      "name": "flag_stale_rules",
+      "lineno": 39,
+      "type": "function"
+    },
+    "scripts/parse_transcript.py": {
+      "complexity": 17,
+      "rank": "C",
+      "name": "main",
+      "lineno": 44,
+      "type": "function"
+    },
+    "scripts/rag-quality-proof.py": {
+      "complexity": 14,
+      "rank": "C",
+      "name": "main",
+      "lineno": 92,
+      "type": "function"
+    },
+    "scripts/report-risk-flags.py": {
+      "complexity": 20,
+      "rank": "C",
+      "name": "main",
+      "lineno": 16,
+      "type": "function"
+    },
+    "scripts/rotate_google_token.py": {
+      "complexity": 29,
+      "rank": "D",
+      "name": "main",
+      "lineno": 186,
+      "type": "function"
+    },
+    "scripts/row4a_browser_proof.py": {
+      "complexity": 21,
+      "rank": "D",
+      "name": "main",
+      "lineno": 85,
+      "type": "function"
+    },
+    "scripts/dev-tooling/cbm_index_repos.py": {
+      "complexity": 14,
+      "rank": "C",
+      "name": "main",
+      "lineno": 128,
+      "type": "function"
+    },
+    "scripts/dev-tooling/cbm_mcp_diagnose.py": {
+      "complexity": 13,
+      "rank": "C",
+      "name": "timed_session",
+      "lineno": 85,
+      "type": "function"
+    },
+    "scripts/dev-tooling/mcp_smoke_probe.py": {
+      "complexity": 7,
+      "rank": "B",
+      "name": "resolve_command",
+      "lineno": 41,
+      "type": "function"
+    },
+    "scripts/dev-tooling/test_agent_git_configuration.py": {
+      "complexity": 7,
+      "rank": "B",
+      "name": "test_shared_policy_has_one_commit_route",
+      "lineno": 8,
+      "type": "function"
+    },
+    "scripts/dev-tooling/test_ai_os_codex_hook.py": {
+      "complexity": 7,
+      "rank": "B",
+      "name": "test_session_start_active_checkpoint_returns_compact_summary",
+      "lineno": 176,
+      "type": "function"
+    },
+    "scripts/dev-tooling/test_ai_os_git_control.py": {
+      "complexity": 8,
+      "rank": "B",
+      "name": "test_foreign_staged_hunk_in_same_file_is_preserved",
+      "lineno": 178,
+      "type": "function"
+    },
+    "scripts/dev-tooling/test_ai_os_parallel_tasks.py": {
+      "complexity": 9,
+      "rank": "B",
+      "name": "test_scope_normalization_and_overlap_rules",
+      "lineno": 135,
+      "type": "function"
+    },
+    "scripts/dev-tooling/test_mcp_configuration.py": {
+      "complexity": 6,
+      "rank": "B",
+      "name": "flatten_strings",
+      "lineno": 66,
+      "type": "function"
+    }
+  },
+  "mi": {
+    "scripts/ai_os_claude_hook.py": {
+      "mi": 23.58163576158415,
+      "rank": "A"
+    },
+    "scripts/ai_os_codex_hook.py": {
+      "mi": 28.677364457548464,
+      "rank": "A"
+    },
+    "scripts/ai_os_task.py": {
+      "mi": 0.0,
+      "rank": "C"
+    },
+    "scripts/ai_os_task_ownership.py": {
+      "mi": 17.64398589575689,
+      "rank": "B"
+    },
+    "scripts/architecture-drift-check.py": {
+      "mi": 38.09466108853413,
+      "rank": "A"
+    },
+    "scripts/audit-rag-env.py": {
+      "mi": 50.68539675137606,
+      "rank": "A"
+    },
+    "scripts/audit_export_vs_db.py": {
+      "mi": 64.89560495490127,
+      "rank": "A"
+    },
+    "scripts/case_os_master_harness.py": {
+      "mi": 54.33403378048274,
+      "rank": "A"
+    },
+    "scripts/check_latest_turns_v2.py": {
+      "mi": 56.356064299155626,
+      "rank": "A"
+    },
+    "scripts/cleanup-precedent-proof-data.py": {
+      "mi": 60.238328449484605,
+      "rank": "A"
+    },
+    "scripts/cleanup-proof-risk-flag-cases.py": {
+      "mi": 47.61200885934286,
+      "rank": "A"
+    },
+    "scripts/cleanup_old_events.py": {
+      "mi": 70.379021637402,
+      "rank": "A"
+    },
+    "scripts/compile-world-state.py": {
+      "mi": 62.436576097173706,
+      "rank": "A"
+    },
+    "scripts/e2e_full_flow.py": {
+      "mi": 48.04918673947528,
+      "rank": "A"
+    },
+    "scripts/e2e_full_flow_proof.py": {
+      "mi": 68.53682709867827,
+      "rank": "A"
+    },
+    "scripts/export_bootstrap_emails.py": {
+      "mi": 79.62877485730836,
+      "rank": "A"
+    },
+    "scripts/monthly_rule_review.py": {
+      "mi": 51.80815572813431,
+      "rank": "A"
+    },
+    "scripts/parse_transcript.py": {
+      "mi": 53.239250646375744,
+      "rank": "A"
+    },
+    "scripts/push-kalk-top-heartbeat.py": {
+      "mi": 64.1206644621585,
+      "rank": "A"
+    },
+    "scripts/push-operational-feed-now.py": {
+      "mi": 62.153833384973495,
+      "rank": "A"
+    },
+    "scripts/rag-quality-proof.py": {
+      "mi": 43.206956990578604,
+      "rank": "A"
+    },
+    "scripts/refactor_drive_ingest.py": {
+      "mi": 55.466339789918166,
+      "rank": "A"
+    },
+    "scripts/report-risk-flags.py": {
+      "mi": 45.5858910876635,
+      "rank": "A"
+    },
+    "scripts/rotate_google_token.py": {
+      "mi": 39.511860303937695,
+      "rank": "A"
+    },
+    "scripts/row4a_browser_proof.py": {
+      "mi": 28.41927797825243,
+      "rank": "A"
+    },
+    "scripts/smoke-gmail-attachment-find-case.py": {
+      "mi": 67.97683643742332,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/cbm_index_repos.py": {
+      "mi": 37.37705862233387,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/cbm_mcp_diagnose.py": {
+      "mi": 30.992942690962508,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/cbm_mcp_diagnose_one.py": {
+      "mi": 77.37946750323147,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/mcp_smoke_probe.py": {
+      "mi": 46.36070317721621,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_agent_git_configuration.py": {
+      "mi": 46.738039169230106,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_ai_os_claude_hook.py": {
+      "mi": 31.520593206128517,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_ai_os_codex_hook.py": {
+      "mi": 24.66869261762396,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_ai_os_git_control.py": {
+      "mi": 26.412610751224285,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_ai_os_parallel_tasks.py": {
+      "mi": 22.309344537667393,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_ai_os_task.py": {
+      "mi": 22.644087511125605,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_git_change_control_rules.py": {
+      "mi": 61.56973291420723,
+      "rank": "A"
+    },
+    "scripts/dev-tooling/test_mcp_configuration.py": {
+      "mi": 16.063204468668854,
+      "rank": "B"
+    },
+    "scripts/quality/_aggregate_scan.py": {
+      "mi": 47.631770096208015,
+      "rank": "A"
+    }
+  },
+  "bandit_counts": {
+    "scripts/ai_os_claude_hook.py": 2,
+    "scripts/ai_os_codex_hook.py": 2,
+    "scripts/ai_os_task.py": 9,
+    "scripts/ai_os_task_ownership.py": 6,
+    "scripts/architecture-drift-check.py": 3,
+    "scripts/case_os_master_harness.py": 2,
+    "scripts/cleanup-precedent-proof-data.py": 1,
+    "scripts/cleanup-proof-risk-flag-cases.py": 3,
+    "scripts/compile-world-state.py": 2,
+    "scripts/dev-tooling/cbm_index_repos.py": 4,
+    "scripts/dev-tooling/cbm_mcp_diagnose.py": 5,
+    "scripts/dev-tooling/mcp_smoke_probe.py": 4,
+    "scripts/dev-tooling/test_agent_git_configuration.py": 13,
+    "scripts/dev-tooling/test_ai_os_claude_hook.py": 18,
+    "scripts/dev-tooling/test_ai_os_codex_hook.py": 26,
+    "scripts/dev-tooling/test_ai_os_git_control.py": 30,
+    "scripts/dev-tooling/test_ai_os_parallel_tasks.py": 36,
+    "scripts/dev-tooling/test_ai_os_task.py": 32,
+    "scripts/dev-tooling/test_git_change_control_rules.py": 4,
+    "scripts/dev-tooling/test_mcp_configuration.py": 57,
+    "scripts/e2e_full_flow.py": 6,
+    "scripts/e2e_full_flow_proof.py": 4,
+    "scripts/push-kalk-top-heartbeat.py": 1,
+    "scripts/rag-quality-proof.py": 1,
+    "scripts/rotate_google_token.py": 1,
+    "scripts/row4a_browser_proof.py": 1
+  },
+  "bandit_severity": {
+    "scripts/ai_os_claude_hook.py": {
+      "LOW": 2
+    },
+    "scripts/ai_os_codex_hook.py": {
+      "LOW": 2
+    },
+    "scripts/ai_os_task.py": {
+      "LOW": 9
+    },
+    "scripts/ai_os_task_ownership.py": {
+      "LOW": 6
+    },
+    "scripts/architecture-drift-check.py": {
+      "LOW": 3
+    },
+    "scripts/case_os_master_harness.py": {
+      "LOW": 2
+    },
+    "scripts/cleanup-precedent-proof-data.py": {
+      "MEDIUM": 1
+    },
+    "scripts/cleanup-proof-risk-flag-cases.py": {
+      "MEDIUM": 3
+    },
+    "scripts/compile-world-state.py": {
+      "LOW": 2
+    },
+    "scripts/dev-tooling/cbm_index_repos.py": {
+      "LOW": 4
+    },
+    "scripts/dev-tooling/cbm_mcp_diagnose.py": {
+      "LOW": 5
+    },
+    "scripts/dev-tooling/mcp_smoke_probe.py": {
+      "LOW": 4
+    },
+    "scripts/dev-tooling/test_agent_git_configuration.py": {
+      "LOW": 13
+    },
+    "scripts/dev-tooling/test_ai_os_claude_hook.py": {
+      "LOW": 18
+    },
+    "scripts/dev-tooling/test_ai_os_codex_hook.py": {
+      "LOW": 26
+    },
+    "scripts/dev-tooling/test_ai_os_git_control.py": {
+      "LOW": 30
+    },
+    "scripts/dev-tooling/test_ai_os_parallel_tasks.py": {
+      "LOW": 36
+    },
+    "scripts/dev-tooling/test_ai_os_task.py": {
+      "LOW": 32
+    },
+    "scripts/dev-tooling/test_git_change_control_rules.py": {
+      "LOW": 4
+    },
+    "scripts/dev-tooling/test_mcp_configuration.py": {
+      "LOW": 57
+    },
+    "scripts/e2e_full_flow.py": {
+      "MEDIUM": 4,
+      "LOW": 2
+    },
+    "scripts/e2e_full_flow_proof.py": {
+      "LOW": 4
+    },
+    "scripts/push-kalk-top-heartbeat.py": {
+      "MEDIUM": 1
+    },
+    "scripts/rag-quality-proof.py": {
+      "MEDIUM": 1
+    },
+    "scripts/rotate_google_token.py": {
+      "LOW": 1
+    },
+    "scripts/row4a_browser_proof.py": {
+      "LOW": 1
+    }
+  }
+}

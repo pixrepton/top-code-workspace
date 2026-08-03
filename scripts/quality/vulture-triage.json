@@ -1,0 +1,12 @@
+[
+  {
+    "file": "scripts/ai_os_task.py",
+    "symbol": "exc_type",
+    "lines": [
+      196,
+      1119
+    ],
+    "verdict": "false_positive",
+    "reason": "Required unused parameter of context manager __exit__(self, exc_type, exc, tb) protocol."
+  }
+]

@@ -1,0 +1,4 @@
+﻿ruff: ruff 0.16.1
+radon: 6.0.1
+vulture: vulture 2.16
+bandit: __main__.py 1.9.4   python version = 3.12.2 (tags/v3.12.2:6abddd9, Feb  6 2024, 21:26:36) [MSC v.1937 64 bit (AMD64)]
