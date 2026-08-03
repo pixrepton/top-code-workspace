@@ -1,8 +1,8 @@
 """
-Architecture Drift Checker — rozszerzony.
+Runtime artifact lint — sprawdza spójność wygenerowanych artefaktów w knowledge/runtime.
 
-Porownuje wygenerowane artefakty architektoniczne z aktualnym stanem kodu
-i zglasza roznice w 10 kategoriach.
+To nie jest pełny architecture drift check względem kodu/MCP/runtime — tylko lint
+markdownowych artefaktów (obecność sekcji, słowa kluczowe, oczekiwane oznaczenia).
 
 Usage:
     python scripts/architecture-drift-check.py
@@ -11,17 +11,27 @@ Zasada:
     Jesli artefakt i graf MCP sa sprzeczne: artefakt wymaga aktualizacji.
     Jesli artefakt i runtime sa sprzeczne: artefakt wymaga aktualizacji.
 """
-import json
-import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = REPO_ROOT / "knowledge" / "runtime"
+RUNTIME_ARTIFACT_NAMES = {
+    "API_INGRESS.md",
+    "DATABASE_OWNERSHIP.md",
+    "FEATURE_FLAGS.md",
+    "EVENT_SPINE_GRAPH.md",
+    "WRITE_EXECUTOR_GRAPH.md",
+    "AGENT_CAPABILITY_MATRIX.md",
+    "BOUNDARY_MAP.md",
+    "SOT_MATRIX.md",
+    "OWNERSHIP_GRAPH.md",
+    "REPOSITORY_MAP.md",
+}
 GMAIL_AGENT_DIR = REPO_ROOT / "gmail-agent"
 RAG_DIR = REPO_ROOT / "rag-chat-asystent"
 
@@ -39,15 +49,30 @@ def _read_file(path: Path) -> str:
     return path.read_text("utf-8", errors="replace")
 
 
-def _git_diff() -> list[str]:
+def _git_diff() -> tuple[list[str], str | None]:
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", "HEAD"],
-            capture_output=True, text=True, cwd=str(REPO_ROOT), timeout=30
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+            timeout=30,
         )
-        return [f for f in result.stdout.split("\n") if f.strip()]
-    except Exception:
-        return []
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "git diff failed").strip()
+            return [], detail
+        return [f for f in result.stdout.split("\n") if f.strip()], None
+    except Exception as exc:
+        return [], str(exc)
+
+
+def _runtime_artifact_changes(changed_files: list[str]) -> list[str]:
+    return sorted(
+        path
+        for path in changed_files
+        if Path(path).name in RUNTIME_ARTIFACT_NAMES
+        or path.replace("\\", "/").startswith("knowledge/runtime/")
+    )
 
 
 def _check_exists(name: str) -> list[str]:
@@ -201,24 +226,38 @@ def run_checks() -> tuple[int, list[tuple[str, list[str]]]]:
 
 
 def main() -> int:
-    changed_files = _git_diff()
+    changed_files, git_error = _git_diff()
+    runtime_changes = _runtime_artifact_changes(changed_files)
     timestamp = datetime.now().isoformat()[:19]
+    extra_findings: list[str] = []
 
     print("=" * 60)
-    print(f"ARCHITECTURE DRIFT REPORT — {timestamp}")
+    print(f"RUNTIME ARTIFACT LINT — {timestamp}")
     print("=" * 60)
 
-    if changed_files:
+    if git_error:
+        extra_findings.append(f"GIT: nie udalo sie odczytac diff ({git_error})")
+        print(f"\nUWAGA: git diff nieudany: {git_error}")
+    elif changed_files:
         print(f"\nZmienione pliki od ostatniego commita: {len(changed_files)}")
         for f in changed_files[:10]:
             print(f"  {f}")
         if len(changed_files) > 10:
             print(f"  ... i {len(changed_files) - 10} wiecej")
+        if runtime_changes:
+            print("\nZmienione artefakty runtime (niezacommitowane):")
+            for path in runtime_changes:
+                print(f"  {path}")
+            print("  Uwaga: po zmianach kodu wygeneruj artefakty przez generate-runtime-artifacts.js")
     else:
         print("\nBrak zmian od ostatniego commita.")
 
-    print("\n--- Artifact Checks ---")
+    print("\n--- Artifact Lint Checks ---")
     total_drifts, results = run_checks()
+    total_drifts += len(extra_findings)
+
+    for finding in extra_findings:
+        print(f"  [GIT/WORKTREE] {finding}")
 
     for name, findings in results:
         if findings:
@@ -226,10 +265,10 @@ def main() -> int:
                 print(f"  [{name}] {f}")
 
     if total_drifts == 0:
-        print("  Wszystkie artefakty zgodne. Brak dryfu.")
+        print("  Wszystkie artefakty przeszly lint. Brak problemow.")
 
-    print(f"\n=== PODSUMOWANIE ===")
-    print(f"  Lacznie dryfow: {total_drifts}")
+    print("\n=== PODSUMOWANIE ===")
+    print(f"  Lacznie ustalen lintu: {total_drifts}")
     print(f"  Przeskanowano: {len(results)} kategorii")
     if total_drifts > 0:
         print("  Rekomendacja: zaktualizuj artefakty przez: node .cursor/hooks/generate-runtime-artifacts.js")

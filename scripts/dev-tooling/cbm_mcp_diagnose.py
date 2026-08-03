@@ -7,7 +7,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -54,18 +53,28 @@ def send(proc: subprocess.Popen[str], payload: dict[str, Any]) -> None:
     proc.stdin.flush()
 
 
-def read_json_line(proc: subprocess.Popen[str], timeout: float) -> dict[str, Any]:
+def read_json_line(
+    proc: subprocess.Popen[str],
+    timeout: float,
+    *,
+    req_id: int | None = None,
+) -> dict[str, Any]:
     assert proc.stdout is not None
     start = time.perf_counter()
     while time.perf_counter() - start < timeout:
         line = proc.stdout.readline()
         if not line:
+            if proc.poll() is not None:
+                break
             time.sleep(0.02)
             continue
         line = line.strip()
         if not line:
             continue
-        return json.loads(line)
+        payload = json.loads(line)
+        if req_id is not None and payload.get("id") != req_id:
+            continue
+        return payload
     raise TimeoutError(f"no JSON line within {timeout}s")
 
 
@@ -79,7 +88,7 @@ def call_tool(proc: subprocess.Popen[str], tool: str, arguments: dict[str, Any],
             "params": {"name": tool, "arguments": arguments},
         },
     )
-    return read_json_line(proc, timeout)
+    return read_json_line(proc, timeout, req_id=req_id)
 
 
 def timed_session(project: str, label: str, run_index: int) -> RunReport:
@@ -97,7 +106,7 @@ def timed_session(project: str, label: str, run_index: int) -> RunReport:
         [executable, *args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         text=True,
         env=env,
         cwd=str(ROOT),
@@ -119,7 +128,7 @@ def timed_session(project: str, label: str, run_index: int) -> RunReport:
                 },
             },
         )
-        init_resp = read_json_line(proc, 60.0)
+        init_resp = read_json_line(proc, 60.0, req_id=1)
         report.steps.append(
             StepTiming(
                 "initialize",
@@ -132,7 +141,7 @@ def timed_session(project: str, label: str, run_index: int) -> RunReport:
 
         t2 = time.perf_counter()
         send(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        tools_resp = read_json_line(proc, 60.0)
+        tools_resp = read_json_line(proc, 60.0, req_id=2)
         tools = tools_resp.get("result", {}).get("tools", [])
         report.steps.append(StepTiming("tools/list", time.perf_counter() - t2, bool(tools), f"count={len(tools)}"))
 
@@ -220,7 +229,7 @@ def discover_projects() -> list[str]:
         [command, *args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         text=True,
         env=env,
         cwd=str(ROOT),
@@ -240,7 +249,7 @@ def discover_projects() -> list[str]:
                 },
             },
         )
-        read_json_line(proc, 30.0)
+        read_json_line(proc, 30.0, req_id=1)
         send(proc, {"jsonrpc": "2.0", "method": "notifications/initialized"})
         # list_projects is not always exposed; infer from cache + known ids
     finally:

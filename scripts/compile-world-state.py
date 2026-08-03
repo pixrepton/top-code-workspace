@@ -5,7 +5,11 @@ Usage:
   python scripts/compile-world-state.py           # patch and write
   python scripts/compile-world-state.py --dry-run  # print diff, no write
 """
-import argparse, difflib, json, re, subprocess
+import argparse
+import difflib
+import json
+import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -104,7 +108,7 @@ def main():
     # report collected values
     print("Auto values collected:")
     for repo, v in vals.items():
-        has_field = f"version_code:" in original and f"  {repo}:" in original
+        has_field = "version_code:" in original and f"  {repo}:" in original
         note = "" if has_field else "  [no target field in YAML — collected only]"
         print(f"  {repo}: {v or '(not found)'}{note}")
 

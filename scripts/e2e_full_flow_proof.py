@@ -34,7 +34,6 @@ HEALTH_CHECKS = [
 
 def check_docker_stack() -> bool:
     """Sprawdza czy niezbędne kontenery są uruchomione."""
-    import json
 
     try:
         result = subprocess.run(
@@ -61,7 +60,7 @@ def check_docker_stack() -> bool:
 
 
 def main() -> int:
-    print(f"=== E2E Full Flow Proof Gate ===")
+    print("=== E2E Full Flow Proof Gate ===")
     print()
 
     # Krok 1: Sprawdź Docker
@@ -80,8 +79,8 @@ def main() -> int:
     print(f"  OK: znaleziono {E2E_SCRIPT}")
 
     # Krok 3: Uruchom E2E
-    print(f"\n[3/3] Uruchamiam E2E full flow...")
-    print(f"  (to może potrwać do 120 sekund)")
+    print("\n[3/3] Uruchamiam E2E full flow...")
+    print("  (to może potrwać do 120 sekund)")
     print()
 
     result = subprocess.run(
@@ -103,7 +102,7 @@ def main() -> int:
     # Wynik
     if result.returncode == 0:
         print(f"\n  {PROOF_MARKER}")
-        print(f"  E2E full flow PASSED (exit code 0)")
+        print("  E2E full flow PASSED (exit code 0)")
         return 0
 
     print(f"\n  E2E FAILED (exit code {result.returncode})")

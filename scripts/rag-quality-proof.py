@@ -9,6 +9,7 @@ import re
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 BASE = os.getenv("RAG_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 API_KEY = os.getenv("HVAC_ADMIN_API_KEY") or os.getenv("HVAC_PUBLIC_API_KEY") or "admin"
@@ -37,11 +38,19 @@ REFUSAL_MARKERS = (
 )
 
 
+def _assert_http_url(url: str) -> None:
+    scheme = urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"unsupported URL scheme: {scheme!r}")
+
+
 def post_chat(query: str) -> dict:
+    target_url = f"{BASE}/chat"
+    _assert_http_url(target_url)
     payload = json.dumps({"query": query, "stream": False, "use_cache": False}).encode()
     headers = {"Content-Type": "application/json", "X-API-Key": API_KEY}
-    req = urllib.request.Request(f"{BASE}/chat", data=payload, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+    req = urllib.request.Request(target_url, data=payload, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=120) as resp:  # nosec B310
         return json.loads(resp.read().decode("utf-8"))
 
 

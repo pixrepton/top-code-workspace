@@ -6,10 +6,10 @@ Użycie:
 
 Co robi:
     1. Odświeża obecny token (sprawdza czy ważny)
-    2. Unieważnia stary token (revoke)
-    3. Uruchamia przepływ OAuth device code
-    4. Zapisuje nowy token do pliku .env
-    5. Testuje nowy token (GET 1 wiadomości)
+    2. Uruchamia przepływ OAuth device code
+    3. Zapisuje nowy token do pliku .env
+    4. Testuje nowy token (GET 1 wiadomości)
+    5. Unieważnia stary token (revoke) — dopiero po udanej rotacji
 
 Wymaga:
     - GOOGLE_CLIENT_ID i GOOGLE_CLIENT_SECRET w pliku .env
@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import sys
 import webbrowser
 from pathlib import Path
@@ -65,7 +64,10 @@ def write_env(env_path: Path, env: dict[str, str]) -> None:
         if key not in written_keys:
             lines.append(f"{key}={val}")
             written_keys.add(key)
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    content = "\n".join(lines) + "\n"
+    tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
+    tmp_path.write_text(content, encoding="utf-8")
+    os.replace(tmp_path, env_path)
 
 
 def refresh_token(client_id: str, client_secret: str, refresh_token: str) -> dict[str, Any] | None:
@@ -162,11 +164,11 @@ def device_code_flow(client_id: str) -> dict[str, Any] | None:
     return None
 
 
-def test_token(client_id: str, refresh_token: str) -> bool:
+def test_token(client_id: str, client_secret: str, token_refresh: str) -> bool:
     """Testuje token: odświeża i czyta 1 wiadomość z Gmail API."""
     import requests  # type: ignore[import-not-found]
 
-    token_data = refresh_token(client_id, "", refresh_token)
+    token_data = refresh_token(client_id, client_secret, token_refresh)
     if not token_data:
         return False
     access_token = token_data.get("access_token", "")
@@ -235,7 +237,7 @@ def main() -> int:
             print("ERROR: Nie znaleziono pliku .env. Podaj --env-file.")
             return 1
 
-        print(f"=== Rotacja tokena Daszek Bridge ===")
+        print("=== Rotacja tokena Daszek Bridge ===")
         print(f"  Plik .env: {env_path}")
         env = load_env(env_path)
 
@@ -254,9 +256,9 @@ def main() -> int:
 
         env["DASZEK_BRIDGE_TOKEN"] = new_token
         write_env(env_path, env)
-        print(f"\n=== ROTACJA UDANA ===")
+        print("\n=== ROTACJA UDANA ===")
         print(f"  Nowy DASZEK_BRIDGE_TOKEN zapisany do {env_path}")
-        print(f"  Zaktualizuj również token w Daszku (WordPress config) lub zsynchronizuj przez sync-local-stack-env.ps1")
+        print("  Zaktualizuj również token w Daszku (WordPress config) lub zsynchronizuj przez sync-local-stack-env.ps1")
         return 0
 
     # ── Service: Google OAuth ───────────────────────────────────────────
@@ -279,7 +281,7 @@ def main() -> int:
         print("ERROR: Nie znaleziono pliku .env. Podaj --env-file.")
         return 1
 
-    print(f"=== Rotacja tokena Google OAuth ===")
+    print("=== Rotacja tokena Google OAuth ===")
     print(f"  Plik .env: {env_path}")
     env = load_env(env_path)
     if not env:
@@ -298,38 +300,31 @@ def main() -> int:
 
     # --validate-only: tylko sprawdź token, nic nie zmieniaj
     if args.validate_only:
-        print(f"\n[1/1] Walidacja tokena...")
+        print("\n[1/1] Walidacja tokena...")
         token_data = refresh_token(client_id, client_secret, old_refresh_token)
         if token_data:
             print(f"  TOKEN WAŻNY: {token_data.get('access_token', '')[:20]}...")
             return 0
-        print(f"  TOKEN NIEWAŻNY")
+        print("  TOKEN NIEWAŻNY")
         return 1
 
-    print(f"\n[1/5] Odświeżanie obecnego tokena...")
+    print("\n[1/5] Odświeżanie obecnego tokena...")
     token_data = refresh_token(client_id, client_secret, old_refresh_token)
+    old_access_token = ""
     if token_data:
         print(f"  Token ważny. Odświeżony access_token: {token_data.get('access_token', '')[:20]}...")
-        access_token = token_data.get("access_token", "")
+        old_access_token = token_data.get("access_token", "")
     else:
-        print(f"  Token nieważny lub wygasł. Kontynuuję...")
-        access_token = ""
-
-    if access_token:
-        print(f"\n[2/5] Unieważnianie starego tokena...")
-        if revoke_token(access_token):
-            print("  Stary token unieważniony.")
-        else:
-            print("  Nie udało się unieważnić (token mógł być już nieważny). Kontynuuję...")
+        print("  Token nieważny lub wygasł. Kontynuuję...")
 
     # --non-interactive: tylko test, żadnego przepływu OAuth
     if args.non_interactive:
-        print(f"\n[NON-INTERACTIVE] Rotacja wymaga interakcji użytkownika.")
-        print(f"  Uruchom bez --non-interactive, aby wykonać pełną rotację.")
-        print(f"  Lub użyj --print-url-only aby dostać URL do autoryzacji.")
+        print("\n[NON-INTERACTIVE] Rotacja wymaga interakcji użytkownika.")
+        print("  Uruchom bez --non-interactive, aby wykonać pełną rotację.")
+        print("  Lub użyj --print-url-only aby dostać URL do autoryzacji.")
         return 0
 
-    print(f"\n[3/5] Przepływ OAuth — nowy token...")
+    print("\n[2/5] Przepływ OAuth — nowy token...")
 
     # --print-url-only: wydrukuj URL i zakończ
     if args.print_url_only:
@@ -363,18 +358,26 @@ def main() -> int:
         print(f"  Otrzymano: {list(result.keys())}")
         return 1
 
-    print(f"\n[4/5] Zapis nowego tokena do .env...")
+    print("\n[3/5] Zapis nowego tokena do .env...")
     env["GOOGLE_REFRESH_TOKEN"] = new_refresh_token
     write_env(env_path, env)
-    print(f"  Nowy refresh_token zapisany.")
+    print("  Nowy refresh_token zapisany.")
 
-    print(f"\n[5/5] Test nowego tokena...")
-    if test_token(client_id, new_refresh_token):
-        print(f"\n=== ROTACJA UDANA ===")
-        return 0
-    print(f"\n=== ROTACJA ZAKOŃCZONA, ALE TEST NIE PRZESZEDŁ ===")
-    print("Sprawdź czy zakresy OAuth są poprawne.")
-    return 1
+    print("\n[4/5] Test nowego tokena...")
+    if not test_token(client_id, client_secret, new_refresh_token):
+        print("\n=== ROTACJA ZAKOŃCZONA, ALE TEST NIE PRZESZEDŁ ===")
+        print("Sprawdź czy zakresy OAuth są poprawne.")
+        return 1
+
+    if old_access_token:
+        print("\n[5/5] Unieważnianie starego tokena...")
+        if revoke_token(old_access_token):
+            print("  Stary token unieważniony.")
+        else:
+            print("  Nie udało się unieważnić (token mógł być już nieważny).")
+
+    print("\n=== ROTACJA UDANA ===")
+    return 0
 
 
 if __name__ == "__main__":

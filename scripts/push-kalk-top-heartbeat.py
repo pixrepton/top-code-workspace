@@ -9,10 +9,17 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 
 def _env(name: str, default: str = "") -> str:
     return str(os.getenv(name, default) or "").strip()
+
+
+def _assert_http_url(url: str) -> None:
+    scheme = urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"unsupported URL scheme: {scheme!r}")
 
 
 def main() -> int:
@@ -34,8 +41,10 @@ def main() -> int:
         },
         "correlation": {},
     }
+    target_url = f"{base}/internal/os-events"
+    _assert_http_url(target_url)
     req = urllib.request.Request(
-        f"{base}/internal/os-events",
+        target_url,
         data=json.dumps(body).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
@@ -45,7 +54,7 @@ def main() -> int:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
             raw = resp.read().decode("utf-8", errors="replace")
         print("heartbeat_ok", resp.status, raw[:200])
         return 0

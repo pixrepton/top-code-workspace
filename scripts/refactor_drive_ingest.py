@@ -1,4 +1,3 @@
-import re, sys
 
 FILEPATH = r"C:\Users\compg\Desktop\top-code workspace\gmail-agent\tools\gmail_audit\drive_ingest_runtime.py"
 

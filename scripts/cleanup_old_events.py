@@ -12,13 +12,12 @@ import psycopg
 def cleanup_events(db_url: str, ttl_days: int = 90, dry_run: bool = False) -> int:
     """Usuwa eventy starsze niż N dni. Zwraca liczbę usuniętych (lub do usunięcia przy dry_run)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=ttl_days)
-    with psycopg.connect(db_url) as conn:
-        with conn.cursor() as cur:
-            if dry_run:
-                cur.execute("SELECT COUNT(*) FROM unified_os_events WHERE created_at < %s", (cutoff,))
-                return cur.fetchone()[0]
-            cur.execute("DELETE FROM unified_os_events WHERE created_at < %s", (cutoff,))
-            return cur.rowcount
+    with psycopg.connect(db_url) as conn, conn.cursor() as cur:
+        if dry_run:
+            cur.execute("SELECT COUNT(*) FROM unified_os_events WHERE created_at < %s", (cutoff,))
+            return cur.fetchone()[0]
+        cur.execute("DELETE FROM unified_os_events WHERE created_at < %s", (cutoff,))
+        return cur.rowcount
 
 
 if __name__ == "__main__":

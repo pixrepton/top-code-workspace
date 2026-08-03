@@ -1,11 +1,10 @@
 """
 Parse a JSONL conversation transcript and extract structured summary.
 """
+import argparse
 import json
 import os
-
-TRANSCRIPT_PATH = r"C:\Users\compg\.cursor\projects\c-Users-compg-Desktop-top-code-workspace\agent-transcripts\0367e349-23c1-4cf2-85ff-a31af9402872\0367e349-23c1-4cf2-85ff-a31af9402872.jsonl"
-OUTPUT_PATH = r"C:\Users\compg\.cursor\projects\c-Users-compg-Desktop-top-code-workspace\agent-tools\transcript-summary.txt"
+import sys
 
 
 def extract_text_content(content_list):
@@ -41,20 +40,26 @@ def trim_text(text, max_chars=500):
     return text
 
 
-def main():
-    # Count lines first
-    total_lines = 0
-    with open(TRANSCRIPT_PATH, "r", encoding="utf-8") as f:
-        for _ in f:
-            total_lines += 1
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Parse a JSONL transcript into a summary file.")
+    parser.add_argument("input", help="Path to the JSONL transcript file")
+    parser.add_argument("output", help="Path to the summary output file")
+    args = parser.parse_args()
 
-    print(f"Total lines in transcript: {total_lines}")
+    transcript_path = os.path.abspath(args.input)
+    output_path = os.path.abspath(args.output)
 
-    # Parse and group
-    turns = []  # list of dicts with role, texts, tools
+    if not os.path.isfile(transcript_path):
+        print(f"ERROR: transcript not found: {transcript_path}", file=sys.stderr)
+        return 1
+
+    turns = []
     errors = 0
-    with open(TRANSCRIPT_PATH, "r", encoding="utf-8") as f:
+    total_lines = 0
+
+    with open(transcript_path, encoding="utf-8") as f:
         for line_no, line in enumerate(f, 1):
+            total_lines += 1
             line = line.strip()
             if not line:
                 continue
@@ -82,12 +87,13 @@ def main():
                 "tools": tools,
             })
 
-    # Write output
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as out:
+    print(f"Total lines in transcript: {total_lines}")
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as out:
         out.write("=" * 80 + "\n")
         out.write("CONVERSATION TRANSCRIPT SUMMARY\n")
-        out.write(f"Source: {TRANSCRIPT_PATH}\n")
+        out.write(f"Source: {transcript_path}\n")
         out.write(f"Total messages: {len(turns)}\n")
         out.write(f"Total lines in file: {total_lines}\n")
         out.write(f"JSON parse errors: {errors}\n")
@@ -97,7 +103,6 @@ def main():
             role_label = "USER" if turn["role"] == "user" else "ASSISTANT" if turn["role"] == "assistant" else turn["role"].upper()
             out.write(f"--- Turn {i+1:4d} | Role: {role_label} ---\n")
 
-            # Tool calls
             if turn["tools"]:
                 out.write(f"  Tool calls ({len(turn['tools'])}):\n")
                 for t in turn["tools"]:
@@ -106,7 +111,6 @@ def main():
                         out.write(f" : {t['description']}")
                     out.write("\n")
 
-            # Text content
             if turn["texts"]:
                 for t_idx, t in enumerate(turn["texts"]):
                     trimmed = trim_text(t, 500)
@@ -117,9 +121,10 @@ def main():
             if turn["tools"] or turn["texts"]:
                 out.write("\n")
 
-    print(f"\nWritten summary to: {OUTPUT_PATH}")
+    print(f"\nWritten summary to: {output_path}")
     print(f"Parsed messages: {len(turns)}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

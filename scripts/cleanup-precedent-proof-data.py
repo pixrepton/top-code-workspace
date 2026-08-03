@@ -23,6 +23,7 @@ def main() -> int:
         return 1
 
     import psycopg
+    from psycopg import sql
 
     tables_case_id = (
         "mailbox_memory_messages",
@@ -48,7 +49,7 @@ def main() -> int:
             print(f"Deleting {len(case_ids)} precedent-proof case(s)...")
             for table in tables_case_id:
                 cur.execute(
-                    f"DELETE FROM {table} WHERE case_id LIKE %s",
+                    sql.SQL("DELETE FROM {} WHERE case_id LIKE %s").format(sql.Identifier(table)),
                     (f"{PREFIX}%",),
                 )
                 report[table] = cur.rowcount

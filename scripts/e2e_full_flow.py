@@ -4,16 +4,30 @@ Tests: gmail-agent pipeline -> RAG -> Event Spine -> health.
 """
 import json
 import sys
-import time
 import urllib.request
 import traceback
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 
 PASS = 0
 FAIL = 0
 STEPS: list[tuple[str, bool, str]] = []
+
+
+def _assert_http_url(url: str) -> None:
+    scheme = urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"unsupported URL scheme: {scheme!r}")
+
+
+def safe_urlopen(url_or_req, timeout: int = 15):
+    if isinstance(url_or_req, str):
+        _assert_http_url(url_or_req)
+    else:
+        _assert_http_url(url_or_req.full_url)
+    return urllib.request.urlopen(url_or_req, timeout=timeout)  # nosec B310
 
 
 def step(name: str, fn) -> None:
@@ -37,7 +51,7 @@ def step(name: str, fn) -> None:
 
 
 def http_get(url: str, timeout: int = 15) -> dict:
-    resp = urllib.request.urlopen(url, timeout=timeout)
+    resp = safe_urlopen(url, timeout=timeout)
     return json.loads(resp.read())
 
 
@@ -48,7 +62,7 @@ def http_post(url: str, payload: dict, headers: dict | None = None, timeout: int
         headers=headers or {"Content-Type": "application/json"},
         method="POST",
     )
-    resp = urllib.request.urlopen(req, timeout=timeout)
+    resp = safe_urlopen(req, timeout=timeout)
     return json.loads(resp.read())
 
 
@@ -64,7 +78,7 @@ step("gmail-agent /health", lambda: http_get("http://localhost:8766/health").get
 
 step("RAG /health", lambda: http_get("http://localhost:8000/health").get("status") == "healthy")
 
-step("Daszek responds", lambda: urllib.request.urlopen("http://localhost:8090/", timeout=10).status == 200)
+step("Daszek responds", lambda: safe_urlopen("http://localhost:8090/", timeout=10).status == 200)
 
 ROOT = Path(__file__).resolve().parent.parent
 LOCAL_VPS_ENV = ROOT / "gmail-agent/.env.local-vps"
@@ -159,7 +173,7 @@ def test_rag_query() -> bool:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    resp = urllib.request.urlopen(req, timeout=90)
+    resp = safe_urlopen(req, timeout=90)
     raw = resp.read().decode("utf-8", errors="replace")
     sources = 0
     answer = ""

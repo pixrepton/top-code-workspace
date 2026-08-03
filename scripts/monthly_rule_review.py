@@ -155,7 +155,7 @@ def main() -> int:
 
     database_url = args.db_url or os.environ.get(DB_URL_ENV_KEY, "") or DEFAULT_DB_URL
 
-    print(f"=== Monthly Rule Review ===")
+    print("=== Monthly Rule Review ===")
     print(f"  DB: {database_url[:60]}...")
     print(f"  Dry run: {args.dry_run}")
     print()

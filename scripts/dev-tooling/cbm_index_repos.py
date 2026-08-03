@@ -9,10 +9,11 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CBM_ENV = {
     "CBM_ALLOWED_ROOT": "C:/Users/compg/Desktop/top-code workspace",
     "CBM_CACHE_DIR": "C:/ai-os-codebase-memory",
@@ -44,7 +45,10 @@ def read_json_line(proc: subprocess.Popen[str], timeout: float, *, req_id: int |
         return payload
     stderr = ""
     if proc.stderr is not None:
-        stderr = proc.stderr.read()[:4000]
+        try:
+            stderr = proc.stderr.read()[:4000]
+        except Exception:
+            stderr = ""
     raise TimeoutError(f"no JSON response within {timeout}s; stderr={stderr!r}")
 
 
@@ -58,7 +62,29 @@ def call_tool(proc: subprocess.Popen[str], tool: str, arguments: dict[str, Any],
             "params": {"name": tool, "arguments": arguments},
         },
     )
-    return read_json_line(proc, timeout)
+    return read_json_line(proc, timeout, req_id=req_id)
+
+
+@contextmanager
+def _index_lock(timeout: float = 60.0):
+    cache = Path(CBM_ENV["CBM_CACHE_DIR"])
+    cache.mkdir(parents=True, exist_ok=True)
+    lock_path = cache / ".index.lock"
+    start = time.perf_counter()
+    while True:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            break
+        except FileExistsError:
+            if time.perf_counter() - start > timeout:
+                raise TimeoutError(f"index lock held: {lock_path}")
+            time.sleep(0.5)
+    try:
+        yield
+    finally:
+        lock_path.unlink(missing_ok=True)
 
 
 def index_repo(repo_path: Path, *, mode: str | None = None, timeout: float = 3600.0) -> dict[str, Any]:
@@ -77,7 +103,7 @@ def index_repo(repo_path: Path, *, mode: str | None = None, timeout: float = 360
         [executable, *args],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         text=True,
         env=env,
         cwd=str(ROOT),
@@ -146,7 +172,8 @@ def main() -> int:
         print(f"INDEX {label}: {path}", flush=True)
         t0 = time.perf_counter()
         try:
-            resp = index_repo(path, mode=mode)
+            with _index_lock():
+                resp = index_repo(path, mode=mode)
             elapsed = time.perf_counter() - t0
             entry = {"label": label, "path": str(path), "seconds": round(elapsed, 1), "response": resp}
             results.append(entry)

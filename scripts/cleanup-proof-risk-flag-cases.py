@@ -12,12 +12,12 @@ GMAIL_AUDIT = Path(__file__).resolve().parent.parent / "gmail-agent" / "tools" /
 if str(GMAIL_AUDIT) not in sys.path:
     sys.path.insert(0, str(GMAIL_AUDIT))
 
-PROOF_LIKE_SQL = """
-    case_id LIKE 'case_full_chain_proof_%'
-    OR case_id LIKE 'case_similar_cases_v1_proof_%'
-    OR case_id LIKE 'case_similar_cases_precedent_proof_%'
-    OR case_id LIKE 'case_drive_agent_live_%'
-"""
+PROOF_PREFIXES = (
+    "case_full_chain_proof_%",
+    "case_similar_cases_v1_proof_%",
+    "case_similar_cases_precedent_proof_%",
+    "case_drive_agent_live_%",
+)
 
 TABLES_BY_CASE_ID = (
     "mailbox_memory_messages",
@@ -32,11 +32,16 @@ TABLES_BY_CASE_ID = (
 def _delete_by_case_ids(cur, case_ids: list[str], report: dict[str, int], prefix: str) -> None:
     if not case_ids:
         return
+    from psycopg import sql
+
     print(f"Deleting {len(case_ids)} case(s) [{prefix}]...")
     for table in TABLES_BY_CASE_ID:
         if table == "mailbox_memory_cases":
             continue
-        cur.execute(f"DELETE FROM {table} WHERE case_id = ANY(%s)", (case_ids,))
+        cur.execute(
+            sql.SQL("DELETE FROM {} WHERE case_id = ANY(%s)").format(sql.Identifier(table)),
+            (case_ids,),
+        )
         report[f"{prefix}:{table}"] = cur.rowcount
     cur.execute("DELETE FROM mailbox_memory_cases WHERE case_id = ANY(%s)", (case_ids,))
     report[f"{prefix}:mailbox_memory_cases"] = cur.rowcount
@@ -69,13 +74,17 @@ def main() -> int:
         return 1
 
     import psycopg
+    from psycopg import sql
 
     report: dict[str, int] = {}
     deleted_case_ids: list[str] = []
 
     with psycopg.connect(db_url, connect_timeout=30) as conn:
         with conn.cursor() as cur:
-            cur.execute(f"SELECT case_id FROM mailbox_memory_cases WHERE {PROOF_LIKE_SQL} ORDER BY 1")
+            cur.execute(
+                "SELECT case_id FROM mailbox_memory_cases WHERE case_id LIKE ANY(%s) ORDER BY 1",
+                (list(PROOF_PREFIXES),),
+            )
             proof_ids = [row[0] for row in cur.fetchall()]
             if proof_ids:
                 _delete_by_case_ids(cur, proof_ids, report, "delete_proof")
@@ -86,11 +95,10 @@ def main() -> int:
                     DELETE FROM agent_runtime_turns
                     WHERE engagement_id IN (
                         SELECT engagement_id FROM operator_engagement_snapshots
-                        WHERE """
-                    + PROOF_LIKE_SQL
-                    + """
+                        WHERE case_id LIKE ANY(%s)
                     )
-                    """
+                    """,
+                    (list(PROOF_PREFIXES),),
                 )
                 report["delete_proof:agent_runtime_turns"] = cur.rowcount
 
@@ -106,24 +114,23 @@ def main() -> int:
             self._url = url
 
         def fetch_cases(self, *, limit: int = 200):
-            with psycopg.connect(self._url, connect_timeout=15) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            with psycopg.connect(self._url, connect_timeout=15) as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         SELECT case_id, updated_at
                         FROM mailbox_memory_cases
                         ORDER BY updated_at DESC NULLS LAST
                         LIMIT %s
                         """,
-                        (limit,),
-                    )
-                    return [
-                        {
-                            "case_id": case_id,
-                            "updated_at": updated_at.isoformat() if updated_at else "",
-                        }
-                        for case_id, updated_at in cur.fetchall()
-                    ]
+                    (limit,),
+                )
+                return [
+                    {
+                        "case_id": case_id,
+                        "updated_at": updated_at.isoformat() if updated_at else "",
+                    }
+                    for case_id, updated_at in cur.fetchall()
+                ]
 
     flags = evaluate_deterministic_risk_flags(mailbox_store=_Store(db_url), engagement_snapshots=[])
     stale_left = [f for f in flags if f.get("risk") == "RISK:STALE"]

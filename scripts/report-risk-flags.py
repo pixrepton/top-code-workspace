@@ -26,48 +26,46 @@ def main() -> int:
     import psycopg
 
     snapshots: list[dict] = []
-    with psycopg.connect(db_url, connect_timeout=15) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with psycopg.connect(db_url, connect_timeout=15) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT engagement_id, case_id, snapshot_data, updated_at
                 FROM operator_engagement_snapshots
                 ORDER BY updated_at DESC NULLS LAST
                 LIMIT 500
                 """
-            )
-            for eid, case_id, data, updated_at in cur.fetchall():
-                snap = data if isinstance(data, dict) else {}
-                if not isinstance(snap, dict):
-                    continue
-                snap.setdefault("engagement_id", eid)
-                snap.setdefault("case_id", case_id)
-                if updated_at:
-                    snap.setdefault("updated_at", updated_at.isoformat())
-                snapshots.append(snap)
+        )
+        for eid, case_id, data, updated_at in cur.fetchall():
+            snap = data if isinstance(data, dict) else {}
+            if not isinstance(snap, dict):
+                continue
+            snap.setdefault("engagement_id", eid)
+            snap.setdefault("case_id", case_id)
+            if updated_at:
+                snap.setdefault("updated_at", updated_at.isoformat())
+            snapshots.append(snap)
 
     class _Store:
         def fetch_cases(self, *, limit: int = 200):
-            with psycopg.connect(db_url, connect_timeout=15) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            with psycopg.connect(db_url, connect_timeout=15) as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         SELECT case_id, updated_at
                         FROM mailbox_memory_cases
                         ORDER BY updated_at DESC NULLS LAST
                         LIMIT %s
                         """,
-                        (limit,),
+                    (limit,),
+                )
+                rows = []
+                for case_id, updated_at in cur.fetchall():
+                    rows.append(
+                        {
+                            "case_id": case_id,
+                            "updated_at": updated_at.isoformat() if updated_at else "",
+                        }
                     )
-                    rows = []
-                    for case_id, updated_at in cur.fetchall():
-                        rows.append(
-                            {
-                                "case_id": case_id,
-                                "updated_at": updated_at.isoformat() if updated_at else "",
-                            }
-                        )
-                    return rows
+                return rows
 
     flags = evaluate_deterministic_risk_flags(
         mailbox_store=_Store(),

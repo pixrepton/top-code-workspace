@@ -1,5 +1,5 @@
 """Check latest agent turns from DB."""
-import psycopg, json
+import psycopg
 from dotenv import dotenv_values
 
 vals = dotenv_values('/etc/topinstal/gmail-agent.env')

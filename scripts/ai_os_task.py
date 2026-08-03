@@ -234,7 +234,7 @@ class FilePidLock:
         self._nested = False
         self._key = ""
 
-    def __enter__(self) -> "FilePidLock":
+    def __enter__(self) -> FilePidLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._key = str(self.path.resolve())
         if self._key in _HELD_FILE_LOCKS:

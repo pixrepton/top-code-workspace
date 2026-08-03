@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "dev-tooling"))
 
-from cbm_mcp_diagnose import list_index_files, summarize_report, timed_session  # noqa: E402
+from cbm_mcp_diagnose import summarize_report, timed_session  # noqa: E402
 
 
 def main() -> int:

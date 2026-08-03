@@ -112,6 +112,29 @@ def main() -> int:
     console_messages: list[dict[str, str]] = []
     page_errors: list[dict[str, str]] = []
     failed_requests: list[dict[str, Any]] = []
+    anchors: dict[str, Any] = {"proof_dir": str(proof_dir)}
+    exit_code = 1
+
+    def persist_diagnostics() -> None:
+        write_json(network_path, network)
+        write_json(
+            console_path,
+            {
+                "console": console_messages,
+                "pageErrors": page_errors,
+                "requestsFailed": failed_requests,
+            },
+        )
+        write_json(anchors_path, anchors)
+
+    def critical_anchors_ok() -> bool:
+        required = (
+            "live_response_ok",
+            "latest_matches_handoff_snapshot",
+            "latest_matches_signal",
+            "detail_contains_latest_title",
+        )
+        return all(anchors.get(key) is True for key in required)
 
     with sync_playwright() as playwright:
         browser = playwright.firefox.launch(headless=True)
@@ -265,25 +288,20 @@ def main() -> int:
                 "latest_matches_signal": expected["signal_id"] in membership["source_signal_ids"],
                 "latest_title_matches_handoff": membership["title"] == expected["title"],
                 "detail_contains_latest_title": membership["title"] in detail_text,
+                "membership_found": membership["found"],
                 "js_errors": len(page_errors),
                 "failed_requests": len(failed_requests),
             }
-
-            write_json(anchors_path, anchors)
-            write_json(network_path, network)
-            write_json(
-                console_path,
-                {
-                    "console": console_messages,
-                    "pageErrors": page_errors,
-                    "requestsFailed": failed_requests,
-                },
-            )
+            exit_code = 0 if critical_anchors_ok() else 1
+        except Exception as exc:
+            anchors["error"] = str(exc)
+            exit_code = 1
         finally:
+            persist_diagnostics()
             context.close()
             browser.close()
 
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

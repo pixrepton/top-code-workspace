@@ -45,9 +45,9 @@ for p in proofs:
     if result.returncode != 0:
         print(f"  FAILED ({result.returncode}): {rel}")
         if result.stdout:
-            print(f"    stdout (last 20 lines):\n" + "\n".join(result.stdout.strip().splitlines()[-20:]))
+            print("    stdout (last 20 lines):\n" + "\n".join(result.stdout.strip().splitlines()[-20:]))
         if result.stderr:
-            print(f"    stderr (last 20 lines):\n" + "\n".join(result.stderr.strip().splitlines()[-20:]))
+            print("    stderr (last 20 lines):\n" + "\n".join(result.stderr.strip().splitlines()[-20:]))
         failures.append(p)
     else:
         print(f"  OK: {rel}")
