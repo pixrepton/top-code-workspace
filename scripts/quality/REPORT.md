@@ -275,6 +275,30 @@ Confirmed dead-code count used in ranking: **0** for all files.
 - `scripts/quality/` scan outputs excluded from the hotspot table to avoid self-scanning the report tree.
 - Deep review is semantic judgment on top of tools; it does not replace Gate A/B runtime proof.
 
+## Repair status (2026-08-03)
+
+Executed as task `SCRIPTS-QUALITY-REPAIR-1` in three commits on `repair/root-mcp-json-fix`:
+
+| Commit | Scope |
+| --- | --- |
+| `22b21ea` | `fix(ai-os)` — PID locks, checkpoint RMW lock, commit finalize, ownership wt/index guard (non-foreign), baseline cleanup, Claude/Codex taxonomy |
+| `726abd4` | `fix(scripts)` — token rotate, CBM helpers, row4a/transcript/drift honesty, Bandit MEDIUM (B608/B310), broad Ruff safe cleanup |
+| (this) | `docs(quality)` — repair status |
+
+### Proof
+
+- `python -m pytest scripts/dev-tooling -q` → **85 passed, 3 skipped** (`confirmed by local tests`).
+- Bandit MEDIUM+ on repaired ops paths → **0** (`confirmed by local tests`).
+- Ruff residual at `--line-length 120` (excluding `scripts/quality/`): **80** (mostly E501/C901/B904/E402) — not fully zeroed; further CC reduction deferred.
+- Runtime OAuth / Playwright / live DB cleanup / CBM index → **`not proven`** in this session.
+- Gate B / Docker stack → not required (no harness/runtime endpoint changes).
+
+### Residual / deferred
+
+- Remaining Ruff E501 over 120 chars and C901 complexity on large `main()` helpers.
+- Soft ownership conflict remains a **warning** (contract preserved; not flipped to hard BLOCK).
+- Architecture drift checker is intentionally **artifact lint**, not a full code↔docs engine.
+
 ## Artifacts
 
 | File | Role |
