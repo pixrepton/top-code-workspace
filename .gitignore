@@ -14,6 +14,9 @@
 !wp-bridges/.serena/.gitignore
 !scripts/
 !scripts/**
+!.agents/
+!.agents/skills/
+!.agents/skills/**
 !docker-compose.cieplo-local.yml
 !docker-compose.kalk-top-local.yml
 !docker-compose.daszek-local.yml

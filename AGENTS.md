@@ -69,6 +69,10 @@ Do not write persistent memory without an explicit operator instruction.
 - `wp-bridges/` — root-owned WordPress bridges; not an independent Git repository.
 - `knowledge/` — canonical project knowledge, decisions, registries and tooling guidance.
 
+## Agent procedural layer (workspace)
+
+Procedural skills (how to execute and prove work) live in `.agents/skills/`. Control-plane map: `knowledge/system-atlas/tooling/agent-harness/AGENT_DEVELOPMENT_HARNESS.md`. Pick 1-3 skills from `AGENT_SKILLS_REGISTRY.md` before broad doc loading. Code-structure hints: GitNexus/CBM generated skills per repo — not a substitute for procedural skills.
+
 For cross-repository work:
 
 1. Identify every affected contract.
