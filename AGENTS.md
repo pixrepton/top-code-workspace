@@ -92,6 +92,8 @@ Typ B stubs today include: `wp-bridges/`, `scripts/`, `tests/`, `tools/`, `paylo
 
 Procedural skills (how to execute and prove work) live in `.agents/skills/`. Control-plane map: `knowledge/system-atlas/tooling/agent-harness/AGENT_DEVELOPMENT_HARNESS.md`. Pick 1-3 skills from `AGENT_SKILLS_REGISTRY.md` before broad doc loading. Code-structure hints: GitNexus/CBM generated skills per repo — not a substitute for procedural skills.
 
+**Hard trigger, not a suggestion:** the first time in a session that a task calls for exploring an unfamiliar area, symbol, workflow, dependency, contract, or blast radius in ANY nested repo, load `code-intelligence-routing` **before** the first `Read`/`Grep`/`rg` call — not after, not as a self-correction once caught. Claude Code: `.agents/skills/code-intelligence-routing/` is invisible to the `Skill` tool (different discovery root); use the mirror at `.claude/skills/code-intelligence-routing/`.
+
 For cross-repository work:
 
 1. Identify every affected contract.
@@ -213,6 +215,14 @@ Never silently reconcile conflicting evidence by guessing.
 Do not explore code randomly and do not query every tool “just in case”.
 
 First classify the question, then use the canonical route.
+
+**Verify before trusting "GitNexus is MCP-available" text.** `CLAUDE.md`, this file's own table
+below, generated `gitnexus:start/end` blocks, and the `gitnexus-*` skills all describe GitNexus
+`query`/`context`/`impact` as callable MCP tools and `gitnexus://...` as MCP resources — that
+text does not mean the MCP server is actually registered in the current session/client. Check
+first (e.g. Claude Code: `ToolSearch(query: "gitnexus")`); if it resolves nothing, GitNexus is
+CLI/index-only here (only a passive hook annotation on Read/Grep/Bash/Glob, not a callable tool)
+— route through **Codebase Memory (CBM)** instead of silently falling back to plain Read/Grep.
 
 Detailed routes, freshness rules and high-risk protocol:
 
