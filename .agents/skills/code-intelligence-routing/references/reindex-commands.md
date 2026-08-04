@@ -38,6 +38,9 @@ Config repair:
 
 ## CBM — per-repo index
 
+Prefer MCP tool `index_repository` with explicit `project=` / `repo_path` for the touched repo.
+CLI wrapper (same MCP call over stdio):
+
 ```powershell
 python scripts/dev-tooling/cbm_index_repos.py gmail-agent
 ```

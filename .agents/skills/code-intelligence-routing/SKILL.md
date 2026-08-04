@@ -68,6 +68,7 @@ Do **not** reindex: docs-only task, trivial one-line fix with no structural expl
 ```powershell
 python scripts/dev-tooling/test_mcp_configuration.py -q
 python scripts/agent_harness_audit.py
+python scripts/agent_map_audit.py
 ```
 
 After harness edits:
