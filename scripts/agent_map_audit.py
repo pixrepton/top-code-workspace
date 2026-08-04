@@ -187,7 +187,7 @@ def check_nested_repos(names: list[str]) -> tuple[list[str], list[str]]:
 
 
 def check_exploration_policy_coherence() -> tuple[list[str], list[str], list[str]]:
-    """Cursor exploration skill must be MCP-first; warn if TOOLING_POLICY still rg-first."""
+    """Exploration policy: skill and TOOLING_POLICY must both be MCP-first for code exploration."""
     oks: list[str] = []
     fails: list[str] = []
     warns: list[str] = []
@@ -203,13 +203,18 @@ def check_exploration_policy_coherence() -> tuple[list[str], list[str], list[str
     tooling = _resolve("knowledge/TOOLING_POLICY.md")
     if tooling.is_file():
         tooling_body = _read(tooling)
-        if "default to direct Git, source reads and `rg`" in tooling_body:
-            warns.append(
-                "TOOLING_POLICY still states Codex safe-mode rg-first; "
-                "Cursor exploration uses code-intelligence-routing MCP-first — keep both intentional"
-            )
-        else:
+        mcp_first_markers = (
+            "Route through the appropriate MCP/graph tool first",
+            "CODE_INTELLIGENCE_ROUTER.md",
+            "code-intelligence-routing/SKILL.md",
+        )
+        if all(marker in tooling_body for marker in mcp_first_markers):
             oks.append("exploration_policy:tooling_aligned")
+        else:
+            fails.append(
+                "TOOLING_POLICY missing MCP-first code exploration markers; "
+                "align with code-intelligence-routing skill and CODE_INTELLIGENCE_ROUTER.md"
+            )
     return oks, fails, warns
 
 
