@@ -17,21 +17,21 @@ Label: `confirmed by local tests`
 
 ## Hotspot outcomes (former Red/Yellow)
 
-| File | Before | After |
-| --- | ---: | ---: |
-| `ai_os_task.py` | 3.72 | **9.5** |
-| `ai_os_task_ownership.py` | 6.31 | **9.68** |
-| `ai_os_task_commit.py` | (in monolith) | **10.0** |
-| `ai_os_task_lifecycle.py` | (in monolith) | **10.0** |
-| `ai_os_task_gates.py` | (in monolith) | **10.0** |
-| `ai_os_task_state.py` | (in monolith) | **9.38** |
-| `rotate_google_token.py` | 7.26 | **10.0** |
-| `ai_os_claude_hook.py` | 7.57 | **10.0** |
-| `ai_os_codex_hook.py` | 8.59 | **9.38** |
-| `cbm_mcp_diagnose.py` | 8.11 | **10.0** |
-| `row4a_browser_proof.py` | 8.43 | **10.0** |
-| `parse_transcript.py` | 8.83 | **10.0** |
-| `architecture-drift-check.py` | 8.88 | **10.0** |
+| File                          |        Before |    After |
+| ----------------------------- | ------------: | -------: |
+| `ai_os_task.py`               |          3.72 |  **9.5** |
+| `ai_os_task_ownership.py`     |          6.31 | **9.68** |
+| `ai_os_task_commit.py`        | (in monolith) | **10.0** |
+| `ai_os_task_lifecycle.py`     | (in monolith) | **10.0** |
+| `ai_os_task_gates.py`         | (in monolith) | **10.0** |
+| `ai_os_task_state.py`         | (in monolith) | **9.38** |
+| `rotate_google_token.py`      |          7.26 | **10.0** |
+| `ai_os_claude_hook.py`        |          7.57 | **10.0** |
+| `ai_os_codex_hook.py`         |          8.59 | **9.38** |
+| `cbm_mcp_diagnose.py`         |          8.11 | **10.0** |
+| `row4a_browser_proof.py`      |          8.43 | **10.0** |
+| `parse_transcript.py`         |          8.83 | **10.0** |
+| `architecture-drift-check.py` |          8.88 | **10.0** |
 
 ## Method
 
