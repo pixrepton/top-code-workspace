@@ -146,6 +146,172 @@ def check_no_memory_bank_in_active_rules() -> list[str]:
     return fails
 
 
+TYPE_A_REPOS = (
+    "knowledge",
+    "gmail-agent",
+    "daszek",
+    "kalk-top",
+    "rag-chat-asystent",
+    "rag-widget",
+    "cieplo-orchestrator",
+    "fast-kalk",
+    "top-instal-generator",
+)
+
+TYPE_B_STUBS = (
+    "wp-bridges/AGENTS.md",
+    "scripts/AGENTS.md",
+    "tests/AGENTS.md",
+    "tools/AGENTS.md",
+    "payload/AGENTS.md",
+    ".agents/AGENTS.md",
+)
+
+TYPE_A_MARKERS = (
+    "Status:",
+    "## Role",
+    "Must not",
+    "## Gate A",
+    "## Cross-repo",
+    "## Anti-goals",
+    "Safety capsule",
+)
+
+TYPE_B_MARKERS = (
+    "Typ B",
+    "root-owned",
+    "../AGENTS.md",
+    "## Gate",
+    "## Anti-goals",
+)
+
+FORBIDDEN_AGENTS_PLACEHOLDERS = (
+    "<zmieniony plik>",
+    "<changed-php-file>",
+    "uruchom jakieś testy",
+)
+
+
+def _unclosed_fence(body: str) -> bool:
+    return body.count("```") % 2 != 0
+
+
+def check_agents_l1l2_model() -> tuple[list[str], list[str]]:
+    """Validate L1/L2 AGENTS.md adapters (Typ A repos + Typ B stubs)."""
+    oks: list[str] = []
+    fails: list[str] = []
+
+    root_agents = WORKSPACE_ROOT / "AGENTS.md"
+    if not root_agents.is_file():
+        fails.append("root AGENTS.md missing")
+        return oks, fails
+    root_body = _read(root_agents)
+    for marker in ("L1 / L2 instruction model", "Typ A", "Typ B", "knowledge/INDEX.md"):
+        if marker not in root_body:
+            fails.append(f"root AGENTS.md missing L1/L2 marker: {marker!r}")
+        else:
+            oks.append(f"root_l1l2:{marker}")
+
+    index = WORKSPACE_ROOT / "knowledge" / "INDEX.md"
+    if index.is_file():
+        idx = _read(index)
+        for marker in (
+            "knowledge/AGENTS.md",
+            "Whole workspace session",
+            "Work opened directly inside the `knowledge` Git repo",
+        ):
+            if marker not in idx:
+                fails.append(f"knowledge/INDEX.md cold-start missing: {marker!r}")
+            else:
+                oks.append(f"index_cold_start:{marker}")
+    else:
+        fails.append("knowledge/INDEX.md missing")
+
+    for name in TYPE_A_REPOS:
+        repo = WORKSPACE_ROOT / name
+        if not (repo / ".git").exists():
+            fails.append(f"Typ A path is not a git root: {name}")
+            continue
+        agents = repo / "AGENTS.md"
+        if not agents.is_file():
+            fails.append(f"Typ A missing AGENTS.md: {name}")
+            continue
+        body = _read(agents)
+        oks.append(f"type_a_present:{name}")
+        if _unclosed_fence(body):
+            fails.append(f"Typ A unclosed markdown fence: {name}/AGENTS.md")
+        for ph in FORBIDDEN_AGENTS_PLACEHOLDERS:
+            if ph in body:
+                fails.append(f"Typ A forbidden placeholder in {name}/AGENTS.md: {ph!r}")
+        for marker in TYPE_A_MARKERS:
+            # Allow Polish/English Role heading variants already normalized to ## Role
+            if marker not in body:
+                fails.append(f"Typ A {name}/AGENTS.md missing section/marker: {marker!r}")
+            else:
+                oks.append(f"type_a_marker:{name}:{marker}")
+        if "independent Git" in body.lower() and "typ b" in body.lower():
+            fails.append(f"Typ A {name} incorrectly claims Typ B")
+        # GitNexus integrity: if markers present, both start and end required
+        has_start = "<!-- gitnexus:start -->" in body
+        has_end = "<!-- gitnexus:end -->" in body
+        if has_start != has_end:
+            fails.append(f"Typ A {name}/AGENTS.md broken GitNexus markers start={has_start} end={has_end}")
+        elif has_start:
+            oks.append(f"type_a_gitnexus:{name}")
+
+    for rel in TYPE_B_STUBS:
+        path = WORKSPACE_ROOT / rel.replace("/", "\\")
+        if not path.is_file():
+            fails.append(f"Typ B stub missing: {rel}")
+            continue
+        body = _read(path)
+        oks.append(f"type_b_present:{rel}")
+        if _unclosed_fence(body):
+            fails.append(f"Typ B unclosed markdown fence: {rel}")
+        for ph in FORBIDDEN_AGENTS_PLACEHOLDERS:
+            if ph in body:
+                fails.append(f"Typ B forbidden placeholder in {rel}: {ph!r}")
+        for marker in TYPE_B_MARKERS:
+            if marker not in body:
+                fails.append(f"Typ B {rel} missing marker: {marker!r}")
+            else:
+                oks.append(f"type_b_marker:{rel}:{marker}")
+        # Typ B must not pretend to be an independent git product repo
+        if re.search(r"(?i)independent git repository(?!.*not)", body) and "not an independent" not in body.lower():
+            # soft: require explicit negation already covered by root-owned marker
+            pass
+        if "Cold-Start" in body and "full cold-start" in body.lower():
+            fails.append(f"Typ B {rel} contains expanded cold-start (forbidden)")
+        if rel == "tools/AGENTS.md":
+            if "STOP" not in body and "read-only" not in body.lower():
+                fails.append("tools/AGENTS.md must be STOP/read-only by default")
+            else:
+                oks.append("type_b_tools_stop")
+            if "gmail-agent/tools/gmail_audit" not in body.replace("\\", "/"):
+                fails.append("tools/AGENTS.md must point at canonical gmail-agent/tools/gmail_audit")
+        if rel == "payload/AGENTS.md":
+            if "customer" not in body.lower() and "PII" not in body and "mailbox" not in body.lower():
+                fails.append("payload/AGENTS.md must forbid customer/PII/mailbox dumps")
+            else:
+                oks.append("type_b_payload_no_pii")
+
+    # Critical path existence referenced from knowledge AGENTS
+    knowledge_agents = WORKSPACE_ROOT / "knowledge" / "AGENTS.md"
+    if knowledge_agents.is_file():
+        for rel in (
+            "knowledge/INDEX.md",
+            "knowledge/CONTROL_PLANE.md",
+            "knowledge/SESSION_MEMORY_POLICY.md",
+            "knowledge/DOCUMENTATION_POLICY.md",
+        ):
+            if (WORKSPACE_ROOT / rel.replace("/", "\\")).is_file():
+                oks.append(f"critical_path:{rel}")
+            else:
+                fails.append(f"critical path missing: {rel}")
+
+    return oks, fails
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Workspace agent harness audit")
     parser.add_argument("--json", action="store_true")
@@ -171,6 +337,10 @@ def main() -> int:
     fails.extend(check_registry_lists_skills(manifest))
     fails.extend(check_forbidden_phrases(manifest))
     fails.extend(check_no_memory_bank_in_active_rules())
+
+    o, f = check_agents_l1l2_model()
+    oks.extend(o)
+    fails.extend(f)
 
   # MCP declared_vs_client: informational only in slice
     mcp = manifest.get("mcp_audit") or {}

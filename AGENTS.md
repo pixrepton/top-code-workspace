@@ -56,18 +56,37 @@ Do not create or restore:
 
 Do not write persistent memory without an explicit operator instruction.
 
+## L1 / L2 instruction model
+
+This root file is **L1** — the shared ecosystem constitution for `top-code workspace`.
+
+| Type | What | `AGENTS.md` duty |
+|------|------|------------------|
+| **Typ A** | Independent nested Git repository | Required local L2 adapter: role, owns/must-not, read-first, write/task scope, real Gate A, cross-repo rule, anti-goals, safety capsule. Not a copy of this file. Remains minimally self-sufficient if the repo is opened alone. Root L1 also applies when work runs inside this workspace. |
+| **Typ B** | Root-owned folder (no nested `.git`) | Thin stub only: root-owned status, role, owning root repo, minimal gate, anti-goals. No second cold-start, no local SoT, no independent Git lifecycle. |
+
+Hard rules:
+
+- Every active independent Git repo under this workspace **must** have a local `AGENTS.md` (Typ A).
+- Every local `AGENTS.md` is an **adapter**, not an alternate constitution or parallel memory system.
+- Full knowledge cold-start and “need → file” routing remain exclusively in `knowledge/INDEX.md`.
+- Preserve existing `<!-- gitnexus:start -->` … `<!-- gitnexus:end -->` blocks; do not hand-edit them.
+
+Typ B stubs today include: `wp-bridges/`, `scripts/`, `tests/`, `tools/`, `payload/`, `.agents/`.
+
 ## Repository Routing
 
-- `gmail-agent/` — Node B; mailbox, cases, policy, decisions and execution state.
-- `daszek/` — Node A; operator projection UI and bounded HITL.
-- `kalk-top/` — HVAC logic, sizing, pricing and `OfferDTO`.
-- `cieplo-orchestrator/` — separate Cieplo pipeline and worker.
-- `rag-chat-asystent/` — RAG backend, ingest and retrieval.
-- `rag-widget/` — WordPress RAG surface and adapters.
-- `top-instal-generator/` — PDF and DOCX generation.
-- `fast-kalk/` — lead widget and its owned runtime logic.
-- `wp-bridges/` — root-owned WordPress bridges; not an independent Git repository.
-- `knowledge/` — canonical project knowledge, decisions, registries and tooling guidance.
+- `gmail-agent/` — Node B; mailbox, cases, policy, decisions and execution state. (Typ A)
+- `daszek/` — Node A; operator projection UI and bounded HITL. (Typ A)
+- `kalk-top/` — HVAC logic, sizing, pricing and `OfferDTO`. (Typ A)
+- `cieplo-orchestrator/` — separate Cieplo pipeline and worker. (Typ A)
+- `rag-chat-asystent/` — RAG backend, ingest and retrieval. (Typ A)
+- `rag-widget/` — WordPress RAG surface and adapters. (Typ A)
+- `top-instal-generator/` — PDF and DOCX generation. (Typ A)
+- `fast-kalk/` — lead widget and its owned runtime logic. (Typ A)
+- `knowledge/` — canonical project knowledge, decisions, registries and tooling guidance. (Typ A)
+- `wp-bridges/` — root-owned WordPress bridges; not an independent Git repository. (Typ B)
+- `scripts/`, `tests/`, `tools/`, `payload/`, `.agents/` — root-owned harness/fixtures/skills surfaces. (Typ B)
 
 ## Agent procedural layer (workspace)
 

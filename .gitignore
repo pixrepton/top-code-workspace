@@ -15,8 +15,16 @@
 !scripts/
 !scripts/**
 !.agents/
+!.agents/AGENTS.md
 !.agents/skills/
 !.agents/skills/**
+!tests/
+!tests/AGENTS.md
+!tools/
+!tools/AGENTS.md
+!payload/
+payload/**
+!payload/AGENTS.md
 !docker-compose.cieplo-local.yml
 !docker-compose.kalk-top-local.yml
 !docker-compose.daszek-local.yml

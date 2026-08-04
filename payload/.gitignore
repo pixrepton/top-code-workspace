@@ -1,0 +1,5 @@
+# Local payload / scratch fixtures — not a Source of Truth.
+# Track only this ignore file and the instruction stub.
+*
+!.gitignore
+!AGENTS.md
