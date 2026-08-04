@@ -68,14 +68,34 @@ docker cp $Corpus "${Container}:/tmp/fresh38-sentinel/corpus-v2.json"
 $hotFiles = @(
     'central_llm_stage.py',
     'understanding_output.py',
-    'eval_understanding_judge.py'
+    'eval_understanding_judge.py',
+    'eval_planner_spine_handoff.py',
+    'agent_runtime/effective_tools.py',
+    'agent_runtime/envelope_presence.py',
+    'agent_runtime/known_fact_guard.py',
+    'agent_runtime/draft_sanity.py',
+    'agent_runtime/failure_taxonomy.py',
+    'agent_runtime/planner_run_budget.py',
+    'agent_runtime/graph.py',
+    'agent_runtime/openai_agent_client.py',
+    'agent_runtime/tools/handlers.py',
+    'agent_runtime/tool_result.py'
 )
 foreach ($name in $hotFiles) {
     $src = Join-Path $AuditDir $name
     if (Test-Path $src) {
-        docker cp $src "${Container}:/app/tools/gmail_audit/$name"
+        $destName = $name -replace '/', '\'
+        $remote = "/app/tools/gmail_audit/$($name -replace '\\','/')"
+        docker exec $Container sh -lc "mkdir -p `$(dirname $remote)" | Out-Null
+        docker cp $src "${Container}:${remote}"
         Log "synced $name"
     }
+}
+
+# Prefer in-repo patched recovery harness when present; else artifacts / scratch PATCHED.
+if (-not $PatchedRunner -or -not (Test-Path $PatchedRunner)) {
+    $inRepo = Join-Path $HarnessDir 'run_recovery_pf.py'
+    if (Test-Path $inRepo) { $PatchedRunner = $inRepo }
 }
 
 $merged = @{
