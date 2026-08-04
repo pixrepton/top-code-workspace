@@ -1,6 +1,6 @@
-# Reindex commands (targeted)
+# Reindex via MCP tools (targeted)
 
-Run from workspace root unless noted. Refresh **one** repo or the minimum set the task touches.
+After **larger code changes** in a repo, refresh that repo's indexes through MCP-capable tooling **before** the next exploration pass. Run from workspace root unless noted. Refresh **one** repo or the minimum set the task touches.
 
 ## Preflight (warnings only)
 
