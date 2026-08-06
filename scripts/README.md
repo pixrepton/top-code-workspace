@@ -9,6 +9,7 @@ Cross-repo PowerShell harness for local Docker stack. Versioned in the workspace
 | `resolve-paths.ps1`          | Sets `TOP_CODE_ROOT` and per-repo env paths (sourced by others)                           |
 | `sync-local-stack-env.ps1`   | Sync `.env.local-vps`, audit `.env`, Daszek `.env.daszek-local`, RAG wire                 |
 | `preflight-local-stack.ps1`  | Health: Node B, RAG; `-FullStack` adds Daszek, kalk-top, PG                               |
+| `rag12-gate-b-rag-stack-smoke.ps1` | **RAG-12** bounded Gate B: Node B + RAG `/health` + GraphStore PG + `/rag_v2/status` (RAG-14); MinIO/Qdrant/Temporal honest SKIP |
 | `verify-local-gates.ps1`     | Preflight + optional pytest smoke (Gate A+B)                                              |
 | `push-rag-system-health.ps1` | W3: RAG health snapshot → Daszek + `rag.kb_health.snapshot` (cron/harness)                |
 | `preflight-workspace.ps1`    | Workspace-level checks                                                                    |
@@ -76,7 +77,12 @@ powershell -File scripts/sync-local-stack-env.ps1
 
 # 3. Sprawdź stack
 powershell -File scripts/preflight-local-stack.ps1 -FullStack
+
+# 3b. RAG-12 bounded Gate B (≠ full ecosystem): Node B + RAG + GraphStore + adapter status
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/rag12-gate-b-rag-stack-smoke.ps1
 ```
+
+`rag12-gate-b-rag-stack-smoke.ps1` writes a JSON matrix under `.artifacts/rag12-gate-b-smoke-*.json`. Optional live listeners (MinIO `:9000`, Qdrant `:6333`, Temporal `:7233`) report **SKIP** when down — do not invent those stacks. Use `-RequireLiveAdapters` only when you intentionally require them. If `/rag_v2/status` is 404 (stale `rag-backend` image vs RAG-14), the script falls back to host `collect_rag_v2_adapter_status` and returns **PARTIAL**.
 
 ## Daszek System proofs (Gate B)
 
