@@ -31,16 +31,19 @@ def safe_urlopen(url_or_req, timeout: int = 15):
 
 
 def step(name: str, fn) -> None:
+    """Run a check. If fn returns a tuple, only the *last* element is the verdict
+    (so side-effect patterns like ``(mutator(), bool_check)`` cannot false-pass)."""
     global PASS, FAIL
     try:
         result = fn()
-        if result:
+        ok = bool(result[-1]) if isinstance(result, tuple) else bool(result)
+        if ok:
             PASS += 1
             s = "PASS"
         else:
             FAIL += 1
             s = "FAIL"
-        STEPS.append((name, result, s))
+        STEPS.append((name, ok, s))
         print(f"  [{s}] {name}")
     except Exception as e:
         FAIL += 1
@@ -122,10 +125,21 @@ lead_payload = {
 }
 
 lead_result = {}
-step("POST /agent-chat (lead injection)", lambda: (
-    lead_result.update(http_post("http://localhost:8766/agent-chat", lead_payload, auth_headers, timeout=120)),
-    lead_result.get("ok") is True and len(lead_result.get("proposals", [])) > 0
-))
+
+
+def _lead_injection_ok() -> bool:
+    """Spine 6.3: sync chat may return ok+hitl_required with proposals=[]."""
+    lead_result.update(
+        http_post("http://localhost:8766/agent-chat", lead_payload, auth_headers, timeout=120)
+    )
+    if lead_result.get("ok") is not True:
+        return False
+    if lead_result.get("hitl_required") is True:
+        return True
+    return len(lead_result.get("proposals") or []) > 0
+
+
+step("POST /agent-chat (lead injection)", _lead_injection_ok)
 
 if lead_result.get("ok"):
     eng_id = lead_result.get("engagement_id", "")
@@ -135,7 +149,11 @@ if lead_result.get("ok"):
     step("HITL required (guardrail active)", lambda: lead_result.get("hitl_required") is True)
 
     proposals = lead_result.get("proposals", [])
-    step(f"Proposals generated ({len(proposals)})", lambda: len(proposals) > 0)
+    # Spine 6.3 command receipt path: empty proposals + hitl_required is valid.
+    step(
+        f"Proposals or HITL receipt ({len(proposals)}, hitl={lead_result.get('hitl_required')})",
+        lambda: len(proposals) > 0 or lead_result.get("hitl_required") is True,
+    )
 
     # Check timeline
     step("Engagement timeline accessible",
