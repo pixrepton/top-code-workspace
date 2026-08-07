@@ -88,6 +88,7 @@ function Get-DockerContainerId {
 $minioId = $null
 $qdrantId = $null
 $temporalId = $null
+$workerProc = $null
 $minioStatus = 'FAIL'
 $qdrantStatus = 'FAIL'
 $temporalStatus = 'SKIPPED'
@@ -101,51 +102,54 @@ try {
     Write-Log "RAG root: $ragRoot" 'Cyan'
     Write-Log "BOUNDS: live_data_plane NOT flipped; RAG_CORE NOT cut over; Temporal=activation-only unless workflow id set." 'Yellow'
 
-    foreach ($p in @(@{n='MinIO';port=$MinioPort}, @{n='Qdrant';port=$QdrantPort})) {
-        if (Test-Tcp -HostName '127.0.0.1' -Port $p.port) {
-            throw "Port $($p.port) already in use ($($p.n)). Free it or pass a different port."
+    # Reuse compose/profile listeners when ports are already open.
+    if (Test-Tcp -HostName '127.0.0.1' -Port $MinioPort) {
+        Write-Log "MinIO port $MinioPort already open — reusing existing listener." 'Yellow'
+        $minioId = '(pre-existing-listener)'
+    } else {
+        $minioName = "rag-v2-ephemeral-minio-$stamp"
+        $minioCmd = "docker run -d --rm --name $minioName -p ${MinioPort}:9000 -p ${MinioConsolePort}:9001 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:latest server /data --console-address :9001"
+        $commands.Add("docker pull minio/minio:latest")
+        $commands.Add($minioCmd)
+        Write-Log "Pulling minio/minio:latest (if needed)" 'Cyan'
+        docker pull minio/minio:latest | Out-Null
+        Write-Log "Starting MinIO: $minioCmd" 'Cyan'
+        $minioRaw = docker run -d --rm --name $minioName -p "${MinioPort}:9000" -p "${MinioConsolePort}:9001" -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:latest server /data --console-address ':9001' 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "MinIO docker run failed (exit $LASTEXITCODE): $minioRaw" }
+        $minioId = Get-DockerContainerId $minioRaw
+        if (-not $minioId) { throw "MinIO container id not parsed from: $minioRaw" }
+        Write-Log "MinIO container: $minioId" 'Green'
+        if (-not (Wait-Tcp -HostName '127.0.0.1' -Port $MinioPort -TimeoutSec 45)) {
+            throw "MinIO port $MinioPort not ready"
         }
     }
 
-    # --- MinIO ---
-    $minioName = "rag-v2-ephemeral-minio-$stamp"
-    $minioCmd = "docker run -d --rm --name $minioName -p ${MinioPort}:9000 -p ${MinioConsolePort}:9001 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:latest server /data --console-address :9001"
-    $commands.Add("docker pull minio/minio:latest")
-    $commands.Add($minioCmd)
-    Write-Log "Pulling minio/minio:latest (if needed)" 'Cyan'
-    docker pull minio/minio:latest | Out-Null
-    Write-Log "Starting MinIO: $minioCmd" 'Cyan'
-    $minioRaw = docker run -d --rm --name $minioName -p "${MinioPort}:9000" -p "${MinioConsolePort}:9001" -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:latest server /data --console-address ':9001' 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "MinIO docker run failed (exit $LASTEXITCODE): $minioRaw" }
-    $minioId = Get-DockerContainerId $minioRaw
-    if (-not $minioId) { throw "MinIO container id not parsed from: $minioRaw" }
-    Write-Log "MinIO container: $minioId" 'Green'
-    if (-not (Wait-Tcp -HostName '127.0.0.1' -Port $MinioPort -TimeoutSec 45)) {
-        throw "MinIO port $MinioPort not ready"
-    }
-
-    # --- Qdrant ---
-    $qdrantName = "rag-v2-ephemeral-qdrant-$stamp"
-    $qdrantCmd = "docker run -d --rm --name $qdrantName -p ${QdrantPort}:6333 -p 6334:6334 qdrant/qdrant:latest"
-    $commands.Add("docker pull qdrant/qdrant:latest")
-    $commands.Add($qdrantCmd)
-    Write-Log "Pulling qdrant/qdrant:latest (if needed)" 'Cyan'
-    docker pull qdrant/qdrant:latest | Out-Null
-    Write-Log "Starting Qdrant: $qdrantCmd" 'Cyan'
-    $qdrantRaw = docker run -d --rm --name $qdrantName -p "${QdrantPort}:6333" -p '6334:6334' qdrant/qdrant:latest 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Qdrant docker run failed (exit $LASTEXITCODE): $qdrantRaw" }
-    $qdrantId = Get-DockerContainerId $qdrantRaw
-    if (-not $qdrantId) { throw "Qdrant container id not parsed from: $qdrantRaw" }
-    Write-Log "Qdrant container: $qdrantId" 'Green'
-    if (-not (Wait-Tcp -HostName '127.0.0.1' -Port $QdrantPort -TimeoutSec 60)) {
-        throw "Qdrant port $QdrantPort not ready"
+    if (Test-Tcp -HostName '127.0.0.1' -Port $QdrantPort) {
+        Write-Log "Qdrant port $QdrantPort already open — reusing existing listener." 'Yellow'
+        $qdrantId = '(pre-existing-listener)'
+    } else {
+        $qdrantName = "rag-v2-ephemeral-qdrant-$stamp"
+        $qdrantCmd = "docker run -d --rm --name $qdrantName -p ${QdrantPort}:6333 -p 6334:6334 qdrant/qdrant:latest"
+        $commands.Add("docker pull qdrant/qdrant:latest")
+        $commands.Add($qdrantCmd)
+        Write-Log "Pulling qdrant/qdrant:latest (if needed)" 'Cyan'
+        docker pull qdrant/qdrant:latest | Out-Null
+        Write-Log "Starting Qdrant: $qdrantCmd" 'Cyan'
+        $qdrantRaw = docker run -d --rm --name $qdrantName -p "${QdrantPort}:6333" -p '6334:6334' qdrant/qdrant:latest 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Qdrant docker run failed (exit $LASTEXITCODE): $qdrantRaw" }
+        $qdrantId = Get-DockerContainerId $qdrantRaw
+        if (-not $qdrantId) { throw "Qdrant container id not parsed from: $qdrantRaw" }
+        Write-Log "Qdrant container: $qdrantId" 'Green'
+        if (-not (Wait-Tcp -HostName '127.0.0.1' -Port $QdrantPort -TimeoutSec 60)) {
+            throw "Qdrant port $QdrantPort not ready"
+        }
     }
 
     # --- optional Temporal (best-effort; activation-only pytest does not need a live server) ---
     $temporalReady = $false
     if (-not $SkipTemporal) {
         if (Test-Tcp -HostName '127.0.0.1' -Port $TemporalPort) {
-            Write-Log "Temporal port $TemporalPort already open — activation probe only (no worker)." 'Yellow'
+            Write-Log "Temporal port $TemporalPort already open — will start worker for full LIVE_START when possible." 'Yellow'
             $temporalReady = $true
             $temporalId = '(pre-existing-listener)'
         } else {
@@ -243,9 +247,38 @@ else:
     $env:TEMPORAL_HOST = "127.0.0.1:$TemporalPort"
     Remove-Item Env:RAG_V2_TEMPORAL_LIVE_WORKFLOW_ID -ErrorAction SilentlyContinue
 
+    $workerProc = $null
+    $workerOut = Join-Path $ProofDir "temporal-worker-$stamp.out.log"
+    $workerErr = Join-Path $ProofDir "temporal-worker-$stamp.err.log"
+    if (-not $SkipTemporal -and $temporalReady) {
+        Write-Log "Starting Temporal worker (RAG-05 full start_ingest proof)" 'Cyan'
+        $env:RAG_V2_TEMPORAL_LIVE_START = '1'
+        try {
+            $workerProc = Start-Process -FilePath $PythonExe -ArgumentList @(
+                '-m', 'rag_v2.adapters.temporal_worker'
+            ) -WorkingDirectory (Join-Path $ragRoot 'backend') -PassThru -NoNewWindow `
+                -RedirectStandardOutput $workerOut -RedirectStandardError $workerErr
+            Start-Sleep -Seconds 4
+            if ($workerProc.HasExited) {
+                Write-Log "Temporal worker exited early — falling back to activation-only" 'Yellow'
+                Get-Content -LiteralPath $workerErr -ErrorAction SilentlyContinue | Select-Object -Last 20 | ForEach-Object { Write-Log $_ 'Yellow' }
+                Remove-Item Env:RAG_V2_TEMPORAL_LIVE_START -ErrorAction SilentlyContinue
+                $workerProc = $null
+            } else {
+                Write-Log "Temporal worker pid=$($workerProc.Id)" 'Green'
+            }
+        } catch {
+            Write-Log "Temporal worker start failed: $($_.Exception.Message) — activation-only" 'Yellow'
+            Remove-Item Env:RAG_V2_TEMPORAL_LIVE_START -ErrorAction SilentlyContinue
+            $workerProc = $null
+        }
+    } else {
+        Remove-Item Env:RAG_V2_TEMPORAL_LIVE_START -ErrorAction SilentlyContinue
+    }
+
     Write-Log "ENV: RAG_V2_MINIO_LIVE=1 MINIO_ENDPOINT=$($env:MINIO_ENDPOINT) MINIO_BUCKET=rag-v2" 'Cyan'
     Write-Log "ENV: RAG_V2_QDRANT_LIVE=1 RAG_V2_QDRANT_URL=$($env:RAG_V2_QDRANT_URL)" 'Cyan'
-    Write-Log "ENV: RAG_V2_TEMPORAL_LIVE=1 RAG_V2_TEMPORAL_HOST=$($env:RAG_V2_TEMPORAL_HOST) (no LIVE_WORKFLOW_ID => activation-only)" 'Yellow'
+    Write-Log "ENV: RAG_V2_TEMPORAL_LIVE=1 RAG_V2_TEMPORAL_HOST=$($env:RAG_V2_TEMPORAL_HOST) LIVE_START=$($env:RAG_V2_TEMPORAL_LIVE_START)" 'Cyan'
 
     $pytestArgs = @(
         '-m', 'pytest',
@@ -275,8 +308,13 @@ else:
     elseif ($pytestText -match 'test_live_qdrant_upsert_search_fusion\s+FAILED') { $qdrantStatus = 'FAIL' }
 
     if ($pytestText -match 'test_live_temporal_start_ingest\s+PASSED') {
-        $temporalStatus = 'PASS_BOUNDED'
-        Write-Log "Temporal live: PASS_BOUNDED (activation-only; no worker/workflow mutation)." 'Yellow'
+        if ($env:RAG_V2_TEMPORAL_LIVE_START -and $env:RAG_V2_TEMPORAL_LIVE_START.ToLower() -in @('1','true','yes','on')) {
+            $temporalStatus = 'PASS'
+            Write-Log "Temporal live: PASS (worker + start_ingest)." 'Green'
+        } else {
+            $temporalStatus = 'PASS_BOUNDED'
+            Write-Log "Temporal live: PASS_BOUNDED (activation-only; no worker/workflow mutation)." 'Yellow'
+        }
     }
     elseif ($pytestText -match 'test_live_temporal_start_ingest\s+SKIPPED') { $temporalStatus = 'SKIPPED' }
     elseif ($pytestText -match 'test_live_temporal_start_ingest\s+FAILED') { $temporalStatus = 'FAIL' }
@@ -292,6 +330,10 @@ else:
     Write-Log "FATAL: $($_.Exception.Message)" 'Red'
     $gaps.Add("Fatal: $($_.Exception.Message)")
 } finally {
+    if ($workerProc -and -not $workerProc.HasExited) {
+        Write-Log "Stopping Temporal worker pid=$($workerProc.Id)" 'Cyan'
+        try { Stop-Process -Id $workerProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+    }
     Write-Log "Cleaning up ephemeral containers..." 'Cyan'
     foreach ($pair in @(
         @{id=$minioId; name='minio'},
