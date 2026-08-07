@@ -4,16 +4,22 @@ Status: **Typ B — root-owned workspace harness** (not an independent Git repos
 
 ## Role
 
-Cross-repo tooling: local stack sync/preflight/verify, session hooks, **`ai_os_task.py`** (checkpoint, ownership, gate, scoped commit), Codex/Claude hook adapters.
+Cross-repo tooling: local stack sync/preflight/verify, session hooks, **`ai_os_task.py`** (checkpoint, ownership, gate, scoped commit), Codex/Claude hook adapters, **E2E proof scripts**.
 
 See this directory’s README for the script catalog.
 
+Notable E2E harnesses:
+
+- `e2e_async_agent_chat.py` — Gate B async Agent Chat (Phase 6.2); track when committing `E2E-ASYNC-TRACK-01`
+- `e2e_full_flow.py` — broader stack flow; known PARTIAL vs spine 6.3 (`E2E-FULLFLOW-*`)
+- `preflight-local-stack.ps1` / `-FullStack` — Gate B preflight
+
 ## Owns / Must not
 
-| Owns | Must not |
-|------|----------|
+| Owns                                             | Must not                       |
+| ------------------------------------------------ | ------------------------------ |
 | Gate orchestration; task engine; path resolution | Case / RAG / HVAC domain logic |
-| Scoped commit / ownership guards | Secrets committed into Git |
+| Scoped commit / ownership guards                 | Secrets committed into Git     |
 
 ## Read first
 

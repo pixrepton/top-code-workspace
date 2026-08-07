@@ -11,6 +11,7 @@ Temporary request bodies and samples for local smoke/proof.
 - Ecosystem rules: `../AGENTS.md` (L1)
 - No secrets, tokens, customer data, or full mailbox dumps
 - Contents are **not** canonical documentation (`knowledge/` wins)
+- After 2026-08 knowledge sync: still Typ B scratch only — no Agent Chat / case fixtures here
 - Durable fixtures belong in the owning product repo’s tests
 - Most payload files should stay gitignored; commit only deliberate allowlisted files (e.g. this `AGENTS.md`)
 - Not a document store, RAG corpus, or case database

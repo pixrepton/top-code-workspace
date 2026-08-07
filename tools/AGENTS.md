@@ -13,6 +13,7 @@ Not the canonical source tree for gmail-agent tooling.
 3. Canonical gmail audit code lives in: `../gmail-agent/tools/gmail_audit/`
 4. **Do not write here** when the owning copy exists under `gmail-agent`.
 5. Cleanup of this shadow requires an explicit operator decision — do not “fix in silence”.
+6. Post-2026-08: new Node B surfaces (`agent_chat_jobs`, `operator_command_spine`, `correction_ledger`) live only under `gmail-agent/tools/gmail_audit/` — never mirror them here.
 
 ## Gate
 
