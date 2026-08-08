@@ -66,6 +66,8 @@ docker cp $Corpus "${Container}:/tmp/fresh38-sentinel/corpus-v2.json"
 
 # Hotfix product files into running API image (no rebuild) so capture sees current host SHA.
 $hotFiles = @(
+    'llm_provider_router.py',
+    'groq_client.py',
     'central_llm_stage.py',
     'understanding_output.py',
     'eval_understanding_judge.py',
