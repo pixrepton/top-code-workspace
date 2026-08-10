@@ -15,7 +15,10 @@ param(
     [string]$AttemptType = 'FIRST_ATTEMPT',
     [int]$AttemptNumber = 1,
     # Hard guarantee for a canonical frozen run: refuse every reuse, even a matching one.
-    [switch]$NoReuse
+    [switch]$NoReuse,
+    # SUT source root to fingerprint and hot-sync. Defaults to the real product tree; overridable
+    # so the fingerprint mechanism itself can be tested against a controlled tree.
+    [string]$SutSourceRoot = ''
 )
 
 $ErrorActionPreference = 'Continue'
@@ -31,7 +34,9 @@ if (-not $Corpus) {
     $Corpus = Join-Path $AuditDir 'tests\fixtures\measurement_contract_v1\corpus-v2.json'
 }
 if (-not $HarnessDir) {
-    $HarnessDir = Join-Path $Workspace '.artifacts\ai-os-post-stage6-fresh-baseline\harness'
+    # CL-03: the tracked canonical harness. Previously this defaulted into .artifacts\, which is
+    # gitignored, so the runner could not be reconstructed from a fresh checkout at all.
+    $HarnessDir = Join-Path $PSScriptRoot 'fresh38'
 }
 # Runner provenance (FIX-MEAS01): one canonical source, mechanically verified against a
 # tracked hash pin. The previous default preferred an opaque session-scratch copy and fell
@@ -96,9 +101,24 @@ if ($Provenance -and $Provenance.canonical_runner.sha256) {
         Log "      in the same commit as the harness change if this difference is intentional."
         exit 2
     }
-    Log "runner_provenance=VERIFIED sha256=$runnerSha"
+    Log "runner_provenance=VERIFIED sha256=$runnerSha path=$PatchedRunner"
 } else {
     Log "runner_provenance=UNPINNED sha256=$runnerSha"
+}
+
+# There must be exactly one canonical runner. A leftover copy that has drifted is reported
+# rather than left to be picked up by some other tool that still points at the old location.
+if ($Provenance -and $Provenance.deprecated_copies) {
+    foreach ($stale in $Provenance.deprecated_copies) {
+        $stalePath = [string]$stale.path
+        if (-not [System.IO.Path]::IsPathRooted($stalePath)) {
+            $stalePath = Join-Path $Workspace $stalePath
+        }
+        $staleSha = Get-Sha256 $stalePath
+        if ($staleSha -and $staleSha -ne $runnerSha -and $stale.path -like '*run_recovery_pf*') {
+            Log "WARN DEPRECATED_RUNNER_COPY_DIVERGED path=$($stale.path) sha256=$staleSha (canonical=$runnerSha)"
+        }
+    }
 }
 
 docker exec $Container sh -lc 'mkdir -p /tmp/fresh38-sentinel' | Out-Null
@@ -106,53 +126,60 @@ docker cp $PatchedRunner "${Container}:/tmp/fresh38-sentinel/run_recovery_pf.py"
 docker cp (Join-Path $HarnessDir 'scoring.py') "${Container}:/tmp/fresh38-sentinel/scoring.py"
 docker cp $Corpus "${Container}:/tmp/fresh38-sentinel/corpus-v2.json"
 
-# Hotfix product files into running API image (no rebuild) so capture sees current host SHA.
-$hotFiles = @(
-    'llm_deadline.py',
-    'llm_provider_router.py',
-    'groq_client.py',
-    'central_llm_stage.py',
-    'config.py',
-    'gmail_intake.py',
-    'signal_worker.py',
-    'daszek_client.py',
-    'signal_extractor.py',
-    'preclassifier.py',
-    'context_assembler.py',
-    'understanding_output.py',
-    'eval_understanding_judge.py',
-    'eval_planner_spine_handoff.py',
-    'intake_payload.py',
-    'agent_runtime/effective_tools.py',
-    'agent_runtime/envelope_presence.py',
-    'agent_runtime/known_fact_guard.py',
-    'agent_runtime/draft_sanity.py',
-    'agent_runtime/failure_taxonomy.py',
-    'agent_runtime/planner_run_budget.py',
-    'agent_runtime/graph.py',
-    'agent_runtime/openai_agent_client.py',
-    'agent_runtime/tools/handlers.py',
-    'agent_runtime/tool_result.py'
-)
+# ── SUT source set (CL-04) ──────────────────────────────────────────────────────────────
+# Derived, never hand-curated. A hand-maintained hot-sync list has a structural blind spot: a
+# product dependency that is not on the list can change the running code without changing the
+# manifest hash, which is exactly how the 21/38 run was contaminated. Adding "a few more files"
+# would not close the class -- only mechanical enumeration does.
+#
+# The set is every .py under the SUT source root, minus directories that are not executed
+# product code. Enumeration is deterministic: ordinal-sorted, forward-slash relative paths,
+# content hashes only -- no timestamps, no temp paths, no filesystem ordering.
+if (-not $SutSourceRoot) { $SutSourceRoot = $AuditDir }
+$SutSourceRoot = (Resolve-Path $SutSourceRoot).Path
+$SutExcludedDirs = @('tests', '__pycache__', 'runs', 'data', '.pytest_cache', 'scripts', '.venv')
+
+$sutFiles = Get-ChildItem -Path $SutSourceRoot -Recurse -File -Filter '*.py' |
+    ForEach-Object {
+        $rel = $_.FullName.Substring($SutSourceRoot.Length).TrimStart('\', '/') -replace '\\', '/'
+        [pscustomobject]@{ Rel = $rel; Full = $_.FullName }
+    } |
+    Where-Object {
+        $segments = $_.Rel.Split('/')
+        $dirSegments = $segments[0..([Math]::Max(0, $segments.Count - 2))]
+        if ($segments.Count -eq 1) { $dirSegments = @() }
+        -not ($dirSegments | Where-Object { $SutExcludedDirs -contains $_ })
+    } |
+    Sort-Object -Property @{ Expression = { $_.Rel }; Ascending = $true }
+
 $syncedHashes = [ordered]@{}
-$missingHotFiles = @()
-foreach ($name in $hotFiles) {
-    $src = Join-Path $AuditDir $name
-    if (Test-Path $src) {
-        $remote = "/app/tools/gmail_audit/$($name -replace '\\','/')"
-        docker exec $Container sh -lc "mkdir -p `$(dirname $remote)" | Out-Null
-        docker cp $src "${Container}:${remote}" | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            # A silently failed hot-sync is the original contamination mechanism: the manifest
-            # would record the host hash while the container still ran older code.
-            Log "ABORT hot-sync failed for $name (docker cp exit=$LASTEXITCODE)"
-            exit 2
-        }
-        $syncedHashes[$name] = Get-Sha256 $src
-        Log "synced $name"
-    } else {
-        $missingHotFiles += $name
+foreach ($f in $sutFiles) {
+    $syncedHashes[$f.Rel] = Get-Sha256 $f.Full
+}
+Log "sut_source_files=$($syncedHashes.Count) root=tools/gmail_audit excluded=$($SutExcludedDirs -join ',')"
+
+# Hotfix the whole SUT source set into the running container so the capture executes exactly the
+# code that was fingerprinted. Staged and copied in one `docker cp` rather than per file: 361
+# individual copies would be slow, and a partial failure mid-list is precisely the silent-drift
+# failure this section exists to remove.
+$stageDir = Join-Path ([System.IO.Path]::GetTempPath()) ("fresh38-sut-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
+try {
+    foreach ($f in $sutFiles) {
+        $dest = Join-Path $stageDir ($f.Rel -replace '/', '\')
+        $destParent = Split-Path $dest -Parent
+        if (-not (Test-Path $destParent)) { New-Item -ItemType Directory -Force -Path $destParent | Out-Null }
+        Copy-Item -LiteralPath $f.Full -Destination $dest -Force
     }
+    docker cp "$stageDir\." "${Container}:/app/tools/gmail_audit/" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        # A silently failed hot-sync is the original contamination mechanism: the manifest would
+        # record host hashes while the container still ran older code.
+        Log "ABORT SUT hot-sync failed (docker cp exit=$LASTEXITCODE)"
+        exit 2
+    }
+    Log "synced SUT source set ($($syncedHashes.Count) files) in one transfer"
+} finally {
+    Remove-Item -Recurse -Force $stageDir -ErrorAction SilentlyContinue
 }
 
 # ── Experiment manifest fingerprint (FIX-MEAS01) ────────────────────────────────────────
@@ -176,6 +203,8 @@ $fingerprintParts = [ordered]@{
     corpus_sha256   = Get-Sha256 $Corpus
     container_image = [string]$imageId
     mode            = $Mode
+    sut_source_root = 'gmail-agent/tools/gmail_audit'
+    sut_excluded    = $SutExcludedDirs
     product_files   = $syncedHashes
 }
 $fingerprintJson = $fingerprintParts | ConvertTo-Json -Depth 10 -Compress
@@ -197,16 +226,13 @@ $experimentManifest = [ordered]@{
     container                = $Container
     created_at               = (Get-Date).ToString('o')
     components               = $fingerprintParts
-    missing_hot_files        = $missingHotFiles
+    sut_source_file_count    = $syncedHashes.Count
 }
 ($experimentManifest | ConvertTo-Json -Depth 12) |
     Set-Content (Join-Path $OutDir 'experiment-manifest.json') -Encoding UTF8
 
 Log "experiment_manifest_hash=$ExperimentManifestHash"
-Log "product_files_synced=$($syncedHashes.Count) missing=$($missingHotFiles.Count)"
-if ($missingHotFiles.Count -gt 0) {
-    Log "WARN hot-sync list references files not present on host: $($missingHotFiles -join ',')"
-}
+Log "sut_source_files_fingerprinted=$($syncedHashes.Count)"
 
 # RECOVERY_ATTEMPT artifacts live in their own subtree so a later retry can never overwrite,
 # or be confused with, first-attempt reliability evidence.

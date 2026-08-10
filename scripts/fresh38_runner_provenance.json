@@ -1,34 +1,51 @@
 {
   "_comment": [
-    "Tracked provenance pin for the Fresh38 capture harness (AIOS-RUNTIME-RELIABILITY-01 / FIX-MEAS01).",
+    "Tracked provenance for the Fresh38 capture harness (AIOS-RUNTIME-RELIABILITY-01, CL-03).",
     "",
-    "Before this file, run_fresh38_case_batch.ps1 preferred an opaque session-scratch copy of the",
-    "runner (C:\\top-code-session-scratch\\exit2-fresh38-.../run_recovery_pf.PATCHED.py) and silently",
-    "fell back to the .artifacts harness. Both happened to be byte-identical, but nothing checked that,",
-    "so a canonical qualification run depended on a file no one could verify or reproduce.",
+    "History. The wrapper originally preferred an opaque session-scratch copy of the runner",
+    "(C:\\top-code-session-scratch\\exit2-fresh38-.../run_recovery_pf.PATCHED.py) and silently fell",
+    "back to a copy under .artifacts/. Both happened to be byte-identical, but nothing checked that,",
+    "so a canonical qualification run depended on a file nobody could verify. FIX-MEAS01 pinned the",
+    "identity here and made a mismatch abort the capture.",
     "",
-    "The .artifacts harness directory is now the single canonical source. It is deliberately gitignored",
-    "(/.artifacts/ in .gitignore) as a build/eval artifact area, so the bytes themselves are not tracked;",
-    "this file makes their identity tracked and mechanically verified at every capture instead. A hash",
-    "mismatch fails the capture rather than producing a silently different SUT.",
+    "CL-03 finishes the job. Hash pinning proved the runner had not changed, but the bytes still lived",
+    "only under .artifacts/, which is gitignored (/.artifacts/), so a fresh checkout could not",
+    "reconstruct the harness at all. The canonical source is now scripts/fresh38/, which is tracked.",
+    "A fresh clone contains the exact runner bytes, and the hashes below are verified against them at",
+    "every capture.",
     "",
-    "To intentionally change the harness: update the hash here in the same commit as the harness change,",
-    "and state why. Never edit this file to make a failing capture pass."
+    "There is exactly one canonical source. The .artifacts copy is a leftover runtime artifact: the",
+    "wrapper no longer reads it, and if it exists and differs from the tracked source the wrapper says",
+    "so in capture.log rather than letting the two drift unnoticed.",
+    "",
+    "To intentionally change the harness: edit scripts/fresh38/, update the hash here in the same",
+    "commit, and state why. Never edit this file to make a failing capture pass."
   ],
   "canonical_runner": {
-    "path": ".artifacts/ai-os-post-stage6-fresh-baseline/harness/run_recovery_pf.py",
+    "path": "scripts/fresh38/run_recovery_pf.py",
     "sha256": "8c2f3ddc8c5b31ecab5c0c9478485468a3945480f5c82bc0b4a65ef8f25abf13",
-    "provenance": "VALID_FROZEN_COMPAT",
-    "verified_identical_to": {
-      "path": "C:\\top-code-session-scratch\\exit2-fresh38-20260803T185704\\run_recovery_pf.PATCHED.py",
-      "sha256": "8c2f3ddc8c5b31ecab5c0c9478485468a3945480f5c82bc0b4a65ef8f25abf13",
-      "note": "deprecated scratch copy; no longer preferred by the wrapper, retained only as historical evidence"
-    }
+    "provenance": "TRACKED_CANONICAL",
+    "tracked_in_git": true,
+    "reproducible_from_fresh_checkout": true
   },
   "canonical_scoring": {
-    "path": ".artifacts/ai-os-post-stage6-fresh-baseline/harness/scoring.py",
-    "sha256": "68801d8fde54d0bf4c1c3d37e40f5602a975ff677c63ed1499263cc2f199dc15"
+    "path": "scripts/fresh38/scoring.py",
+    "sha256": "68801d8fde54d0bf4c1c3d37e40f5602a975ff677c63ed1499263cc2f199dc15",
+    "provenance": "TRACKED_CANONICAL",
+    "tracked_in_git": true
   },
-  "pinned_at_utc": "2026-08-10T05:20:00Z",
+  "deprecated_copies": [
+    {
+      "path": ".artifacts/ai-os-post-stage6-fresh-baseline/harness/run_recovery_pf.py",
+      "status": "NOT_CANONICAL",
+      "note": "gitignored runtime artifact, byte-identical at the time of the CL-03 migration; no longer read by the wrapper"
+    },
+    {
+      "path": "C:\\top-code-session-scratch\\exit2-fresh38-20260803T185704\\run_recovery_pf.PATCHED.py",
+      "status": "NOT_CANONICAL",
+      "note": "original session-scratch copy; retained only as historical evidence"
+    }
+  ],
+  "pinned_at_utc": "2026-08-10T17:20:00Z",
   "pinned_by_task": "AIOS-RUNTIME-RELIABILITY-01"
 }
