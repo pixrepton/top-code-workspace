@@ -74,6 +74,15 @@ Log "START cases=$($CaseIds -join ',') attempt=$AttemptType#$AttemptNumber"
 Log "runner=$PatchedRunner"
 Log "corpus=$Corpus"
 
+# docker must be usable before anything else. Without this check a missing docker on PATH
+# still produced an experiment manifest and a "synced" log line for every product file, while
+# nothing was actually copied into the container -- a capture that looks provisioned and is not.
+$null = & docker version --format '{{.Server.Version}}' 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Log "ABORT docker is not available on PATH; cannot provision or run a capture"
+    exit 2
+}
+
 $runnerSha = Get-Sha256 $PatchedRunner
 if (-not $runnerSha) {
     Log "ABORT runner not found: $PatchedRunner"
@@ -132,7 +141,13 @@ foreach ($name in $hotFiles) {
     if (Test-Path $src) {
         $remote = "/app/tools/gmail_audit/$($name -replace '\\','/')"
         docker exec $Container sh -lc "mkdir -p `$(dirname $remote)" | Out-Null
-        docker cp $src "${Container}:${remote}"
+        docker cp $src "${Container}:${remote}" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            # A silently failed hot-sync is the original contamination mechanism: the manifest
+            # would record the host hash while the container still ran older code.
+            Log "ABORT hot-sync failed for $name (docker cp exit=$LASTEXITCODE)"
+            exit 2
+        }
         $syncedHashes[$name] = Get-Sha256 $src
         Log "synced $name"
     } else {
@@ -147,7 +162,12 @@ foreach ($name in $hotFiles) {
 # Every artifact is now bound to the identity of the code that produced it, and reuse requires
 # an exact match.
 $imageId = (docker inspect --format '{{.Image}}' $Container 2>$null | Select-Object -First 1)
-if (-not $imageId) { $imageId = 'unknown' }
+if (-not $imageId) {
+    # The image id is part of the SUT identity; an 'unknown' placeholder would let two different
+    # runtimes share one manifest hash, which is exactly what this fingerprint exists to prevent.
+    Log "ABORT cannot resolve container image id for $Container"
+    exit 2
+}
 
 $fingerprintParts = [ordered]@{
     wrapper_sha256  = Get-Sha256 $PSCommandPath
