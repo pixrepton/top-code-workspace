@@ -24,10 +24,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+try:
+    from _gmail_agent_env import ensure_gmail_agent_env_file
+except Exception:  # pragma: no cover - fallback for copied standalone scripts
+    def ensure_gmail_agent_env_file() -> Path | None:
+        current = str(os.environ.get("GMAIL_AGENT_ENV_FILE") or "").strip()
+        if current:
+            return Path(current)
+        for parent in Path(__file__).resolve().parents:
+            candidate = parent / "gmail-agent" / ".env.local-vps"
+            if candidate.is_file():
+                os.environ["GMAIL_AGENT_ENV_FILE"] = str(candidate)
+                return candidate
+        return None
+
+ensure_gmail_agent_env_file()
 
 def _audit_dir() -> Path:
     """Resolve the gmail_audit package whether run from the repo or inside the runtime container."""
@@ -50,7 +71,11 @@ MAX_CALLS = 6
 MAX_TOTAL_COMPLETION_TOKENS = 20_000
 MAX_TOTAL_REASONING_TOKENS = 15_000
 MAX_SINGLE_CALL_REASONING_TOKENS = 6_000
-SMOKE_MAX_TOKENS = 8
+# The provider's thinking mode is enabled by default. A smoke budget that is too small can
+# legitimately spend all generated tokens on reasoning and still return HTTP 200 with empty final
+# `message.content`, which proves nothing about provider health. Keep this small, but high enough
+# that the smoke itself remains valid.
+SMOKE_MAX_TOKENS = 32
 ABORT_ERROR_CLASSES = {"quota_exhausted", "auth", "rate_limit", "model_unavailable"}
 
 
@@ -173,6 +198,61 @@ FIXTURE_LARGE = FIXTURE_SHORT + " " + (
 ) * 14
 
 
+def build_connectivity_smoke_request(model: str) -> dict[str, Any]:
+    """A tiny, deterministic text smoke that still leaves room for final answer tokens."""
+    return {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
+        "max_tokens": SMOKE_MAX_TOKENS,
+        # This smoke proves routing + usable final text, not reasoning quality. Disable thinking
+        # explicitly so a tiny budget cannot be spent entirely on reasoning_content.
+        "thinking": {"type": "disabled"},
+        "temperature": 0.0,
+        "stream": False,
+    }
+
+
+def summarize_chat_response(payload: dict[str, Any]) -> dict[str, Any]:
+    """Capture only safe response-shape evidence, never prompts or secret-bearing echoes."""
+    payload = payload or {}
+    choices = payload.get("choices")
+    first = choices[0] if isinstance(choices, list) and choices else {}
+    if not isinstance(first, dict):
+        first = {}
+    message = first.get("message")
+    if not isinstance(message, dict):
+        message = {}
+    content = message.get("content")
+    reasoning = message.get("reasoning_content")
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
+    completion_details = usage.get("completion_tokens_details")
+    if not isinstance(completion_details, dict):
+        completion_details = {}
+    error_field = payload.get("error")
+
+    return {
+        "response_json_shape": sorted(payload.keys()),
+        "returned_model": payload.get("model"),
+        "choices_count": len(choices) if isinstance(choices, list) else 0,
+        "finish_reason": first.get("finish_reason"),
+        "message_content_present": content is not None,
+        "message_content_type": type(content).__name__ if content is not None else "NoneType",
+        "message_content_len": len(content) if isinstance(content, str) else 0,
+        "reasoning_content_present": isinstance(reasoning, str) and bool(reasoning.strip()),
+        "reasoning_content_len": len(reasoning) if isinstance(reasoning, str) else 0,
+        "has_tool_calls": bool(message.get("tool_calls")),
+        "usage_prompt_tokens": usage.get("prompt_tokens"),
+        "usage_completion_tokens": usage.get("completion_tokens"),
+        "usage_total_tokens": usage.get("total_tokens"),
+        "usage_reasoning_tokens": completion_details.get("reasoning_tokens"),
+        "api_error_present": bool(error_field),
+        "api_error_fields": sorted(error_field.keys()) if isinstance(error_field, dict) else [],
+        "non_empty_usable_content": isinstance(content, str) and bool(content.strip()),
+    }
+
+
 def run(host: str, out_path: Path) -> int:
     import requests
     from config import load_settings
@@ -293,25 +373,27 @@ def run(host: str, out_path: Path) -> int:
     }
 
     # ── 1. connectivity smoke: exactly one tiny call ────────────────────────────────
-    smoke = post({
-        "model": resolved.model,
-        "messages": [{"role": "user", "content": "ping"}],
-        "max_tokens": SMOKE_MAX_TOKENS,
-    }, timeout=60)
+    smoke_request = build_connectivity_smoke_request(resolved.model)
+    smoke = post(smoke_request, timeout=60)
     smoke_body = smoke.get("json") or {}
-    smoke_choice = (smoke_body.get("choices") or [{}])[0]
-    smoke_msg = smoke_choice.get("message") or {}
+    smoke_summary = summarize_chat_response(smoke_body)
     smoke_usage = smoke_body.get("usage") or {}
     error_class = None if "transport_error" in smoke else classify_http(smoke.get("status", 0), smoke_body)
     report["smoke"] = {
+        "request": {
+            "endpoint": url,
+            "model": smoke_request["model"],
+            "message_count": len(smoke_request["messages"]),
+            "max_tokens": smoke_request["max_tokens"],
+            "temperature": smoke_request["temperature"],
+            "stream": smoke_request["stream"],
+        },
         "http": smoke.get("status"),
         "transport_error": smoke.get("transport_error"),
         "latency_ms": smoke.get("latency_ms"),
-        "model_echoed": smoke_body.get("model"),
-        "content_len": len(smoke_msg.get("content") or ""),
-        "finish_reason": smoke_choice.get("finish_reason"),
         "error_class": error_class,
         "error_message": error_detail(smoke_body)[:300],
+        **smoke_summary,
     }
     guard.record(
         completion=smoke_usage.get("completion_tokens") or 0,
@@ -327,7 +409,10 @@ def run(host: str, out_path: Path) -> int:
         if report["smoke"]["error_message"]:
             print(f"  host said: {report['smoke']['error_message']}")
         return 2
-    print(f"smoke OK  http=200 model={smoke_body.get('model')} latency={smoke.get('latency_ms')}ms")
+    print(
+        f"smoke OK  http=200 model={smoke_body.get('model')} latency={smoke.get('latency_ms')}ms "
+        f"content_len={report['smoke']['message_content_len']} finish={report['smoke']['finish_reason']!r}"
+    )
 
     # ── 2. bounded qualification ────────────────────────────────────────────────────
     for stage, model_cls, schema_name in build_cases():

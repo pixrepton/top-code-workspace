@@ -80,6 +80,7 @@ Usage (inside container):
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 import traceback
@@ -89,6 +90,26 @@ from typing import Any
 HARNESS_DIR = Path(__file__).resolve().parent
 if str(HARNESS_DIR) not in sys.path:
     sys.path.insert(0, str(HARNESS_DIR))
+SCRIPTS_DIR = HARNESS_DIR.parent
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+try:
+    from _gmail_agent_env import ensure_gmail_agent_env_file
+except Exception:  # pragma: no cover - fallback for copied standalone harnesses
+    def ensure_gmail_agent_env_file() -> Path | None:
+        current = str(os.environ.get("GMAIL_AGENT_ENV_FILE") or "").strip()
+        if current:
+            return Path(current)
+        for parent in Path(__file__).resolve().parents:
+            candidate = parent / "gmail-agent" / ".env.local-vps"
+            if candidate.is_file():
+                os.environ["GMAIL_AGENT_ENV_FILE"] = str(candidate)
+                return candidate
+        return None
+
+ensure_gmail_agent_env_file()
+
 from scoring import (  # noqa: E402
     SENTINEL_CASE_IDS,
     SKIP_LANES as _SKIP_LANES,

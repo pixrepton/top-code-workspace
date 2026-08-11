@@ -17,12 +17,15 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from qualify_deepseek_host import (  # noqa: E402
     MAX_CALLS,
+    SMOKE_MAX_TOKENS,
     MAX_SINGLE_CALL_REASONING_TOKENS,
     MAX_TOTAL_COMPLETION_TOKENS,
     MAX_TOTAL_REASONING_TOKENS,
+    build_connectivity_smoke_request,
     CostGuard,
     classify_http,
     error_detail,
+    summarize_chat_response,
 )
 
 
@@ -168,3 +171,63 @@ def test_model_unavailable_aborts_instead_of_burning_six_calls():
     guard.record(completion=0, reasoning=0, error_class="model_unavailable")
     assert guard.may_call() is False
     assert "model_unavailable" in guard.triggered
+
+
+def test_connectivity_smoke_request_is_deterministic_and_not_underbudgeted():
+    request = build_connectivity_smoke_request("deepseek-v4-flash")
+    assert request["model"] == "deepseek-v4-flash"
+    assert request["messages"] == [{"role": "user", "content": "Reply with exactly: OK"}]
+    assert request["max_tokens"] == SMOKE_MAX_TOKENS
+    assert request["max_tokens"] >= 16
+    assert request["thinking"] == {"type": "disabled"}
+    assert request["temperature"] == 0.0
+    assert request["stream"] is False
+
+
+def test_summarize_chat_response_records_safe_shape_for_reasoning_only_empty_content():
+    summary = summarize_chat_response(
+        {
+            "model": "deepseek-v4-flash",
+            "choices": [
+                {
+                    "finish_reason": "length",
+                    "message": {"content": "", "reasoning_content": "thinking"},
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 7,
+                "completion_tokens": 8,
+                "total_tokens": 15,
+                "completion_tokens_details": {"reasoning_tokens": 8},
+            },
+        }
+    )
+    assert summary["returned_model"] == "deepseek-v4-flash"
+    assert summary["choices_count"] == 1
+    assert summary["finish_reason"] == "length"
+    assert summary["message_content_present"] is True
+    assert summary["message_content_len"] == 0
+    assert summary["reasoning_content_present"] is True
+    assert summary["reasoning_content_len"] == len("thinking")
+    assert summary["usage_completion_tokens"] == 8
+    assert summary["usage_reasoning_tokens"] == 8
+    assert summary["non_empty_usable_content"] is False
+
+
+def test_summarize_chat_response_handles_non_empty_final_content():
+    summary = summarize_chat_response(
+        {
+            "model": "deepseek-v4-flash",
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": "OK", "reasoning_content": ""},
+                }
+            ],
+            "usage": {"prompt_tokens": 7, "completion_tokens": 2, "total_tokens": 9},
+        }
+    )
+    assert summary["message_content_type"] == "str"
+    assert summary["message_content_len"] == 2
+    assert summary["reasoning_content_present"] is False
+    assert summary["non_empty_usable_content"] is True
