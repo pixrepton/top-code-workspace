@@ -22,6 +22,7 @@ from qualify_deepseek_host import (  # noqa: E402
     MAX_TOTAL_REASONING_TOKENS,
     CostGuard,
     classify_http,
+    error_detail,
 )
 
 
@@ -111,3 +112,59 @@ def test_auth_and_rate_limit_statuses_are_classified():
 
 def test_success_has_no_error_class():
     assert classify_http(200, {}) is None
+
+
+# ── error-envelope parsing ──────────────────────────────────────────────────────────
+#
+# Regression cover for a real diagnostic failure. The NVIDIA NIM bridge qualification returned
+# HTTP 410 with a body that stated its own cause verbatim, but the qualifier reported
+# `error_message=""` because it only understood the OpenAI-style `{"error": {"message": ...}}`
+# envelope. NIM answers with RFC 7807 `application/problem+json`. The body below is the exact
+# response captured on 2026-08-11 — these tests replay it rather than re-spending a call.
+
+NIM_410_BODY = {
+    "type": "about:blank",
+    "title": "Gone",
+    "status": 410,
+    "detail": (
+        "The model 'deepseek-ai/deepseek-v4-flash' has reached its end of life on "
+        "2026-08-07T09:00:00Z and is no longer available."
+    ),
+}
+
+
+def test_rfc7807_detail_is_read_not_dropped():
+    assert "end of life" in error_detail(NIM_410_BODY)
+
+
+def test_openai_envelope_still_wins_when_present():
+    assert error_detail({"error": {"message": "Insufficient Balance"}, "detail": "ignored"}) == (
+        "Insufficient Balance"
+    )
+
+
+def test_missing_reason_yields_empty_string_not_an_exception():
+    assert error_detail({}) == ""
+    assert error_detail(None) == ""
+    assert error_detail({"error": "plain string form"}) == "plain string form"
+
+
+def test_retired_model_is_classified_as_model_unavailable():
+    """410 is a fact about the configured model id, not a transport fault."""
+    assert classify_http(410, NIM_410_BODY) == "model_unavailable"
+
+
+def test_end_of_life_wording_is_caught_on_other_statuses_too():
+    assert classify_http(400, {"detail": "model X is no longer available"}) == "model_unavailable"
+
+
+def test_404_distinguishes_a_missing_model_from_a_missing_route():
+    assert classify_http(404, {"detail": "model not found"}) == "model_unavailable"
+    assert classify_http(404, {}) == "not_found"
+
+
+def test_model_unavailable_aborts_instead_of_burning_six_calls():
+    guard = CostGuard()
+    guard.record(completion=0, reasoning=0, error_class="model_unavailable")
+    assert guard.may_call() is False
+    assert "model_unavailable" in guard.triggered

@@ -51,7 +51,7 @@ MAX_TOTAL_COMPLETION_TOKENS = 20_000
 MAX_TOTAL_REASONING_TOKENS = 15_000
 MAX_SINGLE_CALL_REASONING_TOKENS = 6_000
 SMOKE_MAX_TOKENS = 8
-ABORT_ERROR_CLASSES = {"quota_exhausted", "auth", "rate_limit"}
+ABORT_ERROR_CLASSES = {"quota_exhausted", "auth", "rate_limit", "model_unavailable"}
 
 
 class CostGuard:
@@ -102,18 +102,44 @@ class CostGuard:
         }
 
 
+def error_detail(body: dict[str, Any]) -> str:
+    """Extract the human-readable reason from either error envelope a host may use.
+
+    OpenAI-compatible hosts return `{"error": {"message": ...}}`. NVIDIA NIM returns RFC 7807
+    `application/problem+json`: `{"title": ..., "detail": ...}`. Reading only the first shape
+    turned a 410 that stated its own cause verbatim ("has reached its end of life on
+    2026-08-07") into an empty string, which is the worst possible diagnostic: a failure that
+    looks unexplained when the host in fact explained it.
+    """
+    body = body or {}
+    for candidate in (
+        ((body.get("error") or {}) if isinstance(body.get("error"), dict) else {}).get("message"),
+        body.get("detail"),
+        body.get("title"),
+        body.get("message"),
+        body.get("error") if isinstance(body.get("error"), str) else None,
+    ):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return ""
+
+
 def classify_http(status: int, body: dict[str, Any]) -> str | None:
     if status < 400:
         return None
-    message = str(((body or {}).get("error") or {}).get("message") or "").lower()
+    message = error_detail(body).lower()
     if status == 402 or "insufficient" in message or "credit" in message or "balance" in message:
         return "quota_exhausted"
     if status in (401, 403):
         return "auth"
     if status == 429:
         return "rate_limit"
+    # 410 Gone is how NIM reports a retired model id. That is a configuration fact about the
+    # requested model, not a transport fault, and repeating it 6 times buys nothing.
+    if status == 410 or "end of life" in message or "no longer available" in message:
+        return "model_unavailable"
     if status == 404:
-        return "not_found"
+        return "model_unavailable" if "model" in message else "not_found"
     if status >= 500:
         return "server_error"
     return "http_error"
@@ -212,6 +238,60 @@ def run(host: str, out_path: Path) -> int:
             payload = {}
         return {"status": response.status_code, "json": payload, "latency_ms": latency}
 
+    # ── 0. catalog preflight: free, no inference, no tokens ─────────────────────────
+    #
+    # `GET /models` is a listing, not a completion: it costs nothing. Checking it before the
+    # smoke means a retired or mistyped model id is named precisely instead of surfacing as an
+    # opaque HTTP error that has already consumed a call. Advisory by design — a host that does
+    # not expose a catalog simply falls through to the smoke, exactly as before.
+    catalog: list[str] = []
+    try:
+        listing = requests.get(url.rsplit("/chat/completions", 1)[0] + "/models", headers=headers, timeout=30)
+        if listing.status_code == 200:
+            catalog = sorted(
+                str(entry.get("id") or "")
+                for entry in (listing.json().get("data") or [])
+                if entry.get("id")
+            )
+    except Exception:  # noqa: BLE001 - preflight must never be the reason a run fails
+        catalog = []
+
+    if catalog and resolved.model not in catalog:
+        stem = resolved.model.rsplit("/", 1)[-1].split("-0")[0].lower()
+        related = [entry for entry in catalog if stem and stem in entry.lower()]
+        report["catalog_preflight"] = {
+            "checked": True,
+            "catalog_size": len(catalog),
+            "configured_model_present": False,
+            "related_ids_offered_by_host": related,
+        }
+        report["verdict"] = "BLOCKED_OPERATOR_ACTION"
+        report["blocker"] = {
+            "reason": "model_not_offered_by_host",
+            "detail": (
+                f"{resolved.host} does not list {resolved.model!r} in its catalog "
+                f"({len(catalog)} models). No inference call was attempted."
+            ),
+            "operator_decision_required": (
+                "Selecting a different model id changes provider AND model at once, which is the "
+                "one thing this bridge exists to avoid. Any substitution is an operator decision, "
+                "not an automatic fallback."
+            ),
+            "related_ids_offered_by_host": related,
+        }
+        report["cost_guard"] = guard.as_dict()
+        out_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"BLOCKED_OPERATOR_ACTION: host does not offer {resolved.model!r}.")
+        print(f"  related ids it does offer: {related or '(none)'}")
+        print("No inference call was made; nothing was spent.")
+        return 3
+
+    report["catalog_preflight"] = {
+        "checked": bool(catalog),
+        "catalog_size": len(catalog),
+        "configured_model_present": bool(catalog) or None,
+    }
+
     # ── 1. connectivity smoke: exactly one tiny call ────────────────────────────────
     smoke = post({
         "model": resolved.model,
@@ -231,7 +311,7 @@ def run(host: str, out_path: Path) -> int:
         "content_len": len(smoke_msg.get("content") or ""),
         "finish_reason": smoke_choice.get("finish_reason"),
         "error_class": error_class,
-        "error_message": str(((smoke_body or {}).get("error") or {}).get("message") or "")[:200],
+        "error_message": error_detail(smoke_body)[:300],
     }
     guard.record(
         completion=smoke_usage.get("completion_tokens") or 0,
@@ -243,7 +323,9 @@ def run(host: str, out_path: Path) -> int:
         report["verdict"] = "FAIL"
         report["cost_guard"] = guard.as_dict()
         out_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"SMOKE FAILED: http={smoke.get('status')} error_class={error_class} — stopping before qualification.")
+        print(f"SMOKE FAILED: http={smoke.get('status')} error_class={error_class} - stopping before qualification.")
+        if report["smoke"]["error_message"]:
+            print(f"  host said: {report['smoke']['error_message']}")
         return 2
     print(f"smoke OK  http=200 model={smoke_body.get('model')} latency={smoke.get('latency_ms')}ms")
 
