@@ -175,11 +175,19 @@ def run(host: str, out_path: Path) -> int:
     }
 
     if not resolved.configured:
+        missing_model = not resolved.model
         report["verdict"] = "BLOCKED_OPERATOR_ACTION"
         report["blocker"] = {
-            "reason": "credential_not_configured",
+            "reason": "model_not_configured" if missing_model else "credential_not_configured",
             "env_var": resolved.missing_config,
-            "detail": f"{resolved.host} has no usable credential; no call was attempted.",
+            "detail": (
+                f"{resolved.host} is not fully configured ({resolved.missing_config}); "
+                "no call was attempted."
+            ),
+            "model_policy": (
+                "DEEPSEEK_NVIDIA_MODEL is explicit-only: no default and no NVIDIA_MODEL fallback. "
+                "The bridge must preserve the logical model identity while changing only the host."
+            ) if resolved.host == "deepseek_nvidia" else None,
         }
         out_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"BLOCKED_OPERATOR_ACTION: {resolved.missing_config} is not configured for {resolved.host}")
