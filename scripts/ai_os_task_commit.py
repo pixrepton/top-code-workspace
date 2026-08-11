@@ -56,6 +56,9 @@ def _secret_path_issue(path: str) -> str:
     normalized = normalize_rel(path)
     if normalized.lower().endswith((".env.example", ".env.sample", ".env.template")):
         return ""
+    name = Path(normalized).name.lower()
+    if name.startswith(".env.") and name.endswith(".example"):
+        return ""
     for pattern in SECRET_PATH_PATTERNS:
         if pattern.search(normalized):
             return f"sensitive path: {normalized}"

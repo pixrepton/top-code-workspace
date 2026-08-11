@@ -203,13 +203,35 @@ def test_secret_pattern_blocks_commit(git_control_repo):
     name, repo, env = git_control_repo
     start(git_control_repo)
     branch(git_control_repo)
-    (repo / "task.txt").write_text("token=ghp_abcdefghijklmnopqrstuvwxyz123456\n", encoding="utf-8")
+    fake_token = "ghp_" + "a" * 30
+    (repo / "task.txt").write_text(f"token={fake_token}\n", encoding="utf-8")
     gate(git_control_repo)
     proc = run_cmd(["task-commit-plan", "--repo", name, "--json"], env=env, check=False)
     result = json.loads(proc.stdout)
     assert proc.returncode == 1
     assert result["verdict"] == "BLOCKED"
     assert any("GitHub token" in reason for reason in result["reasons"])
+
+
+def test_env_example_suffix_is_allowed_but_real_env_is_blocked(git_control_repo):
+    name, repo, env = git_control_repo
+    start(git_control_repo)
+    branch(git_control_repo)
+
+    example_path = repo / ".env.local-vps.example"
+    example_path.write_text("DEEPSEEK_API_KEY=<set in local env>\n", encoding="utf-8")
+    run_cmd(["task-checkpoint", "--status", "IN_PROGRESS"], env=env)
+    gate(git_control_repo)
+    proc = run_cmd(["task-commit-plan", "--repo", name, "--json"], env=env)
+    assert json.loads(proc.stdout)["verdict"] == "COMMIT_READY"
+
+    real_env_path = repo / ".env.local-vps"
+    real_env_path.write_text("DEEPSEEK_API_KEY=<set in local env>\n", encoding="utf-8")
+    proc = run_cmd(["task-commit-plan", "--repo", name, "--json"], env=env, check=False)
+    result = json.loads(proc.stdout)
+    assert proc.returncode == 1
+    assert result["verdict"] == "BLOCKED"
+    assert any("sensitive path: .env.local-vps" in reason for reason in result["reasons"])
 
 
 def test_write_guard_requires_scope_and_task_branch(git_control_repo):
