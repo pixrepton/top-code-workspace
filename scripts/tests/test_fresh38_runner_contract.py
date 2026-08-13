@@ -82,3 +82,44 @@ def test_atomic_capture_writer_rejects_missing_terminal_state(tmp_path):
     else:
         raise AssertionError("missing terminal state was accepted")
     assert not out.exists()
+
+
+def test_current_floor_heating_signal_is_preserved_as_context_fact():
+    rows = runner._current_fact_rows(
+        {
+            "floor_heating_existing": True,
+            "floor_heating_scope": "parter",
+        },
+        case_id="FU-07",
+        current_signal_id="fresh38-FU-07-current",
+    )
+
+    by_key = {row["fact_key"]: row for row in rows}
+    assert by_key["floor_heating_existing"]["normalized_value"] == "True"
+    assert by_key["floor_heating_scope"]["normalized_value"] == "parter"
+    assert all(row["source_ref"] == "fresh38-FU-07-current" for row in rows)
+
+
+def test_current_message_fact_supersedes_different_prior_value_in_context_pack():
+    pack = runner._corpus_context_pack(
+        {
+            "id": "FU-07",
+            "prior_context": {
+                "case_summary_pl": "Wycena zakladala brak ogrzewania podlogowego.",
+                "prior_facts": {"floor_heating_existing": False},
+            },
+            "input": {},
+        },
+        {
+            "floor_heating_existing": True,
+            "floor_heating_scope": "parter",
+        },
+    )
+
+    active_by_key = {row["fact_key"]: row for row in pack["active_facts"]}
+    assert active_by_key["floor_heating_existing"]["normalized_value"] == "True"
+    assert active_by_key["floor_heating_existing"]["source_ref"] == "case_recovery_FU-07_current"
+    assert not any(
+        row.get("fact_key") == "floor_heating_existing"
+        for row in pack["conflicting_facts"]
+    )

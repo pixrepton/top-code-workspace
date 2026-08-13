@@ -23,7 +23,7 @@
   ],
   "canonical_runner": {
     "path": "scripts/fresh38/run_recovery_pf.py",
-    "sha256": "c1490e79b9d41359a45121e2ddfca0c48d976b8dfea2a9e98df47610ccbc3b22",
+    "sha256": "fe66fbbbc1f010f44be4d632ca59c432d85be830968b240844ec6631a8b77671",
     "provenance": "TRACKED_CANONICAL",
     "tracked_in_git": true,
     "reproducible_from_fresh_checkout": true
@@ -46,6 +46,6 @@
       "note": "original session-scratch copy; retained only as historical evidence"
     }
   ],
-  "pinned_at_utc": "2026-08-11T15:22:50Z",
-  "pinned_by_task": "AIOS-RUNTIME-RELIABILITY-01"
+  "pinned_at_utc": "2026-08-13T17:14:45Z",
+  "pinned_by_task": "FRESH38-CAPTURE-SCHEMA-PARITY-01"
 }

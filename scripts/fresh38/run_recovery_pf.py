@@ -620,6 +620,7 @@ def run_extraction(settings, snapshot: dict) -> dict:
 _CURRENT_FACT_KEYS = (
     "heated_area_m2", "budget_pln_estimated", "current_heating_source",
     "building_type", "construction_year", "raw_geographic_signal",
+    "floor_heating_existing", "floor_heating_scope",
 )
 
 
@@ -721,11 +722,23 @@ def _corpus_context_pack(case: dict, extraction: dict | None = None) -> dict | N
                 "source_kind": "attachment",
                 "source_ref": f"{case_id}_att_{i}",
             })
-    # WAVE-2 PARITY: merge current-message extracted facts and run the REAL production
-    # conflict splitter so the pack reflects prior+current+conflicts like production.
+    # WAVE-2 PARITY: production's replace_message_facts supersedes a different
+    # active value from an older message before the context pack is projected.
+    # Reproduce that write-path edge before running the real conflict splitter.
     current_signal_id = f"{case_id}_current"
     current_rows = _current_fact_rows(extraction or {}, case_id, current_signal_id)
     conflicting_facts: list[dict] = []
+    current_values = {
+        (str(row.get("entity_scope") or "case"), str(row.get("fact_key") or "")):
+            str(row.get("normalized_value") or "").strip()
+        for row in current_rows
+    }
+    for index, fact in enumerate(active_facts):
+        identity = (str(fact.get("entity_scope") or "case"), str(fact.get("fact_key") or ""))
+        current_value = current_values.get(identity)
+        prior_value = str(fact.get("normalized_value") or "").strip()
+        if current_value is not None and current_value != prior_value:
+            active_facts[index] = {**fact, "status": "superseded"}
     combined = active_facts + current_rows
     if current_rows:
         try:
