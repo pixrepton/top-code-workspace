@@ -17,6 +17,19 @@ from pathlib import Path
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)#]+)(?:#[^)]+)?\)")
 
+# This workspace cites canonical routes as backticked paths far more often than as
+# markdown links (e.g. `knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`).
+# LINK_RE alone therefore reported broken=0 while six canonical routes were dead.
+BACKTICK_PATH_RE = re.compile(
+    r"`([A-Za-z0-9_.\-/]+\.(?:md|mdc|ya?ml|py|ps1|json|rules))`"
+)
+
+# Fenced blocks hold commands and illustrative paths, not routing claims.
+CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+
+# Illustrative or templated citations are not routing claims either.
+PLACEHOLDER_MARKERS = ("path/to/", "...", "<", ">", "*", "{", "}", "$", "|")
+
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 
 SCOPE_PREFIXES: dict[str, list[str]] = {
@@ -73,8 +86,54 @@ def classify_missing(target: str) -> str:
     if normalized.startswith("http") or "://" in normalized:
         return "external"
     if normalized.startswith("gmail-agent/") or normalized.startswith("knowledge/"):
-        return "cross_repo"
+        # "cross_repo" excuses a missing target, so it may only apply when the
+        # repository genuinely is not checked out here. When the repo IS present,
+        # a missing file is a dead route and must fail. Without this guard the
+        # audit silently forgave every dead knowledge/... route.
+        repo = normalized.split("/", 1)[0]
+        if not (WORKSPACE_ROOT / repo).is_dir():
+            return "cross_repo"
+        return "unresolved_missing"
     return "unresolved_missing"
+
+
+def _resolve_relative(rel_path: str, raw: str) -> str:
+    return os.path.normpath(os.path.join(os.path.dirname(rel_path), raw)).replace("\\", "/")
+
+
+def scan_backtick_paths(root: Path, rel_path: str, text: str, known: set[str]) -> list[Finding]:
+    """Audit backticked path citations, the dominant routing form in this workspace.
+
+    A backticked path may be written relative to the citing document
+    (`../knowledge/...`) or relative to the workspace root
+    (`knowledge/system-atlas/...`). Either resolution counts as valid; only a
+    citation that resolves to nothing is a dead route.
+    """
+    findings: list[Finding] = []
+    prose = CODE_FENCE_RE.sub("", text)
+    seen: set[str] = set()
+    for match in BACKTICK_PATH_RE.finditer(prose):
+        raw = match.group(1).strip()
+        if raw in seen:
+            continue
+        seen.add(raw)
+        if any(marker in raw for marker in PLACEHOLDER_MARKERS):
+            continue
+        # A bare filename (`SKILL.md`, `world-state.yaml`) is a name mentioned in
+        # prose, not a route. Only citations carrying a path are routing claims.
+        if "/" not in raw:
+            continue
+        relative = _resolve_relative(rel_path, raw)
+        # Must strip the "./" prefix, not the character set: str.lstrip("./")
+        # would turn ".cursor/rules/x.mdc" into "cursor/rules/x.mdc".
+        root_relative = raw[2:] if raw.startswith("./") else raw
+        if relative in known or root_relative in known:
+            findings.append(Finding(rel_path, raw, "local"))
+        elif (root / relative).is_file() or (root / root_relative).is_file():
+            findings.append(Finding(rel_path, raw, "local_abs"))
+        else:
+            findings.append(Finding(rel_path, raw, classify_missing(raw)))
+    return findings
 
 
 def scan_links(root: Path, rel_path: str, known: set[str]) -> list[Finding]:
@@ -87,13 +146,14 @@ def scan_links(root: Path, rel_path: str, known: set[str]) -> list[Finding]:
         raw = match.group(1).strip()
         if not raw or "://" in raw or raw.startswith("mailto:"):
             continue
-        resolved = os.path.normpath(os.path.join(os.path.dirname(rel_path), raw)).replace("\\", "/")
+        resolved = _resolve_relative(rel_path, raw)
         if resolved in known:
             findings.append(Finding(rel_path, raw, "local"))
         elif (root / resolved).is_file():
             findings.append(Finding(rel_path, raw, "local_abs"))
         else:
             findings.append(Finding(rel_path, raw, classify_missing(raw)))
+    findings.extend(scan_backtick_paths(root, rel_path, text, known))
     return findings
 
 
