@@ -35,20 +35,54 @@ try {
     # before ever seeing the arguments.
     @'
 @echo off
-if "%~1"=="inspect" (echo sha256:stubimage0001& exit /b 0)
+if "%~1"=="inspect" goto :inspect
+if "%~1"=="events" goto :events
+if "%~1"=="exec" goto :exec
 if "%~1"=="cp" goto :cp
+exit /b 0
+:inspect
+if "%~2"=="--format" (echo sha256:stubimage0001& exit /b 0)
+echo [{"ID":"reuseexec001","Running":false,"ExitCode":0,"Pid":4242,"ProcessConfig":{"entrypoint":"python","arguments":["-u","run_recovery_pf.py"]},"ContainerID":"stub-container-id"}]
+exit /b 0
+:events
+echo {"Type":"container","Action":"exec_create: python -u run_recovery_pf.py production_faithful corpus-v2.json %F38_REMOTE_PATH% STUB-01","Actor":{"ID":"stub-container-id","Attributes":{"execID":"reuseexec001","name":"stub-container","image":"stub-image"}},"time":1780000001,"timeNano":1780000001000000001}
+echo {"Type":"container","Action":"exec_start: python -u run_recovery_pf.py production_faithful corpus-v2.json %F38_REMOTE_PATH% STUB-01","Actor":{"ID":"stub-container-id","Attributes":{"execID":"reuseexec001","name":"stub-container","image":"stub-image"}},"time":1780000001,"timeNano":1780000001000000002}
+echo {"Type":"container","Action":"exec_die","Actor":{"ID":"stub-container-id","Attributes":{"execID":"reuseexec001","exitCode":"0","name":"stub-container","image":"stub-image"}},"time":1780000002,"timeNano":1780000002000000001}
+exit /b 0
+:exec
+echo %* | findstr /c:"run_recovery_pf.py" >nul
+if not errorlevel 1 (
+  1>&2 echo [fresh38-lifecycle] {"event":"runner_start","attempt_id":"%F38_ATTEMPT_ID%","pid":321,"runner":{"pid":321,"ppid":1,"proc_start_ticks":999,"cmdline":"python -u run_recovery_pf.py"}}
+  exit /b 0
+)
+echo %* | findstr /c:"python -" >nul
+if not errorlevel 1 (
+  echo {"probe_time_utc":"2026-08-12T00:00:00Z","attempt_id":"%F38_ATTEMPT_ID%","remote_path":"%F38_REMOTE_PATH%","runner_pid_requested":"321","runner_start_ticks_requested":"999","runner_pid_info":{"pid":"321","exists":false},"attempt_processes":[],"ownership":{"original_runner_alive":false,"attempt_process_count":0,"closed":true},"artifact":{"path":"%F38_REMOTE_PATH%","exists":true,"size":128,"valid_json":true,"attempt_id":"%F38_ATTEMPT_ID%","case_id":"STUB-01","stage_reached":"full"}}
+  exit /b 0
+)
 exit /b 0
 :cp
 set "SRC=%~2"
 set "DST=%~3"
 rem A Windows source path (C:\...) is a push into the container: nothing to do.
 if "%SRC:~1,1%"==":" exit /b 0
+echo %SRC% | findstr /c:"stdout.txt" >nul
+if not errorlevel 1 (
+  > "%DST%" echo === STUB-01 mode=production_faithful ===
+  exit /b 0
+)
+echo %SRC% | findstr /c:"stderr.txt" >nul
+if not errorlevel 1 (
+  > "%DST%" echo [fresh38-lifecycle] {"event":"runner_start","attempt_id":"%F38_ATTEMPT_ID%","pid":321,"runner":{"pid":321,"ppid":1,"proc_start_ticks":999,"cmdline":"python -u run_recovery_pf.py"}}
+  exit /b 0
+)
 rem Otherwise this is a pull from the container: synthesize a valid one-CASE artifact.
-> "%DST%" echo {"cases":[{"case_id":"STUB-01","valid":true}]}
+> "%DST%" echo {"measurement_attempt":{"attempt_id":"%F38_ATTEMPT_ID%","artifact_path":"%F38_REMOTE_PATH%"},"cases":[{"id":"STUB-01","stage_reached":"full","valid":true}]}
 exit /b 0
 '@ | Set-Content -Path (Join-Path $shimDir 'docker.bat') -Encoding ASCII
 
     $env:PATH = "$shimDir;$env:PATH"
+    $env:FRESH38_EXEC_CHANNEL = 'docker_cli'
 
     # ── fixtures ───────────────────────────────────────────────────────────────────────
     $harness = Join-Path $root 'harness'
@@ -58,7 +92,7 @@ exit /b 0
     # The runner must be the real canonical one: the wrapper verifies it against the tracked
     # provenance pin before doing anything. It is never executed here (docker is stubbed), so
     # this exercises the provenance check without running a real capture.
-    $canonicalRunner = Join-Path $Workspace '.artifacts\ai-os-post-stage6-fresh-baseline\harness\run_recovery_pf.py'
+    $canonicalRunner = Join-Path $Workspace 'scripts\fresh38\run_recovery_pf.py'
     if (-not (Test-Path $canonicalRunner)) {
         Write-Host "SKIP: canonical runner not present at $canonicalRunner" -ForegroundColor Yellow
         exit 0
@@ -73,6 +107,8 @@ exit /b 0
 
     function Invoke-Wrapper([string[]]$extra, [string]$runner = '') {
         if (-not $runner) { $runner = $canonicalRunner }
+        $env:F38_REMOTE_PATH = "/tmp/fresh38-sentinel/reusegate/STUB-01/one-STUB-01.json"
+        $env:F38_ATTEMPT_ID = 'reusegate'
         $argList = @(
             '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Wrapper,
             '-CaseIds', 'STUB-01',
@@ -80,7 +116,8 @@ exit /b 0
             '-Corpus', $corpus,
             '-HarnessDir', $harness,
             '-PatchedRunner', $runner,
-            '-Container', 'stub-container'
+            '-Container', 'stub-container',
+            '-AttemptId', 'reusegate'
         ) + $extra
         $out = & powershell @argList 2>&1 | Out-String
         return $out
@@ -99,6 +136,7 @@ exit /b 0
     $sidecar = Get-Content (Join-Path $outDir 'one-STUB-01.manifest.json') -Raw | ConvertFrom-Json
     Check ($sidecar.attempt_type -eq 'FIRST_ATTEMPT') 'sidecar records attempt_type=FIRST_ATTEMPT'
     Check ($sidecar.attempt_number -eq 1) 'sidecar records attempt_number'
+    Check ($sidecar.measurement_qualification -eq 'QUALIFIED') 'sidecar records measurement_qualification=QUALIFIED'
     Check ([bool]$sidecar.artifact_sha256) 'sidecar records the artifact hash'
 
     Write-Host "`n[2/5] unchanged SUT is allowed to reuse"
@@ -131,6 +169,9 @@ exit /b 0
 }
 finally {
     Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+    Remove-Item Env:F38_REMOTE_PATH -ErrorAction SilentlyContinue
+    Remove-Item Env:F38_ATTEMPT_ID -ErrorAction SilentlyContinue
+    Remove-Item Env:FRESH38_EXEC_CHANNEL -ErrorAction SilentlyContinue
 }
 
 Write-Host ''

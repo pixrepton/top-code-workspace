@@ -23,7 +23,7 @@
   ],
   "canonical_runner": {
     "path": "scripts/fresh38/run_recovery_pf.py",
-    "sha256": "351b1850c7a3b5175129bc3aa715e631f793a34985bceabe6f3755ff4feb1e9d",
+    "sha256": "c1490e79b9d41359a45121e2ddfca0c48d976b8dfea2a9e98df47610ccbc3b22",
     "provenance": "TRACKED_CANONICAL",
     "tracked_in_git": true,
     "reproducible_from_fresh_checkout": true

@@ -82,6 +82,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -164,6 +165,210 @@ class HarnessParityError(RuntimeError):
     A component_isolated run may stub; production_faithful must not."""
 
 
+class HarnessCaptureContractError(RuntimeError):
+    """Raised when the runner cannot prove its canonical terminal artifact."""
+
+
+def _read_proc_text(path: str) -> str:
+    try:
+        return Path(path).read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="replace").strip()
+    except Exception:
+        return ""
+
+
+def _runner_process_identity() -> dict[str, Any]:
+    pid = os.getpid()
+    stat = _read_proc_text(f"/proc/{pid}/stat")
+    start_ticks = None
+    if stat:
+        parts = stat.split()
+        if len(parts) > 21:
+            try:
+                start_ticks = int(parts[21])
+            except ValueError:
+                start_ticks = None
+    return {
+        "pid": pid,
+        "ppid": os.getppid() if hasattr(os, "getppid") else None,
+        "cmdline": _read_proc_text(f"/proc/{pid}/cmdline"),
+        "proc_start_ticks": start_ticks,
+        "cwd": str(Path.cwd()),
+    }
+
+
+def _child_process_snapshot() -> list[dict[str, Any]]:
+    parent = os.getpid()
+    children: list[dict[str, Any]] = []
+    proc_root = Path("/proc")
+    if not proc_root.exists():
+        return children
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit():
+            continue
+        stat = _read_proc_text(str(entry / "stat"))
+        if not stat:
+            continue
+        parts = stat.split()
+        if len(parts) <= 3:
+            continue
+        try:
+            ppid = int(parts[3])
+        except ValueError:
+            continue
+        if ppid != parent:
+            continue
+        children.append(
+            {
+                "pid": int(entry.name),
+                "ppid": ppid,
+                "cmdline": _read_proc_text(str(entry / "cmdline")),
+                "proc_start_ticks": int(parts[21]) if len(parts) > 21 and parts[21].isdigit() else None,
+            }
+        )
+    return children
+
+
+def _measurement_attempt() -> dict[str, Any]:
+    return {
+        "attempt_id": str(os.environ.get("FRESH38_ATTEMPT_ID") or "").strip(),
+        "artifact_path": str(os.environ.get("FRESH38_ARTIFACT_PATH") or "").strip(),
+        "runner": _runner_process_identity(),
+    }
+
+
+def _lifecycle_diag_enabled(case_id: str | None = None) -> bool:
+    target = str(os.environ.get("FRESH38_LIFECYCLE_DIAG_CASE") or "").strip()
+    if target and case_id and target != case_id:
+        return False
+    return str(os.environ.get("FRESH38_LIFECYCLE_DIAG") or "").strip() == "1"
+
+
+def _thread_snapshot() -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for thread in threading.enumerate():
+        items.append(
+            {
+                "name": thread.name,
+                "ident": thread.ident,
+                "daemon": thread.daemon,
+                "alive": thread.is_alive(),
+            }
+        )
+    return items
+
+
+def _lifecycle_diag(event: str, case_id: str | None = None, **fields: Any) -> None:
+    if not _lifecycle_diag_enabled(case_id):
+        return
+    payload = {
+        "event": event,
+        "case_id": case_id,
+        "attempt_id": str(os.environ.get("FRESH38_ATTEMPT_ID") or "").strip(),
+        "pid": os.getpid(),
+        "ppid": os.getppid() if hasattr(os, "getppid") else None,
+        "monotonic_s": round(time.monotonic(), 6),
+        "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        **fields,
+    }
+    print("[fresh38-lifecycle] " + json.dumps(payload, ensure_ascii=False, default=str), file=sys.stderr, flush=True)
+
+
+def _capture_contract_errors(payload: dict[str, Any], expected_case_ids: list[str] | None = None) -> list[str]:
+    errors: list[str] = []
+    expected_attempt = str(os.environ.get("FRESH38_ATTEMPT_ID") or "").strip()
+    if expected_attempt:
+        measurement = payload.get("measurement_attempt")
+        if not isinstance(measurement, dict) or measurement.get("attempt_id") != expected_attempt:
+            errors.append("attempt_id_mismatch")
+    cases = payload.get("cases")
+    if not isinstance(cases, list):
+        return ["missing_cases_list"]
+    if expected_case_ids is not None:
+        actual_ids = [str((case or {}).get("id") or (case or {}).get("case_id") or "") for case in cases]
+        if actual_ids != expected_case_ids:
+            errors.append(f"case_ids_mismatch expected={expected_case_ids} actual={actual_ids}")
+    for idx, case in enumerate(cases):
+        if not isinstance(case, dict):
+            errors.append(f"case_{idx}_not_object")
+            continue
+        case_id = str(case.get("id") or case.get("case_id") or "")
+        if not case_id:
+            errors.append(f"case_{idx}_missing_case_id")
+        if not str(case.get("stage_reached") or ""):
+            errors.append(f"{case_id or idx}_missing_terminal_state")
+        if case.get("parity_error"):
+            errors.append(f"{case_id or idx}_parity_error={case.get('parity_error')}")
+    return errors
+
+
+def write_canonical_capture_artifact(
+    out_path: Path,
+    payload: dict[str, Any],
+    *,
+    expected_case_ids: list[str] | None = None,
+) -> None:
+    """Atomically materialize and validate the terminal capture before exit 0 is possible."""
+    errors = _capture_contract_errors(payload, expected_case_ids)
+    if errors:
+        raise HarnessCaptureContractError("; ".join(errors))
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = out_path.with_name(f".{out_path.name}.{os.getpid()}.{time.monotonic_ns()}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8", newline="\n") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2, default=str)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, out_path)
+        try:
+            dir_fd = os.open(str(out_path.parent), os.O_RDONLY)
+        except OSError:
+            dir_fd = None
+        if dir_fd is not None:
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+
+    try:
+        parsed = json.loads(out_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HarnessCaptureContractError(f"artifact_reopen_failed: {type(exc).__name__}: {exc}") from exc
+    errors = _capture_contract_errors(parsed, expected_case_ids)
+    if errors:
+        raise HarnessCaptureContractError("artifact_reopen_invalid: " + "; ".join(errors))
+
+
+def _shutdown_planner_engine(engine: Any, case_id: str) -> None:
+    """Runner-owned lifecycle boundary for AgentGraphEngine resources."""
+    pool = getattr(engine, "_timeout_pool", None)
+    _lifecycle_diag(
+        "planner_engine_shutdown_start",
+        case_id,
+        has_timeout_pool=pool is not None,
+        threads=_thread_snapshot(),
+        children=_child_process_snapshot(),
+    )
+    if pool is not None and hasattr(pool, "shutdown"):
+        pool.shutdown(wait=True)
+        try:
+            setattr(engine, "_timeout_pool", None)
+        except Exception:
+            pass
+    else:
+        shutdown = getattr(engine, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
+    _lifecycle_diag("planner_engine_shutdown_done", case_id, threads=_thread_snapshot(), children=_child_process_snapshot())
+
+
 def compute_real_intake_result(
     settings,
     snapshot: dict,
@@ -195,6 +400,10 @@ def compute_real_intake_result(
         "final_output_origin": vr.get("final_output_origin"),
         "intake_result_hash": _pf_canon_hash(intake_result) if isinstance(intake_result, dict) else None,
         "request_meta": (raw or {}).get("request_meta"),
+        "raw_valid": bool(vr.get("raw_valid")),
+        "normalized_valid": bool(vr.get("normalized_valid")),
+        "repaired_valid": bool(vr.get("repaired_valid")),
+        "guardrail_error": vr.get("guardrail_error"),
     }
 
 
@@ -696,6 +905,7 @@ def run_planner(
     case_kind: str | None = None,
     case_intelligence: dict | None = None,
 ) -> dict:
+    case_diag_id = str(case.get("id") or "")
     constitution = load_constitution()
     journal = InMemoryAgentTurnJournal()
     engagement_id = f"eng_recovery_{case['id']}"
@@ -770,8 +980,13 @@ def run_planner(
         mailbox_store=policy_store,
     )
     t0 = time.time()
-    result = engine.run(snapshot, context=ctx)
+    _lifecycle_diag("planner_engine_run_start", case_diag_id, threads=_thread_snapshot())
+    try:
+        result = engine.run(snapshot, context=ctx)
+    finally:
+        _shutdown_planner_engine(engine, case_diag_id)
     elapsed = time.time() - t0
+    _lifecycle_diag("planner_engine_run_done", case_diag_id, elapsed_s=round(elapsed, 3), threads=_thread_snapshot())
     final = result.snapshot
     turns_raw = journal.list_turns(engagement_id)
 
@@ -832,11 +1047,26 @@ def _stage_error(exc: Exception) -> str:
 
 def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
     print(f"=== {case['id']} (mode={mode}) ===", flush=True)
+    _lifecycle_diag(
+        "case_start",
+        str(case.get("id") or ""),
+        mode=mode,
+        runner=_runner_process_identity(),
+        threads=_thread_snapshot(),
+        children=_child_process_snapshot(),
+    )
     snapshot = build_snapshot(case)
-    case_result: dict[str, Any] = {"id": case["id"], "categories": case["categories"], "measurement_mode": mode}
+    case_result: dict[str, Any] = {
+        "id": case["id"],
+        "categories": case["categories"],
+        "measurement_mode": mode,
+        "measurement_attempt": _measurement_attempt(),
+    }
 
     try:
+        _lifecycle_diag("stage_intake_start", case["id"])
         case_result["intake"] = run_intake(case, snapshot)
+        _lifecycle_diag("stage_intake_done", case["id"])
         print("  intake:", case_result["intake"]["lane"], "cost_gate_skip:", case_result["intake"]["cost_gate_skip"], flush=True)
     except Exception as exc:  # noqa: BLE001
         case_result["intake_error"] = _stage_error(exc)
@@ -854,8 +1084,10 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
 
     extraction = None
     try:
+        _lifecycle_diag("stage_extraction_start", case["id"])
         extraction = run_extraction(settings, snapshot)
         case_result["extraction"] = extraction
+        _lifecycle_diag("stage_extraction_done", case["id"])
         print("  extraction OK", flush=True)
     except Exception as exc:  # noqa: BLE001
         err = _stage_error(exc)
@@ -870,24 +1102,44 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
     planner_case_kind = None
     is_pf = mode == "production_faithful"
     if is_pf:
+        _lifecycle_diag("stage_pf_intake_reasoning_start", case["id"])
         real = compute_real_intake_result(
             settings,
             snapshot,
             (case_result.get("intake") or {}).get("lane_full") or {"lane": lane},
         )
+        _lifecycle_diag("stage_pf_intake_reasoning_done", case["id"], is_valid=real.get("is_valid"))
         case_result["intake_reasoning"] = {
             "mode": "real_run_intake_reasoning",
             "is_valid": real["is_valid"],
             "final_output_origin": real["final_output_origin"],
             "intake_result_hash": real["intake_result_hash"],
             "business_area": (real["intake_result_final"] or {}).get("business_area"),
+            "raw_valid": real.get("raw_valid"),
+            "normalized_valid": real.get("normalized_valid"),
+            "repaired_valid": real.get("repaired_valid"),
+            "guardrail_error": real.get("guardrail_error"),
         }
         if not real["is_valid"] or not isinstance(real["intake_result_final"], dict):
-            # PARITY CONTRACT: production_faithful must not silently fall back to a placeholder.
-            case_result["parity_error"] = "production_faithful_intake_invalid"
+            # Production-faithful capture must not substitute a placeholder. A real invalid
+            # intake result is still a terminal SUT result, so capture it as product failure
+            # rather than marking the measurement artifact corrupt.
             case_result["stage_reached"] = "intake_reasoning_error"
-            case_result["intake_reasoning_classification"] = classify_outcome(
+            classification = classify_outcome(
                 error_text=str(real.get("final_output_origin") or "intake_invalid"), is_rate_limit=False)
+            case_result["intake_reasoning_classification"] = classification
+            case_result["case_product_outcome"] = "CASE_PRODUCT_FAIL"
+            case_result["terminal_product_result"] = {
+                "stage": "intake_reasoning",
+                "reason": "intake_result_final_missing",
+                "classification": classification,
+                "final_output_origin": real.get("final_output_origin"),
+            }
+            case_result["capture_integrity"] = {
+                "status": "CASE_CAPTURE_SUCCESS",
+                "terminal_state": "intake_reasoning_error",
+                "product_failure_preserved": True,
+            }
             print("  production_faithful intake INVALID — not substituting a placeholder", flush=True)
             return case_result
         intake_result_override = real["intake_result_final"]
@@ -899,9 +1151,11 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
 
     try:
         _br_capture: dict[str, Any] = {}
+        _lifecycle_diag("stage_understanding_start", case["id"])
         case_result["case_intelligence"] = run_understanding(
             settings, snapshot, case_result.get("intake") or {}, case, extraction,
             intake_result_override=intake_result_override, capture=_br_capture)
+        _lifecycle_diag("stage_understanding_done", case["id"])
         ci_layer = case_result.get("case_intelligence")
         if isinstance(ci_layer, dict):
             case_result["understanding"] = ci_layer.get("understanding_output")
@@ -933,6 +1187,7 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
         print("  understanding FAILED:", exc, flush=True)
 
     try:
+        _lifecycle_diag("stage_planner_start", case["id"])
         case_result["planner"] = run_planner(
             agent_settings,
             case,
@@ -946,6 +1201,7 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
                 else None
             ),
         )
+        _lifecycle_diag("stage_planner_done", case["id"])
         case_result["planner_classification"] = classify_outcome(error_text=None, is_rate_limit=None)
         case_result = reclassify_planner_error(case_result)
         print("  planner tool:", case_result["planner"]["tool_name"], "classification:", case_result["planner_classification"],
@@ -964,7 +1220,9 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
         case_result.get("draft"), dict
     ):
         try:
+            _lifecycle_diag("stage_draft_start", case["id"])
             case_result["draft"] = run_draft(settings, snapshot)
+            _lifecycle_diag("stage_draft_done", case["id"])
             print("  draft OK", flush=True)
         except Exception as exc:  # noqa: BLE001
             err = _stage_error(exc)
@@ -979,6 +1237,14 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
     # CLOSEOUT-01 Phase 6 — additive outcome-class coverage (does NOT change corpus,
     # ground truth, threshold, or any existing rubric verdict).
     case_result["outcome_coverage"] = outcome_coverage(case, case_result)
+    _lifecycle_diag(
+        "case_done",
+        case["id"],
+        terminal_state=case_result["stage_reached"],
+        runner=_runner_process_identity(),
+        threads=_thread_snapshot(),
+        children=_child_process_snapshot(),
+    )
     return case_result
 
 
@@ -1006,15 +1272,96 @@ def main() -> None:
     settings = load_settings(require_groq=False, require_google=False)
     agent_settings = load_agent_runtime_settings()
 
+    selected_cases = [case for case in corpus["cases"] if not only_ids or case["id"] in only_ids]
+    expected_case_ids = [str(case["id"]) for case in selected_cases]
+    measurement_attempt = _measurement_attempt()
+    if measurement_attempt["attempt_id"] and not measurement_attempt["artifact_path"]:
+        measurement_attempt["artifact_path"] = str(out_path)
+    _lifecycle_diag(
+        "runner_start",
+        None,
+        mode=mode,
+        corpus_path=str(corpus_path),
+        out_path=str(out_path),
+        selected_case_ids=expected_case_ids,
+        runner=measurement_attempt["runner"],
+        threads=_thread_snapshot(),
+        children=_child_process_snapshot(),
+    )
     results = []
-    for case in corpus["cases"]:
-        if only_ids and case["id"] not in only_ids:
-            continue
+    for case in selected_cases:
+        _lifecycle_diag("main_case_loop_start", str(case.get("id") or ""), out_path=str(out_path))
         case_result = run_one_case(case, mode=mode, settings=settings, agent_settings=agent_settings)
         results.append(case_result)
-        out_path.write_text(json.dumps({"mode": mode, "sentinel_only": sentinel_only, "cases": results}, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        payload = {
+            "mode": mode,
+            "sentinel_only": sentinel_only,
+            "measurement_attempt": measurement_attempt,
+            "cases": results,
+        }
+        partial_expected = expected_case_ids[: len(results)] if expected_case_ids else None
+        _lifecycle_diag(
+            "artifact_write_start",
+            str(case.get("id") or ""),
+            out_path=str(out_path),
+            expected_case_ids=partial_expected,
+            threads=_thread_snapshot(),
+            children=_child_process_snapshot(),
+            runner=_runner_process_identity(),
+        )
+        write_canonical_capture_artifact(out_path, payload, expected_case_ids=partial_expected)
+        stat = out_path.stat()
+        _lifecycle_diag(
+            "artifact_write_done",
+            str(case.get("id") or ""),
+            out_path=str(out_path),
+            size=stat.st_size,
+            mtime=stat.st_mtime,
+            threads=_thread_snapshot(),
+            children=_child_process_snapshot(),
+            runner=_runner_process_identity(),
+        )
 
-    print(f"Done. {len(results)} cases written to {out_path}")
+    if expected_case_ids:
+        final_payload = {
+            "mode": mode,
+            "sentinel_only": sentinel_only,
+            "measurement_attempt": measurement_attempt,
+            "cases": results,
+        }
+        _lifecycle_diag("artifact_final_validate_start", None, out_path=str(out_path), expected_case_ids=expected_case_ids)
+        write_canonical_capture_artifact(out_path, final_payload, expected_case_ids=expected_case_ids)
+        _lifecycle_diag(
+            "artifact_final_validate_done",
+            None,
+            out_path=str(out_path),
+            threads=_thread_snapshot(),
+            children=_child_process_snapshot(),
+            runner=_runner_process_identity(),
+        )
+    else:
+        raise HarnessCaptureContractError("no_cases_selected")
+
+    artifact_ok = False
+    artifact_size = 0
+    try:
+        artifact_size = out_path.stat().st_size
+        parsed = json.loads(out_path.read_text(encoding="utf-8"))
+        artifact_ok = not _capture_contract_errors(parsed, expected_case_ids)
+    except Exception:
+        artifact_ok = False
+    _lifecycle_diag(
+        "runner_about_to_exit",
+        None,
+        out_path=str(out_path),
+        artifact_exists=out_path.exists(),
+        artifact_size=artifact_size,
+        artifact_valid=artifact_ok,
+        runner=_runner_process_identity(),
+        threads=_thread_snapshot(),
+        children=_child_process_snapshot(),
+    )
+    print(f"Done. {len(results)} cases written to {out_path}", flush=True)
 
 
 if __name__ == "__main__":
