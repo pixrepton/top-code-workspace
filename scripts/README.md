@@ -4,22 +4,21 @@ Cross-repo PowerShell harness for local Docker stack. Versioned in the workspace
 
 ## Scripts
 
-| File                         | Purpose                                                                                   |
-| ---------------------------- | ----------------------------------------------------------------------------------------- |
-| `resolve-paths.ps1`          | Sets `TOP_CODE_ROOT` and per-repo env paths (sourced by others)                           |
-| `sync-local-stack-env.ps1`   | Sync `.env.local-vps`, audit `.env`, Daszek `.env.daszek-local`, RAG wire                 |
-| `preflight-local-stack.ps1`  | Health: Node B, RAG; `-FullStack` adds Daszek, kalk-top, PG                               |
+| File                               | Purpose                                                                                                                          |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `resolve-paths.ps1`                | Sets `TOP_CODE_ROOT` and per-repo env paths (sourced by others)                                                                  |
+| `sync-local-stack-env.ps1`         | Sync `.env.local-vps`, audit `.env`, Daszek `.env.daszek-local`, RAG wire                                                        |
+| `preflight-local-stack.ps1`        | Health: Node B, RAG; `-FullStack` adds Daszek, kalk-top, PG                                                                      |
 | `rag12-gate-b-rag-stack-smoke.ps1` | **RAG-12** bounded Gate B: Node B + RAG `/health` + GraphStore PG + `/rag_v2/status` (RAG-14); MinIO/Qdrant/Temporal honest SKIP |
-| `verify-local-gates.ps1`     | Preflight + optional pytest smoke (Gate A+B)                                              |
-| `push-rag-system-health.ps1` | W3: RAG health snapshot → Daszek + `rag.kb_health.snapshot` (cron/harness)                |
-| `preflight-workspace.ps1`    | Workspace-level checks                                                                    |
-| `session-closeout.ps1`       | Session end checklist helper                                                              |
-| `compile-world-state.py`     | World-state compile helper                                                                |
-| `load-secrets.ps1`           | Inject Bitwarden vault secrets into .env (Phase 1: cookies). Requires `BWS_ACCESS_TOKEN`. |
-| `ai_os_task.py`              | Shared checkpoint, ownership, gate, task-branch and scoped local commit engine for Codex and Claude Code. |
-| `ai_os_codex_hook.py`        | Codex lifecycle adapter for checkpoint refresh/resume.                                  |
-| `ai_os_claude_hook.py`       | Claude Code write/Git guard and completion adapter.                                     |
-
+| `verify-local-gates.ps1`           | Preflight + optional pytest smoke (Gate A+B)                                                                                     |
+| `push-rag-system-health.ps1`       | W3: RAG health snapshot → Daszek + `rag.kb_health.snapshot` (cron/harness)                                                       |
+| `preflight-workspace.ps1`          | Workspace-level checks                                                                                                           |
+| `session-closeout.ps1`             | Session end checklist helper                                                                                                     |
+| `compile-world-state.py`           | World-state compile helper                                                                                                       |
+| `load-secrets.ps1`                 | Inject Bitwarden vault secrets into .env (Phase 1: cookies). Requires `BWS_ACCESS_TOKEN`.                                        |
+| `ai_os_task.py`                    | Shared checkpoint, ownership, gate, task-branch and scoped local commit engine for Codex and Claude Code.                        |
+| `ai_os_codex_hook.py`              | Codex lifecycle adapter for checkpoint refresh/resume.                                                                           |
+| `ai_os_claude_hook.py`             | Claude Code write/Git guard and completion adapter.                                                                              |
 
 ## Agent task and Git workflow
 
@@ -52,6 +51,22 @@ python scripts/ai_os_task.py task-checkpoint --status READY_TO_CLOSE --next=
 python scripts/ai_os_task.py task-close --validate-only
 python scripts/ai_os_task.py task-close --summary "Closed with final committed proof."
 ```
+
+Proof phases should make escalation visible.
+
+Prefer phase/gate names that distinguish:
+
+- FAST
+- FOCUSED
+- LIVE_DISCRIMINATING
+- BOUNDED_QUALIFICATION
+- FULL_QUALIFICATION
+
+For `task-checkpoint --phase` or `task-gate --gate-id`, prefer names that show the current proof tier, for example `FAST_ROOT_CAUSE`, `FOCUSED_REGRESSION`, `LIVE_CTX04`, `BOUNDED_FOUR_CASE`, `FULL_FRESH38_QUALIFICATION`. Do not force those exact names where they would be artificial.
+
+Do not escalate to a more expensive proof tier until the previous tier has answered its intended question, unless the claim is impossible to evaluate at that tier.
+
+Canonical proof-economy invariant: root `AGENTS.md`. Execution ladder: `.agents/skills/cursor-codex-harness/SKILL.md`.
 
 Do not use raw `git add` or raw `git commit` for agent work. The canonical
 policy is `knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`.

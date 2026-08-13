@@ -60,10 +60,10 @@ Do not write persistent memory without an explicit operator instruction.
 
 This root file is **L1** — the shared ecosystem constitution for `top-code workspace`.
 
-| Type | What | `AGENTS.md` duty |
-|------|------|------------------|
-| **Typ A** | Independent nested Git repository | Required local L2 adapter: role, owns/must-not, read-first, write/task scope, real Gate A, cross-repo rule, anti-goals, safety capsule. Not a copy of this file. Remains minimally self-sufficient if the repo is opened alone. Root L1 also applies when work runs inside this workspace. |
-| **Typ B** | Root-owned folder (no nested `.git`) | Thin stub only: root-owned status, role, owning root repo, minimal gate, anti-goals. No second cold-start, no local SoT, no independent Git lifecycle. |
+| Type      | What                                 | `AGENTS.md` duty                                                                                                                                                                                                                                                                           |
+| --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Typ A** | Independent nested Git repository    | Required local L2 adapter: role, owns/must-not, read-first, write/task scope, real Gate A, cross-repo rule, anti-goals, safety capsule. Not a copy of this file. Remains minimally self-sufficient if the repo is opened alone. Root L1 also applies when work runs inside this workspace. |
+| **Typ B** | Root-owned folder (no nested `.git`) | Thin stub only: root-owned status, role, owning root repo, minimal gate, anti-goals. No second cold-start, no local SoT, no independent Git lifecycle.                                                                                                                                     |
 
 Hard rules:
 
@@ -180,6 +180,40 @@ diagnosis
 → runtime or parity proof
 → review
 ```
+
+### Proof Economy
+
+Proof integrity and proof economy are separate requirements.
+
+**Proof integrity:** do not claim more than the evidence proves.
+
+**Proof economy:** do not collect more evidence than the current decision requires.
+
+For every unresolved hypothesis, use the cheapest experiment that can reliably discriminate the current question.
+
+Preferred escalation:
+
+```text
+source/static inspection
+→ deterministic/unit proof
+→ focused integration proof
+→ one discriminating live case
+→ bounded qualification
+→ full qualification
+```
+
+Do not use a full suite, full E2E run, or full qualification as a debugging tool when a cheaper proof can answer the current question.
+
+Do not repeat an expensive experiment unless at least one of these changed:
+
+the hypothesis;
+the implementation;
+the controlled variable;
+the evidence required to distinguish competing causes.
+
+Required final proof must never be weakened to save time.
+
+Optimize the cost of reaching the required proof, not the rigor of the proof itself.
 
 Do not:
 
@@ -429,6 +463,7 @@ Report:
 Never report `PASS` when required proof is missing.
 
 <!-- gitnexus:start -->
+
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **top-code workspace** (1812 symbols, 4025 relationships, 149 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
@@ -453,22 +488,22 @@ This project is indexed by GitNexus as **top-code workspace** (1812 symbols, 402
 
 ## Resources
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/top-code workspace/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/top-code workspace/clusters` | All functional areas |
-| `gitnexus://repo/top-code workspace/processes` | All execution flows |
-| `gitnexus://repo/top-code workspace/process/{name}` | Step-by-step execution trace |
+| Resource                                            | Use for                                  |
+| --------------------------------------------------- | ---------------------------------------- |
+| `gitnexus://repo/top-code workspace/context`        | Codebase overview, check index freshness |
+| `gitnexus://repo/top-code workspace/clusters`       | All functional areas                     |
+| `gitnexus://repo/top-code workspace/processes`      | All execution flows                      |
+| `gitnexus://repo/top-code workspace/process/{name}` | Step-by-step execution trace             |
 
 ## CLI
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Task                                         | Read this skill file                                        |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
+| Blast radius / "What breaks if I change X?"  | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?"             | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
+| Rename / extract / split / refactor          | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
+| Tools, resources, schema reference           | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
+| Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
 
 <!-- gitnexus:end -->
