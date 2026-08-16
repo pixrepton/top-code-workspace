@@ -1,4 +1,4 @@
-# Case-by-case Fresh 38 SUT capture into gmail-agent-nodeb-api.
+﻿# Case-by-case Fresh 38 SUT capture into gmail-agent-nodeb-api.
 # Avoids full-batch OOM (Exit2 137). Uses resilient per-case docker exec.
 
 param(
@@ -1387,7 +1387,9 @@ import sys
 import time
 
 try:
+    import pywintypes
     import win32file
+    import win32pipe
 except Exception as exc:
     print(json.dumps({"ok": False, "reason": "pywin32_unavailable", "error": f"{type(exc).__name__}: {exc}"}))
     raise SystemExit(0)
@@ -1395,6 +1397,37 @@ except Exception as exc:
 pipe = os.environ["FRESH38_DOCKER_NPIPE"]
 spec = json.loads(os.environ["FRESH38_ENGINE_EXEC_SPEC"])
 lifecycle_deadline_seconds = max(1, int(spec.get("lifecycle_deadline_seconds", 1800)))
+
+
+def connect_pipe(timeout_s=5.0):
+    # Docker Desktop's npipe can transiently report ERROR_PIPE_BUSY (231) when
+    # several clients connect at once (events stream, health probe, exec client).
+    # The canonical Win32 client pattern is WaitNamedPipe + retry CreateFile;
+    # other errors are propagated and the retry is bounded so a persistently
+    # busy daemon still fails closed. WaitNamedPipe itself can raise while the
+    # pipe instance is being re-created (e.g. error 2); inside the 231 branch
+    # that is transient too, so it is swallowed and the deadline is the bound.
+    deadline = time.monotonic() + timeout_s
+    while True:
+        try:
+            return win32file.CreateFile(
+                pipe,
+                win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+                0,
+                None,
+                win32file.OPEN_EXISTING,
+                0,
+                None,
+            )
+        except pywintypes.error as exc:
+            if getattr(exc, "winerror", None) != 231:
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            try:
+                win32pipe.WaitNamedPipe(pipe, 1000)
+            except pywintypes.error:
+                pass
 
 def decode_chunked(body: bytes) -> bytes:
     out = bytearray()
@@ -1421,15 +1454,7 @@ def request(method: str, path: str, body_obj=None):
         body = json.dumps(body_obj, separators=(",", ":")).encode("utf-8")
         headers.extend(["Content-Type: application/json", f"Content-Length: {len(body)}"])
     raw = (f"{method} {path} HTTP/1.1\r\n" + "\r\n".join(headers) + "\r\n\r\n").encode("ascii") + body
-    handle = win32file.CreateFile(
-        pipe,
-        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-        0,
-        None,
-        win32file.OPEN_EXISTING,
-        0,
-        None,
-    )
+    handle = connect_pipe()
     win32file.WriteFile(handle, raw)
     chunks = []
     read_errors = []
@@ -1559,8 +1584,32 @@ try:
         listener.close()
     except Exception:
         pass
-    inspect = request("GET", f"/exec/{exec_id}/json") if exec_id else {"status": 0, "body": None}
+    inspect = {"status": 0, "body": None} if not exec_id else request("GET", f"/exec/{exec_id}/json")
     inspect_body = inspect.get("body") or {}
+    inspect_confirm_attempts = 0
+    inspect_confirm_duration_s = 0.0
+    if exec_id and lifecycle["done"] and lifecycle["status"] == "EOF":
+        # The callback socket EOF is the exact Exec's process-exit edge: the kernel
+        # closes the FD at os._exit, so the exec main process has already exited.
+        # The daemon reflects that exit asynchronously (Running -> false, ExitCode
+        # set, exec_die emitted), so a single immediate ExecInspect can race the
+        # flip and falsely report a live Exec. Confirm the terminal state inside a
+        # small bounded window; a persistently Running exact Exec still fails
+        # closed below. This is not a wait-for-completion: completion already came
+        # from the socket EOF, and the window only absorbs the daemon's async
+        # bookkeeping of an already-exited process.
+        inspect_confirm_started = time.monotonic()
+        inspect_confirm_window_s = 5.0
+        while True:
+            inspect = request("GET", f"/exec/{exec_id}/json")
+            inspect_body = inspect.get("body") or {}
+            inspect_confirm_attempts += 1
+            if inspect.get("status") == 200 and inspect_body.get("Running") is False and inspect_body.get("ExitCode") is not None:
+                break
+            if time.monotonic() - inspect_confirm_started >= inspect_confirm_window_s:
+                break
+            time.sleep(0.5)
+        inspect_confirm_duration_s = round(time.monotonic() - inspect_confirm_started, 3)
     if not exec_id:
         execution_residual_state = "NO_EXEC_CREATED"
     elif inspect.get("status") == 200 and inspect_body.get("Running") is False:
@@ -1612,6 +1661,8 @@ try:
         "inspect_running": inspect_body.get("Running"),
         "inspect_exit_code": inspect_body.get("ExitCode"),
         "inspect_pid": inspect_body.get("Pid"),
+        "inspect_confirm_attempts": inspect_confirm_attempts,
+        "inspect_confirm_duration_s": inspect_confirm_duration_s,
         "lifecycle_channel": lifecycle,
         "execution_residual_state": execution_residual_state,
         "environment_recovery_required": environment_recovery_required,

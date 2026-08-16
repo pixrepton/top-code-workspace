@@ -1,4 +1,4 @@
-# Fresh38 Engine API lifecycle-channel regression. Uses a local Engine API shim;
+﻿# Fresh38 Engine API lifecycle-channel regression. Uses a local Engine API shim;
 # no live container, provider, judge, scoring, or product code is executed here.
 
 $ErrorActionPreference = 'Stop'
@@ -33,9 +33,16 @@ Check ($source -match 'inspect_body\.get\("Running"\) is False') 'callback EOF s
 Check ($source -match 'inspect_body\.get\("ExitCode"\) is not None') 'callback EOF still requires an exact Exec exit code'
 Check ($source -match 'exec_still_running_after_lifecycle_eof') 'running exact Exec after callback EOF is an explicit failure'
 
-Write-Host "`n[5/6] The repair is not an artifact or exec_die wait"
+Write-Host "`n[5/6] The repair is not an unbounded wait for completion"
 Check ($source -notmatch 'ExecCompletionTimeoutSeconds\s*=\s*[1-9]') 'no post-client completion timeout is introduced'
-Check ($source -notmatch 'Start-Sleep.+ExecInspect') 'no sleep-before-inspect repair is introduced'
+Check ($source -match 'inspect_confirm_window_s = 5\.0') 'terminal-state confirmation uses a small bounded window'
+Check ($source -match 'lifecycle\["done"\] and lifecycle\["status"\] == "EOF"') 'confirm window is gated on the callback EOF process-exit edge'
+Check ($source -notmatch 'inspect_confirm_window_s = .*lifecycle_deadline_seconds') 'confirm window is not derived from the lifecycle deadline'
+Check ($source -match 'exec_still_running_after_lifecycle_eof') 'persistent Running=true after the window still fails closed'
+Check ($source -match 'win32pipe\.WaitNamedPipe\(pipe, 1000\)') 'npipe connect retries transient ERROR_PIPE_BUSY via WaitNamedPipe'
+Check ($source -match 'if getattr\(exc, "winerror", None\) != 231:') 'only ERROR_PIPE_BUSY (231) triggers the retry'
+Check ($source -match 'except pywintypes\.error:\s*\r?\n\s+pass') 'WaitNamedPipe transient raises stay inside the bounded 231 retry'
+Check ($source -match 'def connect_pipe\(timeout_s=5\.0\):') 'npipe connect retry is bounded'
 Check ($source -match 'Find-DockerExecDieEvent') 'exec_die remains evidence/parity only'
 Check ($source -match 'ABORTED_EXEC_MAY_STILL_BE_RUNNING') 'a non-terminal aborted Exec has an explicit residual state'
 Check ($source -match 'remaining cases will not run') 'batch does not continue after an abort with uncertain Exec ownership'
@@ -52,6 +59,7 @@ $oldDockerHost = $env:DOCKER_HOST
 $oldPythonPath = $env:PYTHONPATH
 $oldScenario = $env:F38_ENGINE_TEST_SCENARIO
 $oldState = $env:F38_ENGINE_TEST_STATE
+$oldCounter = $env:F38_ENGINE_TEST_COUNTER
 $oldPath = $env:PATH
 
 try {
@@ -68,6 +76,7 @@ GENERIC_WRITE = 2
 OPEN_EXISTING = 3
 _exec_env = []
 _exec_cmd = []
+_connect_count = [0]
 
 
 def _write_state():
@@ -126,6 +135,11 @@ def _callback(env):
 
 
 def CreateFile(*_args):
+    scenario = os.environ.get("F38_ENGINE_TEST_SCENARIO", "normal")
+    _connect_count[0] += 1
+    if scenario == "pipe_busy_persistent" or (scenario == "pipe_busy_once" and _connect_count[0] == 1):
+        import pywintypes
+        raise pywintypes.error(231, "CreateFile", "All pipe instances are busy")
     return _Handle()
 
 
@@ -145,7 +159,15 @@ def WriteFile(handle, raw):
         handle.response = _response(200)
     elif path.endswith("/json"):
         scenario = os.environ.get("F38_ENGINE_TEST_SCENARIO", "normal")
+        counter_path = os.environ.get("F38_ENGINE_TEST_COUNTER", "")
+        json_calls = 0
+        if counter_path:
+            json_calls = int(Path(counter_path).read_text(encoding="utf-8")) if Path(counter_path).exists() else 0
+            json_calls += 1
+            Path(counter_path).write_text(str(json_calls), encoding="utf-8")
         running = scenario in ("deadline", "running_after_eof")
+        if scenario == "running_then_terminal":
+            running = json_calls <= 2
         state = _read_state()
         cmd = state.get("cmd", []) or ["python", "run_recovery_pf.py", "/tmp/out.json", "STUB-01"]
         handle.response = _response(200, {
@@ -205,9 +227,11 @@ def ReadFile(handle, size):
     $env:DOCKER_HOST = 'npipe:////./pipe/fresh38-engine-test'
     $env:PYTHONPATH = if ($oldPythonPath) { "$root;$oldPythonPath" } else { $root }
     $env:F38_ENGINE_TEST_STATE = Join-Path $root 'engine-state.json'
+    $env:F38_ENGINE_TEST_COUNTER = Join-Path $root 'engine-counter.txt'
 
     function Invoke-EngineScenario([string]$scenario) {
         $env:F38_ENGINE_TEST_SCENARIO = $scenario
+        Remove-Item -LiteralPath $env:F38_ENGINE_TEST_COUNTER -ErrorAction SilentlyContinue
         $stdout = Join-Path $root "$scenario-stdout.txt"
         $stderr = Join-Path $root "$scenario-stderr.txt"
         return Invoke-CaseSubprocessViaEngineApi `
@@ -225,6 +249,19 @@ def ReadFile(handle, size):
 
     $normal = Invoke-EngineScenario 'normal'
     Check ($normal.engine_api.ok -eq $true) 'valid callback plus terminal Exec is accepted by the Engine channel'
+
+    $runningThenTerminal = Invoke-EngineScenario 'running_then_terminal'
+    Check ($runningThenTerminal.engine_api.ok -eq $true) 'daemon state flip shortly after callback EOF is confirmed and accepted'
+    Check ($runningThenTerminal.engine_api.inspect_confirm_attempts -ge 2) 'confirmation re-inspects when the first ExecInspect races the flip'
+    Check ($runningThenTerminal.engine_api.inspect_confirm_duration_s -ge 0.4) 'confirmation window duration is recorded'
+
+    $pipeBusyOnce = Invoke-EngineScenario 'pipe_busy_once'
+    Check ($pipeBusyOnce.engine_api.ok -eq $true) 'npipe 231 once is retried (WaitNamedPipe) and the case is accepted'
+    Check ($pipeBusyOnce.engine_api.inspect_confirm_attempts -eq 1) 'busy-once case still confirms the terminal Exec'
+
+    $pipeBusyPersistent = Invoke-EngineScenario 'pipe_busy_persistent'
+    Check ($pipeBusyPersistent.engine_api.ok -eq $false) 'persistent npipe 231 fails closed'
+    Check ($pipeBusyPersistent.engine_api.reason -eq 'engine_api_exception') 'persistent 231 surfaces as engine_api_exception'
 
     $badToken = Invoke-EngineScenario 'bad_token'
     Check ($badToken.engine_api.ok -eq $false) 'untrusted callback is rejected by the Engine channel'
@@ -304,6 +341,7 @@ exit /b 0
     if ($null -eq $oldPythonPath) { Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue } else { $env:PYTHONPATH = $oldPythonPath }
     if ($null -eq $oldScenario) { Remove-Item Env:F38_ENGINE_TEST_SCENARIO -ErrorAction SilentlyContinue } else { $env:F38_ENGINE_TEST_SCENARIO = $oldScenario }
     if ($null -eq $oldState) { Remove-Item Env:F38_ENGINE_TEST_STATE -ErrorAction SilentlyContinue } else { $env:F38_ENGINE_TEST_STATE = $oldState }
+    if ($null -eq $oldCounter) { Remove-Item Env:F38_ENGINE_TEST_COUNTER -ErrorAction SilentlyContinue } else { $env:F38_ENGINE_TEST_COUNTER = $oldCounter }
     $env:PATH = $oldPath
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
