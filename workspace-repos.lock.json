@@ -1,132 +1,135 @@
 {
-    "schema":  "top-code.workspace-repos.lock.v1",
-    "generated_at":  "2026-07-22T22:08:07+02:00",
-    "workspace":  "C:\\Users\\compg\\Desktop\\top-code workspace",
-    "policy":  "root sparse meta-repo; no submodules; local Docker only; no commit/push/deploy implied",
-    "repos":  [
-                  {
-                      "path":  "knowledge",
-                      "type":  "git_repo",
-                      "role":  "docs_and_world_state",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  null,
-                      "branch":  "master",
-                      "head":  "597b1091a296930ed32afb379ec19b8ab425d4fa",
-                      "dirty":  true,
-                      "dirty_count":  3
-                  },
-                  {
-                      "path":  "gmail-agent",
-                      "type":  "git_repo",
-                      "role":  "node_b_operational_sot",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/gmail-agent.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "35e228208e803c0dcac592770eda6c2e539391ad",
-                      "dirty":  true,
-                      "dirty_count":  12
-                  },
-                  {
-                      "path":  "kalk-top",
-                      "type":  "git_repo",
-                      "role":  "hvac_logic_offer_dto_owner",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/kalk-top.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "9d56055be7f293ad17ffb624abc178617f46f5be",
-                      "dirty":  false,
-                      "dirty_count":  0
-                  },
-                  {
-                      "path":  "daszek",
-                      "type":  "git_repo",
-                      "role":  "operator_projection_ui",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/daszek.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "672769d9496359dcfb7f2427d555ad34a2171b1a",
-                      "dirty":  false,
-                      "dirty_count":  0
-                  },
-                  {
-                      "path":  "wp-bridges",
-                      "type":  "local_harness",
-                      "role":  "deprecated_surface_harness",
-                      "exists":  true,
-                      "git_repo":  false,
-                      "remote":  null,
-                      "branch":  null,
-                      "head":  null,
-                      "dirty":  null,
-                      "dirty_count":  null
-                  },
-                  {
-                      "path":  "rag-chat-asystent",
-                      "type":  "git_repo",
-                      "role":  "rag_backend_ingest_retrieval",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/Asystent-RAG.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "34e9ae2e597076756aa71051382fe18d058776a7",
-                      "dirty":  true,
-                      "dirty_count":  2
-                  },
-                  {
-                      "path":  "rag-widget",
-                      "type":  "git_repo",
-                      "role":  "wordpress_rag_client",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/rag-widget.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "c64707aac69bb4a6cc68e1f097aa8415a3b976a6",
-                      "dirty":  false,
-                      "dirty_count":  0
-                  },
-                  {
-                      "path":  "cieplo-orchestrator",
-                      "type":  "git_repo",
-                      "role":  "cieplo_pipeline_worker",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/cieplo-orchestrator.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "e68f05386722b4034ca36bd39d169eba759f44e6",
-                      "dirty":  true,
-                      "dirty_count":  1
-                  },
-                  {
-                      "path":  "top-instal-generator",
-                      "type":  "git_repo",
-                      "role":  "pdf_docx_generation",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/top-instal-generator.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "7e5279551b3919b7ab84547227b3355f45c44bf4",
-                      "dirty":  true,
-                      "dirty_count":  1
-                  },
-                  {
-                      "path":  "fast-kalk",
-                      "type":  "git_repo",
-                      "role":  "lead_widget",
-                      "exists":  true,
-                      "git_repo":  true,
-                      "remote":  "https://github.com/pixrepton/fast-kalk.git",
-                      "branch":  "handoff/20260719-1403-latest",
-                      "head":  "06a470da94db6069f42c0d20a860815212e80f00",
-                      "dirty":  false,
-                      "dirty_count":  0
-                  }
-              ],
-    "known_hygiene_risks":  [
-                                "rag-chat-asystent/backend contains a nested .git with local dirty state and no remote; preserved intentionally",
-                                "wp-bridges is classified as local_harness/deprecated_surface, not a standalone git repo"
-                            ]
+  "schema": "top-code.workspace-repos.lock.v1",
+  "generated_at": "2026-08-16T21:23:47+02:00",
+  "workspace": "C:\\Users\\compg\\Desktop\\top-code workspace",
+  "policy": "root sparse meta-repo; no submodules; local Docker only; no commit/push/deploy implied",
+  "repos": [
+    {
+      "path": "knowledge",
+      "type": "git_repo",
+      "role": "docs_and_world_state",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/knowledge.git",
+      "branch": "docs/aios-residuals-wave-sync",
+      "head": "80a59278e28a1a6949a73690c8e0c0b3745d5be0",
+      "dirty": false,
+      "dirty_count": 0
+    },
+    {
+      "path": "gmail-agent",
+      "type": "git_repo",
+      "role": "node_b_operational_sot",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/gmail-agent.git",
+      "branch": "feature/aios-roadmap-1.4-2.4",
+      "head": "db809664dea266536dbef0fa1da7b5b85d91cc81",
+      "dirty": true,
+      "dirty_count": 1
+    },
+    {
+      "path": "kalk-top",
+      "type": "git_repo",
+      "role": "hvac_logic_offer_dto_owner",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/kalk-top.git",
+      "branch": "repair/kalk-runtime-hygiene-2-mirror-sync",
+      "head": "ef5db272cf201b556ceeb6de0a254468cef4f3cc",
+      "dirty": true,
+      "dirty_count": 1
+    },
+    {
+      "path": "daszek",
+      "type": "git_repo",
+      "role": "operator_projection_ui",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/daszek.git",
+      "branch": "feature/aios-roadmap-1.4-2.4",
+      "head": "2607af878e23d513f3480a06a74da8e950762f59",
+      "dirty": false,
+      "dirty_count": 0
+    },
+    {
+      "path": "wp-bridges",
+      "type": "local_harness",
+      "role": "deprecated_surface_harness",
+      "exists": true,
+      "git_repo": false,
+      "remote": null,
+      "branch": null,
+      "head": null,
+      "dirty": false,
+      "dirty_count": 0
+    },
+    {
+      "path": "rag-chat-asystent",
+      "type": "git_repo",
+      "role": "rag_backend_ingest_retrieval",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/Asystent-RAG.git",
+      "branch": "feature/aios-roadmap-1.4-2.4",
+      "head": "0715ccc8d41c1590d464578f446680103724c706",
+      "dirty": false,
+      "dirty_count": 0
+    },
+    {
+      "path": "rag-widget",
+      "type": "git_repo",
+      "role": "wordpress_rag_client",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/rag-widget.git",
+      "branch": "fix/rag-widget-admin-security-closeout",
+      "head": "46731422bebeaa307a4f2c7d6a102d1ddd4526c8",
+      "dirty": false,
+      "dirty_count": 0
+    },
+    {
+      "path": "cieplo-orchestrator",
+      "type": "git_repo",
+      "role": "cieplo_pipeline_worker",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/cieplo-orchestrator.git",
+      "branch": "repair/cieplo-lazy-ingress-import",
+      "head": "92c0e6b7319b2f2a5596f24a187a18a33a9c6a3e",
+      "dirty": false,
+      "dirty_count": 0
+    },
+    {
+      "path": "top-instal-generator",
+      "type": "git_repo",
+      "role": "pdf_docx_generation",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/top-instal-generator.git",
+      "branch": "handoff/20260719-1403-latest",
+      "head": "380bf989f44ca3f6a8f272d92bc7193a6fce117d",
+      "dirty": false,
+      "dirty_count": 0
+    },
+    {
+      "path": "fast-kalk",
+      "type": "git_repo",
+      "role": "lead_widget",
+      "exists": true,
+      "git_repo": true,
+      "remote": "https://github.com/pixrepton/fast-kalk.git",
+      "branch": "handoff/20260719-1403-latest",
+      "head": "82128e64bba5cdb2ddbc85d00880a545d742c122",
+      "dirty": false,
+      "dirty_count": 0
+    }
+  ],
+  "known_hygiene_risks": [
+    "rag-chat-asystent/backend contains a nested .git (no remote, legacy snapshot 2026-05-21, dirty) - preserved intentionally; outer repo owns backend/",
+    "wp-bridges is classified as local_harness/deprecated_surface, not a standalone git repo",
+    "kalk-top: canonical branch decision deferred to AIOS-KALK-CANONICALIZE-20260811 (remote default handoff/20260719-1403-latest)",
+    "root workspace: no remote (INTENTIONAL_LOCAL_ONLY per OPERATOR_DECISIONS 2026-08-14)",
+    "phantom CRLF stat-cache residues (content identical to index): root scripts/ai_os_task_commit.py, gmail-agent tools/gmail_audit/mailbox_memory_runtime.py, kalk-top kalkulator/js/uiSummary.js"
+  ]
 }
