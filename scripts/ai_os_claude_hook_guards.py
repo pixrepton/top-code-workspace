@@ -20,36 +20,36 @@ from ai_os_hook_common import proc_detail, run_task  # noqa: E402
 
 
 DESTRUCTIVE_PATTERNS = (
-    (re.compile(r"(^|[;&|]\s*)git\s+reset(?:\s|$)", re.I), "git reset is not allowed; preserve the shared working tree"),
-    (re.compile(r"(^|[;&|]\s*)git\s+clean(?:\s|$)", re.I), "git clean is not allowed; inspect untracked files instead"),
-    (re.compile(r"(^|[;&|]\s*)git\s+push\b[^\n]*(?:--force(?:-with-lease)?|-f)(?:\s|$)", re.I), "force push is forbidden"),
-    (re.compile(r"(^|[;&|]\s*)git\s+stash\s+(?:drop|clear)(?:\s|$)", re.I), "stash deletion is forbidden"),
-    (re.compile(r"(^|[;&|]\s*)git\s+branch\s+-D(?:\s|$)", re.I), "forced branch deletion is forbidden"),
-    (re.compile(r"(^|[;&|]\s*)git\s+(?:checkout\s+--|restore\b)", re.I), "destructive checkout/restore must be handled manually after reviewing impact"),
+    (re.compile(r"(^|[;&|\n]\s*)git\s+reset(?:\s|$)", re.I | re.M), "git reset is not allowed; preserve the shared working tree"),
+    (re.compile(r"(^|[;&|\n]\s*)git\s+clean(?:\s|$)", re.I | re.M), "git clean is not allowed; inspect untracked files instead"),
+    (re.compile(r"(^|[;&|\n]\s*)git\s+push\b[^\n]*(?:--force(?:-with-lease)?|-f)(?:\s|$)", re.I | re.M), "force push is forbidden"),
+    (re.compile(r"(^|[;&|\n]\s*)git\s+stash\s+(?:drop|clear)(?:\s|$)", re.I | re.M), "stash deletion is forbidden"),
+    (re.compile(r"(^|[;&|\n]\s*)git\s+branch\s+-D(?:\s|$)", re.I | re.M), "forced branch deletion is forbidden"),
+    (re.compile(r"(^|[;&|\n]\s*)git\s+(?:checkout\s+--|restore\b)", re.I | re.M), "destructive checkout/restore must be handled manually after reviewing impact"),
 )
 RAW_GIT_PATTERNS = (
     (
-        re.compile(r"(^|[;&|]\s*)git\s+add(?:\s|$)", re.I),
+        re.compile(r"(^|[;&|\n]\s*)git\s+add(?:\s|$)", re.I | re.M),
         "Raw git add is disabled for agent work. Use scripts/ai_os_task.py task-commit.",
     ),
     (
-        re.compile(r"(^|[;&|]\s*)git\s+commit(?:\s|$)", re.I),
+        re.compile(r"(^|[;&|\n]\s*)git\s+commit(?:\s|$)", re.I | re.M),
         "Raw git commit is disabled for agent work. Run task-commit-plan, then task-commit.",
     ),
 )
 PUBLICATION_PATTERNS = (
     (
-        re.compile(r"(^|[;&|]\s*)git\s+push(?:\s|$)", re.I),
+        re.compile(r"(^|[;&|\n]\s*)git\s+push(?:\s|$)", re.I | re.M),
         "Push is outside LOCAL_ONLY mode. Change the checkpoint to PUBLISH or SHIP first.",
     ),
     (
-        re.compile(r"(^|[;&|]\s*)gh\s+pr\s+create(?:\s|$)", re.I),
+        re.compile(r"(^|[;&|\n]\s*)gh\s+pr\s+create(?:\s|$)", re.I | re.M),
         "PR creation is outside LOCAL_ONLY mode. Change the checkpoint to PUBLISH or SHIP first.",
     ),
 )
 MERGE_PATTERNS = (
     (
-        re.compile(r"(^|[;&|]\s*)gh\s+pr\s+merge(?:\s|$)", re.I),
+        re.compile(r"(^|[;&|\n]\s*)gh\s+pr\s+merge(?:\s|$)", re.I | re.M),
         "PR merge remains a separate operator-approved action; SHIP mode does not auto-authorize merge.",
     ),
 )

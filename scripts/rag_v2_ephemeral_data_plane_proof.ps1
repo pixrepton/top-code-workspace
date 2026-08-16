@@ -394,4 +394,3 @@ Write-Host '==================================================='
 
 if (($minioStatus -ne 'PASS') -or ($qdrantStatus -ne 'PASS')) { exit 1 }
 exit 0
-

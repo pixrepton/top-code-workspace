@@ -137,6 +137,7 @@ def test_edit_is_denied_on_protected_branch_then_allowed(claude_repo):
 def test_raw_commit_and_local_only_push_are_denied(claude_repo):
     _name, repo, env = claude_repo
     for command, expected in [
+        ("git add file.txt", "task-commit"),
         ("git commit -m test", "task-commit"),
         ("git push origin HEAD", "LOCAL_ONLY"),
         ("git push --force origin HEAD", "force push"),
@@ -145,6 +146,24 @@ def test_raw_commit_and_local_only_push_are_denied(claude_repo):
         result = json.loads(proc.stdout)
         reason = result["hookSpecificOutput"]["permissionDecisionReason"]
         assert expected.lower() in reason.lower()
+
+
+def test_newline_separated_raw_git_commands_are_denied(claude_repo):
+    _name, repo, env = claude_repo
+    for command, expected in [
+        ("echo prep\ngit add file.txt", "task-commit"),
+        ("echo prep\ngit commit -m test", "task-commit"),
+        ("echo prep\ngit push origin HEAD", "LOCAL_ONLY"),
+        ("git add file.txt", "task-commit"),
+    ]:
+        proc = run_hook(
+            payload("PreToolUse", repo, tool="Bash", tool_input={"command": command}),
+            cwd=repo,
+            env=env,
+        )
+        result = json.loads(proc.stdout)
+        reason = result["hookSpecificOutput"]["permissionDecisionReason"]
+        assert expected.lower() in reason.lower(), command
 
 
 def test_task_completed_blocks_commit_ready_work(claude_repo):
