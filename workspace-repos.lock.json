@@ -1,8 +1,9 @@
 {
-  "schema": "top-code.workspace-repos.lock.v1",
-  "generated_at": "2026-08-16T21:23:47+02:00",
+  "schema": "top-code.workspace-repos.lock.v2",
+  "generated_at": "2026-08-16T22:32:05+02:00",
   "workspace": "C:\\Users\\compg\\Desktop\\top-code workspace",
   "policy": "root sparse meta-repo; no submodules; local Docker only; no commit/push/deploy implied",
+  "snapshot_semantics": "Versioned workspace topology/configuration snapshot. NOT exact self-referential final Git proof. For the repository that contains this file (workspace/root) the 'head' field records 'observed_before_snapshot_commit' - the HEAD present at generation time - and never the SHA of the commit that contains this file. For child/product repositories the 'head' field records the exact observed final HEAD at generation time. The exact final post-operation HEAD proof lives in the external immutable acceptance snapshot under C:\\top-code-session-scratch\\pre-consolidation-20260816T204528\\final-acceptance-snapshot.json.",
   "repos": [
     {
       "path": "knowledge",
@@ -12,9 +13,8 @@
       "git_repo": true,
       "remote": "https://github.com/pixrepton/knowledge.git",
       "branch": "docs/aios-residuals-wave-sync",
-      "head": "80a59278e28a1a6949a73690c8e0c0b3745d5be0",
-      "dirty": false,
-      "dirty_count": 0
+      "head": "5c031587d957ac2a9799dc7eb4423719170b6f24",
+      "clean": true
     },
     {
       "path": "gmail-agent",
@@ -25,8 +25,7 @@
       "remote": "https://github.com/pixrepton/gmail-agent.git",
       "branch": "feature/aios-roadmap-1.4-2.4",
       "head": "db809664dea266536dbef0fa1da7b5b85d91cc81",
-      "dirty": true,
-      "dirty_count": 1
+      "clean": true
     },
     {
       "path": "kalk-top",
@@ -37,8 +36,7 @@
       "remote": "https://github.com/pixrepton/kalk-top.git",
       "branch": "repair/kalk-runtime-hygiene-2-mirror-sync",
       "head": "ef5db272cf201b556ceeb6de0a254468cef4f3cc",
-      "dirty": true,
-      "dirty_count": 1
+      "clean": true
     },
     {
       "path": "daszek",
@@ -49,8 +47,7 @@
       "remote": "https://github.com/pixrepton/daszek.git",
       "branch": "feature/aios-roadmap-1.4-2.4",
       "head": "2607af878e23d513f3480a06a74da8e950762f59",
-      "dirty": false,
-      "dirty_count": 0
+      "clean": true
     },
     {
       "path": "wp-bridges",
@@ -61,8 +58,7 @@
       "remote": null,
       "branch": null,
       "head": null,
-      "dirty": false,
-      "dirty_count": 0
+      "clean": null
     },
     {
       "path": "rag-chat-asystent",
@@ -73,8 +69,7 @@
       "remote": "https://github.com/pixrepton/Asystent-RAG.git",
       "branch": "feature/aios-roadmap-1.4-2.4",
       "head": "0715ccc8d41c1590d464578f446680103724c706",
-      "dirty": false,
-      "dirty_count": 0
+      "clean": true
     },
     {
       "path": "rag-widget",
@@ -85,8 +80,7 @@
       "remote": "https://github.com/pixrepton/rag-widget.git",
       "branch": "fix/rag-widget-admin-security-closeout",
       "head": "46731422bebeaa307a4f2c7d6a102d1ddd4526c8",
-      "dirty": false,
-      "dirty_count": 0
+      "clean": true
     },
     {
       "path": "cieplo-orchestrator",
@@ -97,8 +91,7 @@
       "remote": "https://github.com/pixrepton/cieplo-orchestrator.git",
       "branch": "repair/cieplo-lazy-ingress-import",
       "head": "92c0e6b7319b2f2a5596f24a187a18a33a9c6a3e",
-      "dirty": false,
-      "dirty_count": 0
+      "clean": true
     },
     {
       "path": "top-instal-generator",
@@ -109,8 +102,7 @@
       "remote": "https://github.com/pixrepton/top-instal-generator.git",
       "branch": "handoff/20260719-1403-latest",
       "head": "380bf989f44ca3f6a8f272d92bc7193a6fce117d",
-      "dirty": false,
-      "dirty_count": 0
+      "clean": true
     },
     {
       "path": "fast-kalk",
@@ -121,15 +113,17 @@
       "remote": "https://github.com/pixrepton/fast-kalk.git",
       "branch": "handoff/20260719-1403-latest",
       "head": "82128e64bba5cdb2ddbc85d00880a545d742c122",
-      "dirty": false,
-      "dirty_count": 0
+      "clean": true
     }
   ],
+  "root_row_semantics": {
+    "observed_before_snapshot_commit": true,
+    "observed_head": "e3da2bcfa154bf80f05df4de6b94f5e24a4ad560"
+  },
   "known_hygiene_risks": [
     "rag-chat-asystent/backend contains a nested .git (no remote, legacy snapshot 2026-05-21, dirty) - preserved intentionally; outer repo owns backend/",
     "wp-bridges is classified as local_harness/deprecated_surface, not a standalone git repo",
     "kalk-top: canonical branch decision deferred to AIOS-KALK-CANONICALIZE-20260811 (remote default handoff/20260719-1403-latest)",
-    "root workspace: no remote (INTENTIONAL_LOCAL_ONLY per OPERATOR_DECISIONS 2026-08-14)",
-    "phantom CRLF stat-cache residues (content identical to index): root scripts/ai_os_task_commit.py, gmail-agent tools/gmail_audit/mailbox_memory_runtime.py, kalk-top kalkulator/js/uiSummary.js"
+    "root workspace: no remote (INTENTIONAL_LOCAL_ONLY per OPERATOR_DECISIONS 2026-08-14)"
   ]
 }
