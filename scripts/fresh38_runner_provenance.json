@@ -23,11 +23,11 @@
   ],
   "canonical_runner": {
     "path": "scripts/fresh38/run_recovery_pf.py",
-    "sha256": "6db2101fe9febf2aabe5d40d56cf4ac184c99a78c6fd4e62482a604cb5f58f5e",
+    "sha256": "454f97ebdd7b80a7c0b154585fcebb18e0696c0ba38db60c72161dbdc5cff90e",
     "provenance": "TRACKED_CANONICAL",
     "tracked_in_git": true,
     "reproducible_from_fresh_checkout": true,
-    "change_note": "P1.4A (2026-08-18): runner now passes decision_comparison_inputs (business_recommended_action) into the planner signal payload so the deterministic kalk-top eligibility gate sees authoritative BusinessReasoning state on the first planner turn; harness provenance hash re-pinned intentionally."
+    "change_note": "P2 hygiene (2026-08-18): disable fabricated run_draft eligibility; project review_required and FRESH38_ATTEMPT_ID as run_id; no extra LLM."
   },
   "canonical_scoring": {
     "path": "scripts/fresh38/scoring.py",

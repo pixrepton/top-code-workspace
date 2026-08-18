@@ -45,10 +45,10 @@ Fixes vs run_baseline.py, each traceable to a section of this session's brief:
    carries `snapshot_delta` (confirmed this session by direct trace of
    `InMemoryAgentTurnJournal.append_turn`). Fixed by reading `final.actions` after
    `engine.run()` and capturing any `draft_reply` action's `payload_pl` into
-   `planner.generate_draft_reply_body`. The separate `reply_drafter.run_reply_drafter`
-   stage (`run_draft()`, unchanged from run_baseline.py) already captured its own full
-   return value (`drafts[i].body`/`subject_suggestion`) — that was never a gap, only
-   unscored; the rubric scorer below now scores it.
+   `planner.generate_draft_reply_body`. The separate `reply_drafter` stage is invoked
+   from `run_understanding()` via production `gi_draft_reply`. `run_draft()` no longer
+   fabricates `action=reply`; a missing Brain1 draft is recorded as
+   `draft_skipped_reason=no_brain1_draft_no_fabricated_fallback`.
 
 4. RUBRIC SCORING + CLASSIFICATION (brief §6C/§6D): `score_case()` applies the
    deterministic checks from `metric-definitions.md` sections A/B/H/K (intake,
@@ -811,6 +811,7 @@ def run_understanding(settings, snapshot: dict, intake: dict, case: dict, extrac
         "settings": settings,
         "model": None,
         "verbose": False,
+        "run_id": str(os.environ.get("FRESH38_ATTEMPT_ID") or "").strip(),
         "preclassification_result": {"lane": intake.get("lane")},
         "lane_stage_plan": {"run_business_reasoning": intake.get("lane") not in _SKIP_LANES},
         "case_link_result": {},
@@ -834,6 +835,8 @@ def run_understanding(settings, snapshot: dict, intake: dict, case: dict, extrac
         conf = business_result.get("confidence") or {}
         capture["business_reasoning"] = {
             "recommended_next_action": business_result.get("recommended_next_action"),
+            "reply_recommended": business_result.get("reply_recommended"),
+            "review_required": intake_result.get("review_required"),
             "customer_state_guess": business_result.get("customer_state_guess"),
             "business_area": business_result.get("business_area"),
             "human_review_bias": business_result.get("human_review_bias"),
@@ -888,6 +891,8 @@ def run_understanding(settings, snapshot: dict, intake: dict, case: dict, extrac
             else {}
         )
         capture["brain1_reply_result"] = reply
+        if isinstance(reply.get("causal_observability"), dict):
+            capture["causal_observability"] = reply["causal_observability"]
         capture["action_plan"] = action_plan
         decision_comparison_inputs = {
             "schema_version": "decision_comparison_inputs.v1",
@@ -1072,9 +1077,21 @@ def run_planner(
     }
 
 
-def run_draft(settings, snapshot: dict) -> dict:
-    intake_result = {"decision": {"action": "reply"}, "review_required": False}
-    business_result = {"recommended_next_action": "reply"}
+def run_draft(settings, snapshot: dict, *, intake_result: dict | None = None, business_result: dict | None = None) -> dict:
+    """Brain1 draft only when real intake/BR are supplied.
+
+    Historical harness fabricated ``action=reply`` here. That contaminates
+    measurement: a skipped or failed understanding still looked like a reply
+    path. Production-faithful capture must not invent eligibility.
+    """
+    if not isinstance(intake_result, dict) or not isinstance(business_result, dict):
+        return {
+            "draft_enabled": False,
+            "drafts": [],
+            "skipped": "fabricated_eligibility_disabled",
+            "do_not_send_reasons": ["fabricated_eligibility_disabled"],
+            "requires_manual_edit": True,
+        }
     return run_reply_drafter(
         settings=settings,
         snapshot=snapshot,
@@ -1213,6 +1230,10 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
             case_result["decision_divergence_inputs"] = _br_capture[
                 "decision_divergence_inputs"
             ]
+        if isinstance(_br_capture.get("brain1_reply_result"), dict):
+            _reply_capture = _br_capture["brain1_reply_result"]
+            if isinstance(_reply_capture.get("causal_observability"), dict):
+                case_result["causal_observability"] = _reply_capture["causal_observability"]
         if (
             case.get("ground_truth", {}).get("draft_expected")
             and isinstance(_br_capture.get("brain1_reply_result"), dict)
@@ -1263,18 +1284,8 @@ def run_one_case(case: dict, *, mode: str, settings, agent_settings) -> dict:
     if case.get("ground_truth", {}).get("draft_expected") and not isinstance(
         case_result.get("draft"), dict
     ):
-        try:
-            _lifecycle_diag("stage_draft_start", case["id"])
-            case_result["draft"] = run_draft(settings, snapshot)
-            _lifecycle_diag("stage_draft_done", case["id"])
-            print("  draft OK", flush=True)
-        except Exception as exc:  # noqa: BLE001
-            err = _stage_error(exc)
-            case_result["draft_error"] = err
-            case_result["draft_classification"] = classify_outcome(
-                error_text=err, is_rate_limit=_looks_rate_limited(exc)
-            )
-            print("  draft FAILED:", exc, flush=True)
+        case_result["draft_skipped_reason"] = "no_brain1_draft_no_fabricated_fallback"
+        print("  draft skipped: no Brain1 draft; fabricated eligibility fallback disabled", flush=True)
 
     case_result["stage_reached"] = "full"
     case_result["rubric_scores"] = score_case(case, case_result)
