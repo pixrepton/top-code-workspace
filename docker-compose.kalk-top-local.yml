@@ -26,11 +26,20 @@ services:
       - ./kalk-top:/kalk-top:rw
       - ./fast-kalk:/fast-kalk:ro
       - ./top-instal-generator:/top-instal-generator:ro
+      # Local php -S does not rewrite /wp-json/* unless a front-controller maps it.
+      # Canonical product clients use pretty permalinks; do not work around this in gmail-agent.
+      # kalk-top/docker/entrypoint-local.sh still generates a weaker router if this overlay is absent.
+      - ./scripts/kalk-top-local/_router.php:/opt/topinstal-runtime/wordpress/_router.php:ro
+    # configure-runtime-wp.php reads KALKTOP_AGENT_KEY. Compose ${KALK_TOP_AGENT_KEY}
+    # interpolates from the host/project .env, NOT from service env_file, and would
+    # bind an empty consumer key. Alias inside the container after env_file is applied.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - export KALKTOP_AGENT_KEY="$${KALKTOP_AGENT_KEY:-$${KALK_TOP_AGENT_KEY}}"; exec /entrypoint.sh
     environment:
       # Use host.docker.internal so downloadUrls are resolvable from other Docker containers
       KALK_TOP_RUNTIME_BASE_URL: http://host.docker.internal:8091
       NODE_B_REGISTRY_BASE_URL: http://host.docker.internal:8766
-      # configure-runtime-wp.php reads KALKTOP_AGENT_KEY; gmail-agent client reads KALK_TOP_AGENT_KEY.
-      KALKTOP_AGENT_KEY: ${KALK_TOP_AGENT_KEY:-}
     env_file:
       - ./gmail-agent/.env.local-vps
