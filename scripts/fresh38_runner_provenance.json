@@ -23,10 +23,11 @@
   ],
   "canonical_runner": {
     "path": "scripts/fresh38/run_recovery_pf.py",
-    "sha256": "fe66fbbbc1f010f44be4d632ca59c432d85be830968b240844ec6631a8b77671",
+    "sha256": "6db2101fe9febf2aabe5d40d56cf4ac184c99a78c6fd4e62482a604cb5f58f5e",
     "provenance": "TRACKED_CANONICAL",
     "tracked_in_git": true,
-    "reproducible_from_fresh_checkout": true
+    "reproducible_from_fresh_checkout": true,
+    "change_note": "P1.4A (2026-08-18): runner now passes decision_comparison_inputs (business_recommended_action) into the planner signal payload so the deterministic kalk-top eligibility gate sees authoritative BusinessReasoning state on the first planner turn; harness provenance hash re-pinned intentionally."
   },
   "canonical_scoring": {
     "path": "scripts/fresh38/scoring.py",

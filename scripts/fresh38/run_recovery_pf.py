@@ -889,6 +889,24 @@ def run_understanding(settings, snapshot: dict, intake: dict, case: dict, extrac
         )
         capture["brain1_reply_result"] = reply
         capture["action_plan"] = action_plan
+        decision_comparison_inputs = {
+            "schema_version": "decision_comparison_inputs.v1",
+            "source_signal_id": str(
+                snapshot.get("signal_id") if isinstance(snapshot, dict) else ""
+            ),
+            "business_recommended_action": str(
+                business_result.get("recommended_next_action") or ""
+            ),
+            "action_planner_primary_action": str(
+                action_plan.get("primary_action") or ""
+            ),
+            "next_best_action_type": str(
+                primary_next_action.get("action_type") or ""
+            ),
+            "reply_draft_enabled": bool(reply.get("draft_enabled")),
+            "case_family": str(case_understanding.get("case_family") or ""),
+        }
+        capture["decision_comparison_inputs"] = decision_comparison_inputs
         capture["decision_divergence_inputs"] = {
             "action_planner_primary_action": str(
                 action_plan.get("primary_action") or ""
@@ -906,6 +924,8 @@ def run_understanding(settings, snapshot: dict, intake: dict, case: dict, extrac
                 (reply.get("execution_metadata") or {}).get("source_mode") or ""
             ),
         }
+        if isinstance(ci_layer, dict):
+            ci_layer["decision_comparison_inputs"] = decision_comparison_inputs
     # PLANNER-FIDELITY-CLOSEOUT-02: return full intelligence so planner can receive
     # PolicyDecision/APv2 envelope + Brain1 projection (not only understanding_output).
     return ci_layer
@@ -985,6 +1005,17 @@ def run_planner(
         if prior:
             signal_payload["understanding_brief_pl"] = prior.get("case_summary_pl", "")
         policy_store = CorpusMailboxStore(case, case_id=case_id)
+
+    # P1.4A: production-faithful eligibility context. The deterministic kalk-top
+    # eligibility gate (agent_runtime.kalk_eligibility) reads the authoritative
+    # BusinessReasoning recommendation from decision_comparison_inputs on the
+    # very first planner turn — mirroring agent_reconcile's production wiring.
+    if isinstance(case_intelligence, dict) and isinstance(
+        case_intelligence.get("decision_comparison_inputs"), dict
+    ):
+        signal_payload["decision_comparison_inputs"] = case_intelligence[
+            "decision_comparison_inputs"
+        ]
 
     ctx = ToolExecutionContext.from_snapshot(
         snapshot,

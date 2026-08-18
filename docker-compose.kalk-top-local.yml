@@ -30,5 +30,7 @@ services:
       # Use host.docker.internal so downloadUrls are resolvable from other Docker containers
       KALK_TOP_RUNTIME_BASE_URL: http://host.docker.internal:8091
       NODE_B_REGISTRY_BASE_URL: http://host.docker.internal:8766
+      # configure-runtime-wp.php reads KALKTOP_AGENT_KEY; gmail-agent client reads KALK_TOP_AGENT_KEY.
+      KALKTOP_AGENT_KEY: ${KALK_TOP_AGENT_KEY:-}
     env_file:
       - ./gmail-agent/.env.local-vps
