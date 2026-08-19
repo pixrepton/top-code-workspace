@@ -50,6 +50,7 @@ CBM project names follow `C-Users-<user>-Desktop-top-code-workspace-<repo>` (der
 4. **Explore via the live graph tool** — one first tool from the router table; second only if high-risk or ambiguous.
 5. **Read source narrowly** — only files/symbols the graph narrowed; `Grep`/`rg` for literals and gaps.
 6. **After larger changes** — reindex touched repo (GitNexus `analyze` / CBM `index_repository`).
+7. **After nested `.git` removal or sidetrack cleanup** — `gitnexus clean --force` on the stale index path (e.g. `backend/.gitnexus`), then `analyze --force` from the **Typ A repo root**; run `group sync topinstal-workspace` when the repo is in that group.
 
 ## High-risk shortcut
 

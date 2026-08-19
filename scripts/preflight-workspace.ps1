@@ -74,6 +74,28 @@ if (Test-Path $uaMeta) {
     catch { $warns += 'UA meta.json unreadable' }
 }
 
+# Nested Git / GitNexus sidetrack guard (Typ A repos must be single Git units)
+$nestedGitHits = @()
+$sidetrackGitNexus = @()
+foreach ($repo in $required) {
+    $repoRoot = Join-Path $root $repo
+    if (-not (Test-Path (Join-Path $repoRoot '.git'))) { continue }
+    $rootDotGit = (Resolve-Path (Join-Path $repoRoot '.git')).Path
+    Get-ChildItem -Path $repoRoot -Directory -Recurse -Force -Filter '.git' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -ne $rootDotGit } |
+    ForEach-Object { $nestedGitHits += "$repo/$($_.FullName.Substring($repoRoot.Length + 1))" }
+    if ($repo -eq 'rag-chat-asystent') {
+        $backendIndex = Join-Path $repoRoot 'backend\.gitnexus'
+        if (Test-Path $backendIndex) {
+            $sidetrackGitNexus += 'rag-chat-asystent/backend/.gitnexus (gitnexus clean --force from backend/, then analyze from repo root)'
+        }
+    }
+}
+if ($nestedGitHits.Count -gt 0) {
+    $warns += "nested .git under Typ A repo(s): $($nestedGitHits -join '; ') - remove nested unit; GitNexus indexes repo root only"
+}
+foreach ($s in $sidetrackGitNexus) { $warns += "GitNexus sidetrack: $s" }
+
 # ECOSYSTEM_MAP date
 $ecoPath = Join-Path $root 'ECOSYSTEM_MAP.yaml'
 if (Test-Path $ecoPath) {

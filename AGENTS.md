@@ -96,7 +96,7 @@ Typ B stubs today include: `wp-bridges/`, `scripts/`, `tests/`, `tools/`, `paylo
 - `daszek/` — Node A; operator projection UI and bounded HITL. (Typ A)
 - `kalk-top/` — HVAC logic, sizing, pricing and `OfferDTO`. (Typ A)
 - `cieplo-orchestrator/` — separate Cieplo pipeline and worker. (Typ A)
-- `rag-chat-asystent/` — RAG backend, ingest and retrieval. (Typ A). Nested `backend/.git` removed 2026-08-19 (legacy snapshot `4343071`, 2026-05-21; outer owns `backend/`). Run git commands from the repo root only.
+- `rag-chat-asystent/` — RAG backend, ingest and retrieval. (Typ A). Nested `backend/.git` removed 2026-08-19 (legacy snapshot `4343071`, 2026-05-21; outer owns `backend/`). GitNexus registry `Asystent-RAG` indexes **repo root** only — never `backend/`. Run git commands from the repo root only.
 - `rag-widget/` — WordPress RAG surface and adapters. (Typ A)
 - `top-instal-generator/` — PDF and DOCX generation. (Typ A)
 - `fast-kalk/` — lead widget and its owned runtime logic. (Typ A)
