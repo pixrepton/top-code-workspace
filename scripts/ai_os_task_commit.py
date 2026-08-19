@@ -40,6 +40,7 @@ from ai_os_task_locks import RepoCommitLock
 from ai_os_task_ownership import OwnershipError, collect_raw_git_state, prepare_owned_commit_states, scope_contains
 from ai_os_task_paths import state_dir, utc_now
 from ai_os_task_scope import normalize_rel
+from ai_os_task_commit_decision import evaluate_commit_decision, print_commit_decision
 from ai_os_task_state import atomic_write, load_checkpoint, refresh_git_fields, resolve_task_id
 
 CommitStates = dict[str, dict[str, tuple[str, bytes | None]]]
@@ -217,6 +218,7 @@ def commit_plan_payload(data: dict[str, Any], repo: str) -> dict[str, Any]:
         "warnings": warnings,
         "suggested_message": f"chore({data['task_id']}): {data['task_title']}"[:100],
     }
+    payload["decision"] = evaluate_commit_decision(data, repo, payload)
     _record_commit_evaluation(data, payload)
     return payload
 
@@ -236,6 +238,7 @@ def print_commit_plan(payload: dict[str, Any], as_json: bool) -> None:
         print(f"blocked: {reason}")
     if payload["verdict"] == "COMMIT_READY":
         print(f"suggested_message: {payload['suggested_message']}")
+    print_commit_decision(payload["decision"], as_json)
 
 def plan_commit(args: argparse.Namespace) -> int:
     data = load_checkpoint(getattr(args, "task_id", None))

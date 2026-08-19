@@ -96,7 +96,7 @@ Typ B stubs today include: `wp-bridges/`, `scripts/`, `tests/`, `tools/`, `paylo
 - `daszek/` — Node A; operator projection UI and bounded HITL. (Typ A)
 - `kalk-top/` — HVAC logic, sizing, pricing and `OfferDTO`. (Typ A)
 - `cieplo-orchestrator/` — separate Cieplo pipeline and worker. (Typ A)
-- `rag-chat-asystent/` — RAG backend, ingest and retrieval. (Typ A). Gotcha: `rag-chat-asystent/backend` contains a nested `.git` (no remote, dirty, preserved intentionally) — run git commands from the repo root only.
+- `rag-chat-asystent/` — RAG backend, ingest and retrieval. (Typ A). Nested `backend/.git` removed 2026-08-19 (legacy snapshot `4343071`, 2026-05-21; outer owns `backend/`). Run git commands from the repo root only.
 - `rag-widget/` — WordPress RAG surface and adapters. (Typ A)
 - `top-instal-generator/` — PDF and DOCX generation. (Typ A)
 - `fast-kalk/` — lead widget and its owned runtime logic. (Typ A)
@@ -161,6 +161,22 @@ The wrapper must:
 - record the resulting SHA.
 
 Full task lifecycle (`task-start` → `task-branch` → `task-gate` → `task-checkpoint` → `task-close`): `scripts/README.md` §Agent task and Git workflow.
+
+### Commit decision (mandatory before `task-commit`)
+
+Scoped implementation **authorizes** local commits; it does **not** authorize asking the operator whether to commit.
+
+1. Run `task-commit-plan --json` and read `decision`.
+2. Report `## Decyzja commit` with verdict, rationale and next step (copy from `decision.agent_report` or equivalent).
+3. Act on the verdict:
+   - `COMMIT_NOW` → run `task-commit` immediately;
+   - `COMMIT_LATER` → fix blockers, do not commit;
+   - `NO_COMMIT` → no commit in this repo;
+   - `DEFER_OPERATOR` → stop for operator.
+
+Never ask "czy commit?" for routine scoped work. Ask only when `decision.ask_operator` is true or publication requires push/merge/deploy.
+
+Canonical rules: `knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`.
 
 Do not run:
 
@@ -283,17 +299,17 @@ This section keeps only the rules that gate how a session starts. Additional exe
 
 Key routes (fallbacks and full detail in the canonical doc):
 
-| Need | Primary tool | Fallback when GitNexus/Serena unavailable |
-| --- | --- | --- |
-| Unknown local area or concept | GitNexus `query` | CBM `search_code` |
-| Concrete symbol | Serena `find_symbol` | CBM `search_graph` |
-| Dependencies or blast radius | GitNexus `impact` | CBM `trace_path` (inbound, `risk_labels=true`) |
-| Public HTTP API | GitNexus `route_map` / `api_impact` | CBM `query_graph` over route nodes |
-| MCP, RPC or tool contract | GitNexus `tool_map` | CBM `search_graph` |
-| Cross-repo contract | GitNexus group contracts | CBM per-repo `project=` + manual join |
-| Backend or workflow debugging | GitNexus query/trace | CBM `trace_path` |
-| UI or browser debugging | Playwright | owning backend path |
-| Before commit | tests → GitNexus `detect_changes` | tests → CBM `detect_changes` |
+| Need                          | Primary tool                        | Fallback when GitNexus/Serena unavailable      |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------- |
+| Unknown local area or concept | GitNexus `query`                    | CBM `search_code`                              |
+| Concrete symbol               | Serena `find_symbol`                | CBM `search_graph`                             |
+| Dependencies or blast radius  | GitNexus `impact`                   | CBM `trace_path` (inbound, `risk_labels=true`) |
+| Public HTTP API               | GitNexus `route_map` / `api_impact` | CBM `query_graph` over route nodes             |
+| MCP, RPC or tool contract     | GitNexus `tool_map`                 | CBM `search_graph`                             |
+| Cross-repo contract           | GitNexus group contracts            | CBM per-repo `project=` + manual join          |
+| Backend or workflow debugging | GitNexus query/trace                | CBM `trace_path`                               |
+| UI or browser debugging       | Playwright                          | owning backend path                            |
+| Before commit                 | tests → GitNexus `detect_changes`   | tests → CBM `detect_changes`                   |
 
 A change is **high-risk** when it affects: public API; DTO or payload shape; database state; authorization; policy or HITL; cross-repo contract; Source of Truth boundaries; routing; side effects; external communication. High-risk work requires impact/contract analysis, references or implementations, CBM confirmation where applicable, tests, and runtime, integration or Playwright proof.
 
@@ -368,6 +384,7 @@ Report:
 Never report `PASS` when required proof is missing.
 
 <!-- gitnexus:start -->
+
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **top-code workspace** (2097 symbols, 4640 relationships, 173 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
@@ -392,22 +409,22 @@ This project is indexed by GitNexus as **top-code workspace** (2097 symbols, 464
 
 ## Resources
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/top-code workspace/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/top-code workspace/clusters` | All functional areas |
-| `gitnexus://repo/top-code workspace/processes` | All execution flows |
-| `gitnexus://repo/top-code workspace/process/{name}` | Step-by-step execution trace |
+| Resource                                            | Use for                                  |
+| --------------------------------------------------- | ---------------------------------------- |
+| `gitnexus://repo/top-code workspace/context`        | Codebase overview, check index freshness |
+| `gitnexus://repo/top-code workspace/clusters`       | All functional areas                     |
+| `gitnexus://repo/top-code workspace/processes`      | All execution flows                      |
+| `gitnexus://repo/top-code workspace/process/{name}` | Step-by-step execution trace             |
 
 ## CLI
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Task                                         | Read this skill file                                        |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
+| Blast radius / "What breaks if I change X?"  | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?"             | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
+| Rename / extract / split / refactor          | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
+| Tools, resources, schema reference           | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
+| Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
 
 <!-- gitnexus:end -->

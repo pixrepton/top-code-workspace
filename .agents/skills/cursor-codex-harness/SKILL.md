@@ -180,6 +180,15 @@ python scripts/context_link_audit.py --scope workspace
 
 Application changes: domain skill tests + repo Gate A from root `AGENTS.md`.
 
+## Commit decision (before `task-commit`)
+
+Canonical: `knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`.
+
+1. `task-commit-plan --repo <repo> --json`
+2. Read `decision.decision` — never ask the operator for routine scoped commits.
+3. Report `## Decyzja commit` (verdict, rationale, proof, next step).
+4. `COMMIT_NOW` → `task-commit` immediately; `COMMIT_LATER` → fix blockers first.
+
 ## Checklist
 
 Before an expensive command, ask:

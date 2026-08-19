@@ -44,6 +44,7 @@ python scripts/ai_os_task.py task-gate --gate-id focused --repo gmail-agent --sc
 
 # Plan and create a scoped local commit without absorbing foreign staged state
 python scripts/ai_os_task.py task-commit-plan --repo gmail-agent --json
+# Read payload.decision (COMMIT_NOW | COMMIT_LATER | NO_COMMIT | DEFER_OPERATOR) — see GIT_AND_CHANGE_CONTROL.md
 python scripts/ai_os_task.py task-commit --repo gmail-agent --message "fix(scope): describe the completed result"
 
 # Rerun final gates after the commit, then close

@@ -1,0 +1,39 @@
+---
+description: Commit decision discipline — analyzed verdict before task-commit; never ask operator for routine scoped commits
+alwaysApply: true
+---
+
+# Commit decision discipline
+
+Kanoniczny proceder: `knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`.
+
+## Zasada
+
+Commit to **wynik analizy agenta**, nie pytanie do operatora.
+
+Przed `task-commit` zawsze:
+
+```powershell
+python scripts/ai_os_task.py task-commit-plan --repo <repo> --json
+```
+
+Czytaj pole `decision` i raportuj sekcje `## Decyzja commit` w odpowiedzi.
+
+## Werdykty
+
+| decision | Dzialanie |
+| --- | --- |
+| `COMMIT_NOW` | `task-commit` bez pytania operatora |
+| `COMMIT_LATER` | Napraw blockery; nie commituj |
+| `NO_COMMIT` | Brak owned paths — kontynuuj lub zamknij task |
+| `DEFER_OPERATOR` | Konflikt ownership / polityka — zatrzymaj sie |
+
+## Zakazane
+
+- "Chcesz commit?" / "Powiedz jesli chcesz follow-up commit"
+- `done` / `gotowe` przy niecommitowanym task-owned residue
+- `git add -A` z root workspace
+
+## Dozwolone pytanie do operatora
+
+Tylko gdy `decision.ask_operator` = true albo jawnie PUBLISH/SHIP/deploy.

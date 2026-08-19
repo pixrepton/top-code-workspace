@@ -113,6 +113,54 @@ function gitHeadIso(repoDir) {
   }
 }
 
+function cbmCacheDir() {
+  const explicit = process.env.CBM_CACHE_DIR;
+  if (explicit) return explicit.replace(/\\/g, "/");
+  if (process.platform === "win32") return "C:/ai-os-codebase-memory";
+  return path.join(os.homedir(), ".cache", "codebase-memory-mcp");
+}
+
+function cbmProjectId(repo) {
+  const rootEncoded = "C-Users-compg-Desktop-top-code-workspace";
+  if (repo === "workspace") return "top-code-workspace";
+  return `${rootEncoded}-${repo}`;
+}
+
+function cbmIndexedIso(projectId) {
+  const dbPath = path.join(cbmCacheDir().replace(/\//g, path.sep), `${projectId}.db`);
+  if (!fs.existsSync(dbPath)) return null;
+  try {
+    return new Date(fs.statSync(dbPath).mtimeMs).toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function formatCbmStaleness() {
+  const lines = [];
+  const workspaceIds = ["top-code-workspace", "C-Users-compg-Desktop-top-code-workspace"];
+  const workspaceIndexed = workspaceIds.map((id) => cbmIndexedIso(id)).filter(Boolean);
+  const head = gitHeadIso(root) || "?";
+  if (workspaceIndexed.length) {
+    const latest = workspaceIndexed.sort().reverse()[0];
+    const stale = latest && head && latest < head ? "STALE" : "check";
+    lines.push(`- workspace shell: indexed=${latest} head=${head} (${stale})`);
+  } else {
+    lines.push("- workspace shell: no CBM .db in cache");
+  }
+  for (const repo of NESTED_REPOS) {
+    const indexedAt = cbmIndexedIso(cbmProjectId(repo));
+    const headRepo = gitHeadIso(path.join(root, repo)) || "?";
+    if (!indexedAt) {
+      lines.push(`- ${repo}: no CBM .db`);
+      continue;
+    }
+    const stale = indexedAt && headRepo && indexedAt < headRepo ? "STALE" : "check";
+    lines.push(`- ${repo}: indexed=${indexedAt} head=${headRepo} (${stale})`);
+  }
+  return lines.join("\n");
+}
+
 function formatCodeIntelStaleness() {
   const lines = [];
   const rootMeta = path.join(root, ".gitnexus", "meta.json");
@@ -190,10 +238,11 @@ readJsonStdin((payload) => {
 
     parts.push(`\n--- ACTIVE TASKS ---\n${formatActiveTasks()}`);
     parts.push(`\n--- CODE-INTEL STALENESS (local .gitnexus meta vs git HEAD) ---\n${formatCodeIntelStaleness()}`);
+    parts.push(`\n--- CBM STALENESS (${cbmCacheDir()} .db mtime vs git HEAD) ---\n${formatCbmStaleness()}`);
 
     parts.push(
       "\nMemory SoT: knowledge/memory/{OPERATOR_DECISIONS,BACKLOG,ACTIVE_WORKSPACE,LAST_SESSION}.md. " +
-        "Do not create persistent transcript/reflection stores."
+      "Do not create persistent transcript/reflection stores."
     );
 
     process.stdout.write(JSON.stringify({ followup_message: parts.join("\n") }) + "\n");
