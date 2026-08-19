@@ -21,11 +21,11 @@ Czytaj pole `decision` i raportuj sekcje `## Decyzja commit` w odpowiedzi.
 
 ## Werdykty
 
-| decision | Dzialanie |
-| --- | --- |
-| `COMMIT_NOW` | `task-commit` bez pytania operatora |
-| `COMMIT_LATER` | Napraw blockery; nie commituj |
-| `NO_COMMIT` | Brak owned paths — kontynuuj lub zamknij task |
+| decision         | Dzialanie                                     |
+| ---------------- | --------------------------------------------- |
+| `COMMIT_NOW`     | `task-commit` bez pytania operatora           |
+| `COMMIT_LATER`   | Napraw blockery; nie commituj                 |
+| `NO_COMMIT`      | Brak owned paths — kontynuuj lub zamknij task |
 | `DEFER_OPERATOR` | Konflikt ownership / polityka — zatrzymaj sie |
 
 ## Zakazane
