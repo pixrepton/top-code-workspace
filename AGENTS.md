@@ -58,7 +58,19 @@ Do not create or restore:
 - shadow backlogs;
 - parallel decision logs.
 
-Do not write persistent memory without an explicit operator instruction.
+Do not write persistent memory without an explicit operator instruction, **except** when canonical memory files (`OPERATOR_DECISIONS`, `BACKLOG`, `ACTIVE_WORKSPACE`, `LAST_SESSION`) are already in the task's declared `repo:path` scope (writeback as part of scoped task closeout).
+
+## MCP configuration (host split)
+
+- **Cursor:** `.cursor/mcp.json` — MCP servers for this IDE session.
+- **Other hosts (Codex CLI, etc.):** root `.mcp.json` — same server set, may use different launchers on Windows.
+- This is intentional host split, not accidental duplication. Disable duplicate Context7 plugin in Cursor settings if two Context7 servers appear in one session.
+
+## Publication (GitHub / PR)
+
+- `LOCAL_ONLY` — local commits only (default).
+- `PUBLISH` / `SHIP` — push and PR when `gh` CLI is installed and authenticated.
+- If `gh` is unavailable: agent stops after `git push`; operator creates PR via GitHub web UI.
 
 ## L1 / L2 instruction model
 
@@ -130,7 +142,9 @@ Default publication mode:
 
 Local commit authorization does not authorize push, PR creation, merge, deployment, VPS work or any live mutation.
 
-Do not use raw `git add` or `git commit` for agent work. Use:
+Do not use raw `git add` or `git commit` for agent work. **Never run `git add -A` from workspace root** — nested product repos are separate Git units; stage only via `task-commit` with explicit owned paths.
+
+Use:
 
 ```powershell
 python scripts/ai_os_task.py task-commit-plan --repo <repo> --json
@@ -142,6 +156,7 @@ The wrapper must:
 - isolate task-owned content;
 - preserve foreign staged state;
 - block secrets and ownership conflicts;
+- **block nested product repo paths** (`gmail-agent/`, `kalk-top/`, …) from workspace-root commits — use `task-commit --repo <nested-repo>` instead;
 - verify final commit paths;
 - record the resulting SHA.
 

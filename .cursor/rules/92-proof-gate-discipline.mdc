@@ -12,12 +12,14 @@ alwaysApply: true
 
 ```text
 gmail-agent:          python -m pytest tools/gmail_audit/tests -q
-kalk-top:             npm run proof
+kalk-top:             npm run verify
 rag-chat-asystent:    python -m pytest backend/tests -q
 daszek:               php -l <zmieniony plik> && node --check public/app.js
 cieplo-orchestrator:  python -m pytest tests/ -q
 top-instal-generator: php -l <zmieniony plik>
 fast-kalk:            php -l <zmieniony plik>
+rag-widget:           node --check hvac-rag-chat/public/js/chat-widget.js (+ php -l zmienionych PHP)
+knowledge:            powershell -NoProfile -ExecutionPolicy Bypass -File knowledge/_gate_docs_sync_a.ps1
 ```
 
 Wiele repo w jednej sesji: uruchamiasz Gate A osobno w kazdym dotknietym repo.

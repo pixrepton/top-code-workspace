@@ -15,6 +15,7 @@ const os = require("os");
 const { execSync } = require("child_process");
 
 const LOCK_FILE = path.join(os.tmpdir(), ".cursor-session-arch-checked.lock");
+const LOCK_TTL_MS = 4 * 60 * 60 * 1000;
 const RUNTIME_DIR = path.join(__dirname, "..", "..", "knowledge", "runtime");
 const EVIDENCE_DIR = path.join(RUNTIME_DIR, "evidence");
 const LAST_REFRESHED = path.join(RUNTIME_DIR, ".last-refreshed");
@@ -43,6 +44,16 @@ function checkArtifactsFreshness() {
     return { status: "stale", message: `Artefakty sprzed ${Math.round(hoursSinceRefresh)}h — zbyt stare, wymagaja regeneracji.` };
   }
   return { status: "fresh", message: `Artefakty aktualne od: ${lastRefreshed.slice(0, 19)}` };
+}
+
+function lockIsFresh(lockPath) {
+  try {
+    if (!fs.existsSync(lockPath)) return false;
+    const ageMs = Date.now() - fs.statSync(lockPath).mtimeMs;
+    return ageMs < LOCK_TTL_MS;
+  } catch {
+    return false;
+  }
 }
 
 function countEvidenceFiles() {
@@ -102,8 +113,8 @@ process.stdin.on("end", () => {
     const manual = Boolean(payload.manual);
     const loopCount = Number(payload.loop_count || 0);
 
-    // Sentinel lock: run only ONCE per Cursor process (skipped when manual)
-    if (!manual && fs.existsSync(LOCK_FILE)) {
+    // TTL lock: arch-check may skip within 4h; session-start-inject always runs (no lock).
+    if (!manual && lockIsFresh(LOCK_FILE)) {
       process.stdout.write("{}\n");
       return;
     }

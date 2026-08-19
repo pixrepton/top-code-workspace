@@ -7,7 +7,7 @@ Cursor-only adapter. Use it before refactors or edits that change shared symbols
 
 ## Pipeline
 
-1. Name the owner and active contract from `AGENTS.md` and `source-of-truth.md`.
+1. Name the owner and active contract from `AGENTS.md` and `knowledge/source-of-truth.md`.
 2. Inspect current source and Git usage in the owning repo first.
 3. Use graph or index tools only for the explicit repo and only when freshness is proved.
 4. Verify callers, callees, literals, and config in source with `rg` or direct reads.

@@ -74,7 +74,7 @@ function Test-HttpHealth($name, $url) {
 
     catch {}
 
-    Write-Host "[SKIP/FAIL] $name $url (start local stack if needed)" -ForegroundColor Yellow
+    Write-Host "[FAIL] $name $url (start local stack if needed)" -ForegroundColor Red
 
     return $false
 
@@ -100,7 +100,7 @@ function Test-TcpPort($name, $hostName, $port) {
 
     catch {}
 
-    Write-Host "[SKIP/FAIL] $name ${hostName}:$port (start local stack if needed)" -ForegroundColor Yellow
+    Write-Host "[FAIL] $name ${hostName}:$port (start local stack if needed)" -ForegroundColor Red
 
     return $false
 
@@ -130,7 +130,10 @@ if (-not (Test-HttpHealth 'RAG backend' 'http://127.0.0.1:8000/health')) { $core
 
 
 
-if (-not $coreOk) { $warn++ }
+if (-not $coreOk) {
+    Write-Host '[FAIL] core stack health check failed (gmail-agent API and RAG backend required in core mode)' -ForegroundColor Red
+    $fail++
+}
 
 
 

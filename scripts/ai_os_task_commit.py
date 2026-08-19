@@ -17,6 +17,7 @@ from typing import Any
 from ai_os_task_constants import (
     FORBIDDEN_COMMAND_MARKERS,
     FROZEN_PATHS,
+    NESTED_PRODUCT_REPO_DIRS,
     PASSING_GATE_VERDICTS,
     SECRET_CONTENT_PATTERNS,
     SECRET_PATH_PATTERNS,
@@ -51,6 +52,21 @@ def owned_paths_for_repo(data: dict[str, Any], repo: str) -> list[str]:
             if item.startswith(prefix):
                 values.add(normalize_rel(item[len(prefix) :]))
     return sorted(values)
+
+def nested_product_path_issue(repo: str, rel_path: str) -> str:
+    """Block staging nested product repo files through workspace-root Git."""
+    if repo not in {".", "root", "workspace"}:
+        return ""
+    normalized = normalize_rel(rel_path)
+    if not normalized:
+        return ""
+    top = normalized.split("/", 1)[0]
+    if top in NESTED_PRODUCT_REPO_DIRS:
+        return (
+            f"nested product repo path forbidden from workspace commit: {normalized} "
+            f"(use task-commit --repo {top})"
+        )
+    return ""
 
 def _secret_path_issue(path: str) -> str:
     normalized = normalize_rel(path)
@@ -161,6 +177,10 @@ def _owned_commit_findings(data: dict[str, Any], repo: str, owned_paths: list[st
     conflict_warnings, conflict_reasons = _ownership_conflict_findings(data, repo, owned_paths, bool(states))
     reasons.extend(conflict_reasons)
     reasons.extend(scan_commit_states_for_secrets(states))
+    for owned_path in owned_paths:
+        nested_issue = nested_product_path_issue(repo, owned_path)
+        if nested_issue:
+            reasons.append(nested_issue)
     warnings = list(conflict_warnings)
     foreign_staged = _foreign_staged_warning(data, repo)
     if foreign_staged:

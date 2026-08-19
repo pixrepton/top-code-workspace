@@ -39,6 +39,7 @@ from ai_os_task_scope import parse_scope
 from ai_os_task_state import (
     atomic_write,
     find_scope_conflicts,
+    git_mismatches,
     load_checkpoint,
     migrate_legacy_checkpoint,
     migrate_legacy_checkpoint_if_present,
@@ -307,7 +308,27 @@ def status_task(args: argparse.Namespace) -> int:
 
 def resume_task(args: argparse.Namespace) -> int:
     data = load_checkpoint(getattr(args, "task_id", None))
+    refresh_git_fields(data)
     print_summary(data, "RESUME")
+    print("--- recovery ---")
+    mismatches = git_mismatches(data)
+    if mismatches:
+        print("action: reconcile git_state_mismatch before commit (re-baseline or sync recorded SHAs)")
+        for item in mismatches:
+            print(f"  mismatch: {item}")
+    dirty_owned = sorted(
+        set(data.get("own_unstaged_files", [])) | set(data.get("own_untracked_files", []))
+    )
+    if dirty_owned:
+        print("dirty task-owned paths:")
+        for item in dirty_owned[:20]:
+            print(f"  {item}")
+        if len(dirty_owned) > 20:
+            print(f"  ... +{len(dirty_owned) - 20} more")
+    else:
+        print("dirty task-owned paths: none")
+    if data.get("next_action"):
+        print(f"resume_hint: {data['next_action']}")
     return 0
 
 def _release_baseline_for(path: Path) -> None:

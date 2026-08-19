@@ -81,3 +81,18 @@ FORBIDDEN_COMMAND_MARKERS = (
     "deploy",
     "kubectl ",
 )
+
+# Nested product repos are independent Git units; never commit their paths via workspace root.
+NESTED_PRODUCT_REPO_DIRS = frozenset(
+    {
+        "knowledge",
+        "gmail-agent",
+        "kalk-top",
+        "daszek",
+        "rag-chat-asystent",
+        "rag-widget",
+        "cieplo-orchestrator",
+        "top-instal-generator",
+        "fast-kalk",
+    }
+)
