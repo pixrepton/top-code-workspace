@@ -29,6 +29,11 @@
 # Tooling indexes (regenerate on demand; not product sources)
 **/.gitnexus/
 **/.serena/cache/
+**/.serena/logs/
+
+# Generated audit / test-run artifacts (junk, not product sources)
+docs/*.html
+/tools/**/runs/
 
 # Root-local operator scratch (not harness, not nested product repos)
 /archive-codex-and-claude/
