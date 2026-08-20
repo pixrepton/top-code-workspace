@@ -1,9 +1,9 @@
 {
     "root_row_semantics": {
-        "observed_head": "800318a7a2a34cfd0865889a0daacdcf530d9cda",
+        "observed_head": "0e251a76087f6c7998117ed6d0b871a262d86b28",
         "observed_before_snapshot_commit": true
     },
-    "policy": "root sparse meta-repo; no submodules; local Docker only; no commit/push/deploy implied",
+    "policy": "root sparse meta-repo; no submodules; local Docker only; push/parity for the 2026-08-20 truth sync is explicitly authorized; no deploy implied",
     "schema": "top-code.workspace-repos.lock.v2",
     "repos": [
         {
@@ -14,8 +14,8 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/knowledge.git",
             "role": "docs_and_world_state",
-            "head": "0924db172eabfe634031ef3ba3ee82c72fb4ff0a",
-            "clean": false
+            "head": "cd31a8c59ae7dc7a0d76c5431b7815edf3126fe1",
+            "clean": true
         },
         {
             "git_repo": true,
@@ -25,7 +25,7 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/gmail-agent.git",
             "role": "node_b_operational_sot",
-            "head": "a877d8083065386afa5a04f15df86e4ed5000a59",
+            "head": "dc2832c2be47d8b72b73a9dff545b0ba23085673",
             "clean": true
         },
         {
@@ -36,8 +36,8 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/kalk-top.git",
             "role": "hvac_logic_offer_dto_owner",
-            "head": "ef5db272cf201b556ceeb6de0a254468cef4f3cc",
-            "clean": false
+            "head": "10b4b8eca0e02cfb33836c6b8d102a7670cad20f",
+            "clean": true
         },
         {
             "git_repo": true,
@@ -47,7 +47,7 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/daszek.git",
             "role": "operator_projection_ui",
-            "head": "2607af878e23d513f3480a06a74da8e950762f59",
+            "head": "7a6e1d7ae92b714cd15bf936d1c93c79e639ecfd",
             "clean": true
         },
         {
@@ -69,7 +69,7 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/Asystent-RAG.git",
             "role": "rag_backend_ingest_retrieval",
-            "head": "0715ccc8d41c1590d464578f446680103724c706",
+            "head": "fed5cbb72a9c9b288461dafa73e78ee735fc71f3",
             "clean": true
         },
         {
@@ -80,7 +80,7 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/rag-widget.git",
             "role": "wordpress_rag_client",
-            "head": "46731422bebeaa307a4f2c7d6a102d1ddd4526c8",
+            "head": "2468c31693f84bc8967230e5193dd5152952f71c",
             "clean": true
         },
         {
@@ -91,7 +91,7 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/cieplo-orchestrator.git",
             "role": "cieplo_pipeline_worker",
-            "head": "92c0e6b7319b2f2a5596f24a187a18a33a9c6a3e",
+            "head": "3a20836db057dc43ddc63ad628e018205c08cf69",
             "clean": true
         },
         {
@@ -102,7 +102,7 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/top-instal-generator.git",
             "role": "pdf_docx_generation",
-            "head": "380bf989f44ca3f6a8f272d92bc7193a6fce117d",
+            "head": "685d583a8a3bb95a056b2dbda85cdf76de0d2c7f",
             "clean": true
         },
         {
@@ -113,17 +113,17 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/fast-kalk.git",
             "role": "lead_widget",
-            "head": "82128e64bba5cdb2ddbc85d00880a545d742c122",
+            "head": "e1afebf7be6f7ff46634b90be9b9021ac647b949",
             "clean": true
         }
     ],
-    "generated_at": "2026-08-19T08:01:47+02:00",
+    "generated_at": "2026-08-20T12:46:03+02:00",
     "snapshot_semantics": "Versioned workspace topology/configuration snapshot. NOT exact self-referential final Git proof. For the repository that contains this file (workspace/root) the \u0027head\u0027 field records \u0027observed_before_snapshot_commit\u0027 - the HEAD present at generation time - and never the SHA of the commit that contains this file. For child/product repositories the \u0027head\u0027 field records the exact observed final HEAD at generation time.",
     "known_hygiene_risks": [
         "rag-chat-asystent/backend nested .git REMOVED 2026-08-19 (archived HEAD 4343071879509df2bc64386131b0ef4880aee156); GitNexus Asystent-RAG reindexed at repo root 2026-08-19 (0715ccc); never index backend/ separately",
         "wp-bridges is classified as local_harness/deprecated_surface, not a standalone git repo",
-        "kalk-top: canonical branch decision deferred to AIOS-KALK-CANONICALIZE-20260811 (remote default handoff/20260719-1403-latest)",
-        "root workspace: no remote (INTENTIONAL_LOCAL_ONLY per OPERATOR_DECISIONS 2026-08-14)"
+        "kalk-top: current branch parity is authorized by OPERATOR_DECISIONS 2026-08-20 for the truth sync; remote default branch may still differ",
+        "root workspace: 2026-08-14 no-remote/local-only statement is superseded by OPERATOR_DECISIONS 2026-08-20 for this truth-sync publication"
     ],
     "workspace": "c:\\Users\\compg\\Desktop\\top-code workspace"
 }
