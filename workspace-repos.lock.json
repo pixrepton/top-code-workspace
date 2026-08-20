@@ -1,6 +1,6 @@
 {
     "root_row_semantics": {
-        "observed_head": "0e251a76087f6c7998117ed6d0b871a262d86b28",
+        "observed_head": "38f3c56a580f0bbe58b65069ae755321ff34ee41",
         "observed_before_snapshot_commit": true
     },
     "policy": "root sparse meta-repo; no submodules; local Docker only; push/parity for the 2026-08-20 truth sync is explicitly authorized; no deploy implied",
@@ -14,7 +14,7 @@
             "exists": true,
             "remote": "https://github.com/pixrepton/knowledge.git",
             "role": "docs_and_world_state",
-            "head": "cd31a8c59ae7dc7a0d76c5431b7815edf3126fe1",
+            "head": "5b78e7bab48e066297106965cb0622496ad241e0",
             "clean": true
         },
         {
@@ -117,7 +117,7 @@
             "clean": true
         }
     ],
-    "generated_at": "2026-08-20T12:46:03+02:00",
+    "generated_at": "2026-08-20T12:49:19+02:00",
     "snapshot_semantics": "Versioned workspace topology/configuration snapshot. NOT exact self-referential final Git proof. For the repository that contains this file (workspace/root) the \u0027head\u0027 field records \u0027observed_before_snapshot_commit\u0027 - the HEAD present at generation time - and never the SHA of the commit that contains this file. For child/product repositories the \u0027head\u0027 field records the exact observed final HEAD at generation time.",
     "known_hygiene_risks": [
         "rag-chat-asystent/backend nested .git REMOVED 2026-08-19 (archived HEAD 4343071879509df2bc64386131b0ef4880aee156); GitNexus Asystent-RAG reindexed at repo root 2026-08-19 (0715ccc); never index backend/ separately",
