@@ -23,11 +23,11 @@
   ],
   "canonical_runner": {
     "path": "scripts/fresh38/run_recovery_pf.py",
-    "sha256": "454f97ebdd7b80a7c0b154585fcebb18e0696c0ba38db60c72161dbdc5cff90e",
+    "sha256": "0c8934263726f803a92a564eee2162899aee190dccbce6894083aeee95425318",
     "provenance": "TRACKED_CANONICAL",
     "tracked_in_git": true,
     "reproducible_from_fresh_checkout": true,
-    "change_note": "P2 hygiene (2026-08-18): disable fabricated run_draft eligibility; project review_required and FRESH38_ATTEMPT_ID as run_id; no extra LLM."
+    "change_note": "P4-C CTX-03 (2026-08-20): tag prior-value supersession as replace_message_facts so a differing customer value surfaces as a conflict."
   },
   "canonical_scoring": {
     "path": "scripts/fresh38/scoring.py",
