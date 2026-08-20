@@ -259,7 +259,12 @@ def test_current_message_fact_supersedes_different_prior_value_in_context_pack()
     active_by_key = {row["fact_key"]: row for row in pack["active_facts"]}
     assert active_by_key["floor_heating_existing"]["normalized_value"] == "True"
     assert active_by_key["floor_heating_existing"]["source_ref"] == "case_recovery_FU-07_current"
-    assert not any(
-        row.get("fact_key") == "floor_heating_existing"
-        for row in pack["conflicting_facts"]
+    # CTX-03 operator decision: a new customer message changing a prior value
+    # is tagged replace_message_facts and surfaces as a real disagreement,
+    # rather than being silently hidden as a settled supersession.
+    conflict = next(
+        (row for row in pack["conflicting_facts"] if row.get("fact_key") == "floor_heating_existing"),
+        None,
     )
+    assert conflict is not None
+    assert set(conflict["values"]) == {"False", "True"}

@@ -738,7 +738,13 @@ def _corpus_context_pack(case: dict, extraction: dict | None = None) -> dict | N
         current_value = current_values.get(identity)
         prior_value = str(fact.get("normalized_value") or "").strip()
         if current_value is not None and current_value != prior_value:
-            active_facts[index] = {**fact, "status": "superseded"}
+            # Parity with production `replace_message_facts`: a new customer
+            # message changing a value is tagged as `replace_message_facts`,
+            # which the read path surfaces as a real disagreement (CTX-03),
+            # not as a silently settled authoritative supersession.
+            meta = dict(fact.get("metadata") or {})
+            meta["supersede_reason"] = "replace_message_facts"
+            active_facts[index] = {**fact, "status": "superseded", "metadata": meta}
     combined = active_facts + current_rows
     if current_rows:
         try:
