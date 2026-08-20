@@ -113,6 +113,19 @@ function gitHeadIso(repoDir) {
   }
 }
 
+function gitHeadSha(repoDir) {
+  try {
+    return execSync("git rev-parse HEAD", {
+      cwd: repoDir,
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
 function cbmCacheDir() {
   const explicit = process.env.CBM_CACHE_DIR;
   if (explicit) return explicit.replace(/\\/g, "/");
@@ -136,27 +149,63 @@ function cbmIndexedIso(projectId) {
   }
 }
 
+function loadCbmProjectHeads() {
+  try {
+    const raw = execSync("codebase-memory-mcp cli list_projects", {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 12000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const jsonStart = raw.indexOf("{");
+    if (jsonStart < 0) return new Map();
+    const data = JSON.parse(raw.slice(jsonStart));
+    const projects = Array.isArray(data.projects) ? data.projects : [];
+    const heads = new Map();
+    for (const project of projects) {
+      const name = project && project.name;
+      const head = project && project.git && project.git.head_sha;
+      if (name && head) heads.set(name, head);
+    }
+    return heads;
+  } catch {
+    return new Map();
+  }
+}
+
 function formatCbmStaleness() {
   const lines = [];
+  const projectHeads = loadCbmProjectHeads();
   const workspaceIds = ["top-code-workspace", "C-Users-compg-Desktop-top-code-workspace"];
   const workspaceIndexed = workspaceIds.map((id) => cbmIndexedIso(id)).filter(Boolean);
-  const head = gitHeadIso(root) || "?";
-  if (workspaceIndexed.length) {
+  const head = gitHeadSha(root);
+  const workspaceProjectHead = workspaceIds.map((id) => projectHeads.get(id)).find(Boolean);
+  if (workspaceProjectHead && head) {
+    const status = workspaceProjectHead === head ? "current" : "STALE";
+    lines.push(`- workspace shell: cbm_head=${workspaceProjectHead.slice(0, 7)} git_head=${head.slice(0, 7)} (${status})`);
+  } else if (workspaceIndexed.length) {
     const latest = workspaceIndexed.sort().reverse()[0];
-    const stale = latest && head && latest < head ? "STALE" : "check";
-    lines.push(`- workspace shell: indexed=${latest} head=${head} (${stale})`);
+    const headIso = gitHeadIso(root) || "?";
+    lines.push(`- workspace shell: indexed_mtime=${latest} head_time=${headIso} (mtime-only check)`);
   } else {
     lines.push("- workspace shell: no CBM .db in cache");
   }
   for (const repo of NESTED_REPOS) {
+    const repoDir = path.join(root, repo);
+    const headSha = gitHeadSha(repoDir);
+    const projectHead = projectHeads.get(cbmProjectId(repo));
+    if (projectHead && headSha) {
+      const status = projectHead === headSha ? "current" : "STALE";
+      lines.push(`- ${repo}: cbm_head=${projectHead.slice(0, 7)} git_head=${headSha.slice(0, 7)} (${status})`);
+      continue;
+    }
     const indexedAt = cbmIndexedIso(cbmProjectId(repo));
-    const headRepo = gitHeadIso(path.join(root, repo)) || "?";
+    const headRepo = gitHeadIso(repoDir) || "?";
     if (!indexedAt) {
       lines.push(`- ${repo}: no CBM .db`);
       continue;
     }
-    const stale = indexedAt && headRepo && indexedAt < headRepo ? "STALE" : "check";
-    lines.push(`- ${repo}: indexed=${indexedAt} head=${headRepo} (${stale})`);
+    lines.push(`- ${repo}: indexed_mtime=${indexedAt} head_time=${headRepo} (mtime-only check)`);
   }
   return lines.join("\n");
 }
@@ -168,8 +217,10 @@ function formatCodeIntelStaleness() {
     try {
       const meta = JSON.parse(fs.readFileSync(rootMeta, "utf8"));
       const indexedAt = meta.indexedAt || meta.generatedAt || "?";
-      const head = gitHeadIso(root) || "?";
-      lines.push(`- workspace shell: indexed=${indexedAt} head=${head}`);
+      const indexedHead = meta.lastCommit || "";
+      const head = gitHeadSha(root) || "";
+      const status = indexedHead && head ? (indexedHead === head ? "current" : "STALE") : "check";
+      lines.push(`- workspace shell: indexed=${indexedAt} indexed_head=${indexedHead.slice(0, 7) || "?"} git_head=${head.slice(0, 7) || "?"} (${status})`);
     } catch {
       lines.push("- workspace shell: meta unreadable");
     }
@@ -184,9 +235,10 @@ function formatCodeIntelStaleness() {
     try {
       const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
       const indexedAt = meta.indexedAt || meta.generatedAt || "?";
-      const head = gitHeadIso(repoDir) || "?";
-      const stale = indexedAt && head && indexedAt < head ? "STALE" : "check";
-      lines.push(`- ${repo}: indexed=${indexedAt} head=${head} (${stale})`);
+      const indexedHead = meta.lastCommit || "";
+      const head = gitHeadSha(repoDir) || "";
+      const status = indexedHead && head ? (indexedHead === head ? "current" : "STALE") : "check";
+      lines.push(`- ${repo}: indexed=${indexedAt} indexed_head=${indexedHead.slice(0, 7) || "?"} git_head=${head.slice(0, 7) || "?"} (${status})`);
     } catch {
       lines.push(`- ${repo}: meta unreadable`);
     }
