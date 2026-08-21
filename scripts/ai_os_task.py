@@ -22,7 +22,10 @@ from ai_os_task_constants import ALLOWED_CLASSES, ALLOWED_PUBLICATION_MODES, ALL
 from ai_os_task_errors import TaskError
 from ai_os_task_gates import run_gate
 from ai_os_task_lifecycle import (
+    add_scope,
+    adopt_path,
     close_task,
+    clear_next,
     list_tasks_cmd,
     new_checkpoint,
     remove_state,
@@ -89,6 +92,27 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--resolve-blocker", action="append")
     checkpoint.add_argument("--commit", action="append", help="repo:sha or sha")
     checkpoint.set_defaults(func=update_checkpoint)
+
+    scope_add = sub.add_parser("task-scope-add")
+    add_task_id_arg(scope_add)
+    scope_add.add_argument("--scope", action="append", required=True, help="repo:path to add to declared scope")
+    scope_add.add_argument(
+        "--adopt-existing",
+        action="store_true",
+        help="Adopt current dirty paths under the added scope as task-owned",
+    )
+    scope_add.add_argument("--reason", default="")
+    scope_add.set_defaults(func=add_scope)
+
+    adopt = sub.add_parser("task-adopt-path")
+    add_task_id_arg(adopt)
+    adopt.add_argument("--path", action="append", required=True, help="repo:path inside declared scope")
+    adopt.add_argument("--reason", default="")
+    adopt.set_defaults(func=adopt_path)
+
+    next_clear = sub.add_parser("task-next-clear")
+    add_task_id_arg(next_clear)
+    next_clear.set_defaults(func=clear_next)
 
     gate = sub.add_parser("task-gate")
     add_task_id_arg(gate)

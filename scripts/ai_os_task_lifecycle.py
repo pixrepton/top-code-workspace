@@ -21,6 +21,7 @@ from ai_os_task_git import git_branch, git_head, repo_path
 from ai_os_task_locks import RegistryLock
 from ai_os_task_ownership import (
     OwnershipError,
+    collect_raw_git_state,
     capture_ownership_baseline,
     delete_ownership_baseline,
     scope_contains,
@@ -35,7 +36,7 @@ from ai_os_task_paths import (
     summary_path,
     utc_now,
 )
-from ai_os_task_scope import parse_scope
+from ai_os_task_scope import parse_scope, scopes_for_repo
 from ai_os_task_state import (
     atomic_write,
     find_scope_conflicts,
@@ -52,6 +53,46 @@ def _require_adopted_inside_scope(scope: list[dict[str, str]], adopted: list[dic
     for item in adopted:
         if not scope_contains(scope, item):
             raise TaskError(f"adopted baseline path must be inside declared scope: {item['repo']}:{item['path']}")
+
+def _scope_identity(item: dict[str, str]) -> tuple[str, str]:
+    return item["repo"], item["path"]
+
+def _append_unique_scope(target: list[dict[str, str]], additions: list[dict[str, str]]) -> list[dict[str, str]]:
+    existing = {_scope_identity(item) for item in target}
+    changed = list(target)
+    for item in additions:
+        key = _scope_identity(item)
+        if key not in existing:
+            changed.append(item)
+            existing.add(key)
+    return changed
+
+def _require_known_scope_repos(data: dict[str, Any], additions: list[dict[str, str]]) -> None:
+    known = set(data["target_repositories"])
+    unknown = sorted({item["repo"] for item in additions} - known)
+    if unknown:
+        raise TaskError(
+            "scope updates can only add paths inside existing target repositories; "
+            f"start a new task for repo(s): {', '.join(unknown)}"
+        )
+
+def _qualified_dirty_paths(scope: list[dict[str, str]]) -> list[str]:
+    dirty: set[str] = set()
+    for repo in sorted({item["repo"] for item in scope}):
+        raw = collect_raw_git_state(repo_path(repo), scopes_for_repo(scope, repo))
+        for paths in raw.values():
+            dirty.update(f"{repo}:{path}" for path in paths)
+    return sorted(dirty)
+
+def _require_clean_scope_addition(additions: list[dict[str, str]], adopt_existing: bool) -> None:
+    if adopt_existing:
+        return
+    dirty = _qualified_dirty_paths(additions)
+    if dirty:
+        raise TaskError(
+            "cannot add scope with pre-existing dirty paths unless --adopt-existing is set: "
+            + ", ".join(dirty[:10])
+        )
 
 def _release_replaced_baseline(active_path: Path) -> None:
     try:
@@ -202,6 +243,63 @@ def update_checkpoint(args: argparse.Namespace) -> int:
     refresh_git_fields(data)
     atomic_write(data)
     print_summary(data, "CHECKPOINT")
+    return 0
+
+def add_scope(args: argparse.Namespace) -> int:
+    additions = parse_scope(args.scope)
+    task_id = getattr(args, "task_id", None)
+    with RegistryLock():
+        data = load_checkpoint(task_id)
+        _require_known_scope_repos(data, additions)
+        _require_no_scope_conflict(additions, data["task_id"], replace=True)
+        _require_clean_scope_addition(additions, args.adopt_existing)
+        data["declared_write_scope"] = _append_unique_scope(data["declared_write_scope"], additions)
+        if args.adopt_existing:
+            data["adopted_baseline_scope"] = _append_unique_scope(data["adopted_baseline_scope"], additions)
+        data["completed_steps"].append(
+            {
+                "timestamp": utc_now(),
+                "text": "Updated task scope: "
+                + ", ".join(f"{item['repo']}:{item['path']}" for item in additions),
+            }
+        )
+        if args.reason:
+            data["decisions"].append({"timestamp": utc_now(), "text": args.reason})
+        data["current_phase"] = "scope-updated"
+        refresh_git_fields(data)
+        atomic_write(data)
+    print_summary(data, "SCOPE_UPDATED")
+    return 0
+
+def adopt_path(args: argparse.Namespace) -> int:
+    additions = parse_scope(args.path)
+    data = load_checkpoint(getattr(args, "task_id", None))
+    _require_known_scope_repos(data, additions)
+    _require_adopted_inside_scope(data["declared_write_scope"], additions)
+    data["adopted_baseline_scope"] = _append_unique_scope(data["adopted_baseline_scope"], additions)
+    data["completed_steps"].append(
+        {
+            "timestamp": utc_now(),
+            "text": "Adopted baseline path(s): "
+            + ", ".join(f"{item['repo']}:{item['path']}" for item in additions),
+        }
+    )
+    if args.reason:
+        data["decisions"].append({"timestamp": utc_now(), "text": args.reason})
+    data["current_phase"] = "baseline-adopted"
+    refresh_git_fields(data)
+    atomic_write(data)
+    print_summary(data, "ADOPTED")
+    return 0
+
+def clear_next(args: argparse.Namespace) -> int:
+    data = load_checkpoint(getattr(args, "task_id", None))
+    data["next_action"] = ""
+    data["completed_steps"].append({"timestamp": utc_now(), "text": "Cleared task next_action"})
+    data["current_phase"] = "next-cleared"
+    refresh_git_fields(data)
+    atomic_write(data)
+    print_summary(data, "NEXT_CLEARED")
     return 0
 
 def _print_closure(payload: dict[str, Any], issues: list[str], as_json: bool) -> None:
