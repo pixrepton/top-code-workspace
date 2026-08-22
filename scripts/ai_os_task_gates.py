@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import shutil
 import subprocess
 import sys
@@ -17,7 +18,7 @@ from typing import Any
 from ai_os_task_constants import FORBIDDEN_COMMAND_MARKERS, PASSING_GATE_VERDICTS
 from ai_os_task_errors import TaskError
 from ai_os_task_git import config_hash, git_head, repo_path, run, scope_hash, staged_diff_hash
-from ai_os_task_paths import state_dir, utc_now
+from ai_os_task_paths import sanitize_task_id, state_dir, utc_now
 from ai_os_task_scope import normalize_rel, scopes_for_repo
 from ai_os_task_state import atomic_write, load_checkpoint, refresh_git_fields
 
@@ -84,6 +85,7 @@ def _deduplicated_entry(
         "gate_id": args.gate_id,
         "repo": args.repo,
         "command": " ".join(command),
+        "command_argv": list(command),
         "working_directory": str(repo_path(args.repo)),
         "timestamp": utc_now(),
         "exit_code": 0,
@@ -106,6 +108,50 @@ def _write_gate_log(log_path: str | None, output: str) -> str:
     target.write_text(output, encoding="utf-8", newline="\n")
     return str(target)
 
+
+def _default_gate_log_path(task_id: str, gate_id: str) -> str:
+    """Always-on structured gate log artifact under the task state dir."""
+    directory = state_dir() / "gate-logs" / sanitize_task_id(task_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    return str(directory / f"{gate_id}-{utc_now().replace(':', '-')}.log")
+
+
+def _gate_env() -> dict[str, str]:
+    """Deterministic UTF-8 environment for gate subprocesses.
+
+    The workspace encoding contract is UTF-8; without this, Windows subprocess
+    text mode follows the locale (cp1250) and Polish pytest output in gate logs
+    becomes non-deterministic. User-set values are preserved.
+    """
+    env = os.environ.copy()
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONLEGACYWINDOWSSTDIO", "0")
+    return env
+
+
+def _terminate_owned_process_tree(proc: subprocess.Popen[Any]) -> None:
+    """Terminate ONLY the process tree spawned by this gate.
+
+    Ownership-safe: the target pid is the direct child this runner created;
+    user/foreign processes are never touched. On Windows, taskkill /T scopes
+    termination to that spawned tree. On POSIX, the child is its own process
+    group (start_new_session=True), so killpg touches only that group.
+    """
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            capture_output=True,
+        )
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+
+
 def _gate_output(proc: subprocess.CompletedProcess[str]) -> str:
     return (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
 
@@ -123,38 +169,102 @@ def _execute_gate(
     print(f"GATE {args.gate_id}: RUN")
     print("command: " + " ".join(command))
     start = time.time()
-    proc = subprocess.run(command, cwd=str(repo_path(args.repo)), text=True, capture_output=True)
+    gate_timeout = int(getattr(args, "timeout", 0) or 0)
+    creationflags = 0
+    start_new_session = False
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        start_new_session = True
+    try:
+        proc = subprocess.Popen(
+            command,
+            cwd=str(repo_path(args.repo)),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=_gate_env(),
+            creationflags=creationflags,
+            start_new_session=start_new_session,
+        )
+        stdout, stderr = proc.communicate(timeout=gate_timeout if gate_timeout else None)
+        timed_out = False
+    except subprocess.TimeoutExpired:
+        _terminate_owned_process_tree(proc)
+        stdout, stderr = proc.communicate()
+        timed_out = True
     duration = round(time.time() - start, 3)
-    output = _gate_output(proc)
-    verdict = "PASS" if proc.returncode == 0 else "FAIL"
+    output = (stdout or "") + (("\n" + stderr) if stderr else "")
+    if timed_out:
+        verdict = "TIMEOUT"
+        exit_code: int | None = proc.returncode
+    else:
+        verdict = "PASS" if proc.returncode == 0 else "FAIL"
+        exit_code = proc.returncode
     short = args.summary or summarize_output(output, verdict)
+    log_path = args.log_path or _default_gate_log_path(data["task_id"], args.gate_id)
     entry = {
         "gate_id": args.gate_id,
         "repo": args.repo,
         "command": " ".join(command),
+        "command_argv": list(command),
         "working_directory": str(repo_path(args.repo)),
         "timestamp": utc_now(),
-        "exit_code": proc.returncode,
+        "exit_code": exit_code,
         "verdict": verdict,
         "duration_seconds": duration,
         "fingerprint": fingerprint,
-        "log_path": _write_gate_log(args.log_path, output),
+        "log_path": _write_gate_log(log_path, output),
         "short_result": short,
         "limitations": args.limitations or "",
+        "diagnostics": (
+            {
+                "failure_kind": "TIMEOUT",
+                "hung": True,
+                "gate_timeout_seconds": gate_timeout,
+                "terminated": True,
+                "termination_target": f"spawned_pid={proc.pid}",
+                "partial_output_tail": "\n".join(output.splitlines()[-40:]),
+            }
+            if timed_out
+            else None
+        ),
     }
     phase = "gate-pass" if verdict == "PASS" else "gate-fail"
     _record_gate(data, entry, phase, f"{args.gate_id}: {verdict} - {short}")
     print(f"GATE {args.gate_id}: {verdict} ({duration}s)")
     print(f"summary: {short}")
-    if proc.returncode != 0:
+    print(f"log: {log_path}")
+    if verdict != "PASS":
+        if timed_out:
+            print(f"HUNG_TEST: gate exceeded {gate_timeout}s; owned process tree {proc.pid} terminated")
         _print_failure_tail(output)
-    return proc.returncode
+    return 1 if timed_out else (0 if verdict == "PASS" else 1)
 
 def run_gate(args: argparse.Namespace) -> int:
     data = load_checkpoint(getattr(args, "task_id", None))
     if args.repo not in data["target_repositories"]:
         raise TaskError(f"gate repo is not in checkpoint target_repositories: {args.repo}")
-    command = _resolve_gate_command(args)
+    profile = getattr(args, "profile", None)
+    raw_command = getattr(args, "command", None)
+    if profile and raw_command:
+        raise TaskError("task-gate: --profile and a raw command are mutually exclusive")
+    if profile:
+        from ai_os_task_profiles import resolve_profile
+
+        resolved = resolve_profile(args.repo, profile)
+        command = resolved.command()
+        forbidden = command_contains_forbidden(command)
+        if forbidden:
+            raise TaskError(f"refusing profile with forbidden command marker(s): {', '.join(forbidden)}")
+        if not getattr(args, "timeout", 0):
+            args.timeout = resolved.gate_timeout
+        if not args.summary:
+            args.summary = resolved.description
+    else:
+        command = _resolve_gate_command(args)
     fingerprint = gate_fingerprint(args, data)
     previous = None if args.always_fresh else previous_matching_pass(data, args.gate_id, args.repo, fingerprint)
     if not previous:

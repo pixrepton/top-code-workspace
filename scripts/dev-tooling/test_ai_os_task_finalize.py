@@ -1,0 +1,224 @@
+"""P2: task-finalize - deterministic commit/close orchestration, no safety loss."""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "scripts" / "ai_os_task.py"
+
+
+def run_cmd(args, cwd=ROOT, env=None, check=True):
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), *args],
+        cwd=str(cwd),
+        text=True,
+        capture_output=True,
+        env=merged_env,
+    )
+    if check and proc.returncode != 0:
+        raise AssertionError(proc.stdout + proc.stderr)
+    return proc
+
+
+def git(repo, *args, check=True):
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(repo),
+        text=True,
+        capture_output=True,
+    )
+    if check and proc.returncode != 0:
+        raise AssertionError(proc.stdout + proc.stderr)
+    return proc
+
+
+def remove_tree(path: Path):
+    def onexc(func, item, exc):
+        try:
+            os.chmod(item, stat.S_IWRITE)
+            func(item)
+        except Exception:
+            raise exc
+
+    shutil.rmtree(path, onexc=onexc)
+
+
+@pytest.fixture
+def task_repo(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    git(source, "init")
+    git(source, "config", "user.email", "test@example.invalid")
+    git(source, "config", "user.name", "Test User")
+    (source / "tracked.txt").write_text("line\n", encoding="utf-8")
+    (source / "task.txt").write_text("initial\n", encoding="utf-8")
+    git(source, "add", "--", "tracked.txt", "task.txt")
+    git(source, "commit", "-m", "init")
+
+    name = f"tmp-finalize-{tmp_path.name}"
+    workspace_repo = ROOT / name
+    if workspace_repo.exists():
+        remove_tree(workspace_repo)
+    git(ROOT, "clone", str(source), str(workspace_repo))
+    git(workspace_repo, "config", "user.email", "test@example.invalid")
+    git(workspace_repo, "config", "user.name", "Test User")
+    env = {"AI_OS_TASK_STATE_DIR": str(tmp_path / "state")}
+    try:
+        yield name, workspace_repo, env
+    finally:
+        if workspace_repo.exists():
+            remove_tree(workspace_repo)
+
+
+def start_task(task_repo, scope: str | None = None):
+    name, _, env = task_repo
+    args = [
+        "task-start",
+        "--task-id",
+        "unit",
+        "--title",
+        "Unit test",
+        "--class",
+        "SMALL",
+        "--repo",
+        name,
+        "--scope",
+        scope or f"{name}:.",
+    ]
+    run_cmd(args, env=env)
+    run_cmd(
+        [
+            "task-branch",
+            "--task-id",
+            "unit",
+            "--repo",
+            name,
+            "--name",
+            "fix/finalize",
+        ],
+        env=env,
+    )
+
+
+def run_gate(task_repo, gate_id="G1", *, code="print('ok')", expect_fail=False):
+    name, _, env = task_repo
+    args = [
+        "task-gate",
+        "--task-id",
+        "unit",
+        "--gate-id",
+        gate_id,
+        "--repo",
+        name,
+        "--",
+        sys.executable,
+        "-c",
+        code,
+    ]
+    return run_cmd(args, env=env, check=not expect_fail)
+
+
+def finalize(task_repo, **extra):
+    name, _, env = task_repo
+    args = [
+        "task-finalize",
+        "--task-id",
+        "unit",
+        "--message",
+        extra.pop("message", "test(harness): finalize unit"),
+        "--summary",
+        extra.pop("summary", "closed by finalize"),
+    ]
+    if extra:
+        raise ValueError(f"unhandled finalize options {sorted(extra)}")
+    return run_cmd(args, env=env, check=False)
+
+
+def test_finalize_commits_refreshes_gate_and_closes(task_repo) -> None:
+    start_task(task_repo)
+    name, repo, env = task_repo
+    (repo / "task.txt").write_text("task change\n", encoding="utf-8")
+    run_gate(task_repo)
+    proc = finalize(task_repo)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "COMMITTED:" in proc.stdout
+    assert "archived:" in proc.stdout
+    # Commit exists and task archive moved the checkpoint.
+    assert git(repo, "log", "-1", "--format=%s").stdout.strip() == "test(harness): finalize unit"
+    state_root = Path(env["AI_OS_TASK_STATE_DIR"])
+    archived = state_root / "tasks" / "archive" / "unit.json"
+    assert archived.exists()
+    data = json.loads(archived.read_text(encoding="utf-8"))
+    assert data["status"] == "CLOSED"
+    assert data["commits"]
+    # Post-commit gate entry is fresh (fingerprint matches current HEAD).
+    gate = data["gates"][-1]
+    assert gate["verdict"] in {"PASS", "DEDUPLICATED"}
+
+
+def test_finalize_refuses_when_gate_failed(task_repo) -> None:
+    start_task(task_repo)
+    name, repo, _ = task_repo
+    run_gate(task_repo, code="import sys; sys.exit(1)", expect_fail=True)
+    (repo / "task.txt").write_text("task change\n", encoding="utf-8")
+    proc = finalize(task_repo)
+    assert proc.returncode != 0
+    assert "commit plan not ready" in proc.stdout + proc.stderr
+    # Nothing committed.
+    head = git(repo, "log", "-1", "--format=%s").stdout.strip()
+    assert head != "test(harness): finalize unit"
+
+
+def test_finalize_refuses_when_next_action_pending(task_repo) -> None:
+    name, _, env = task_repo
+    run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "unit",
+            "--title",
+            "Unit test",
+            "--class",
+            "SMALL",
+            "--repo",
+            name,
+            "--scope",
+            f"{name}:.",
+            "--next",
+            "still working",
+        ],
+        env=env,
+    )
+    proc = finalize(task_repo)
+    assert proc.returncode != 0
+    assert "next_action" in proc.stdout + proc.stderr
+
+
+def test_finalize_preserves_foreign_dirty_paths(task_repo) -> None:
+    name, repo, _ = task_repo
+    start_task(task_repo, scope=f"{name}:task.txt")
+    (repo / "task.txt").write_text("task change\n", encoding="utf-8")
+    (repo / "tracked.txt").write_text("foreign change\n", encoding="utf-8")
+    run_gate(task_repo)
+    proc = finalize(task_repo)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    # Owned path committed; foreign path still dirty and not committed.
+    committed = git(repo, "show", "--name-only", "--format=", "HEAD").stdout.strip()
+    assert "task.txt" in committed
+    assert "tracked.txt" not in committed
+    status = git(repo, "status", "--porcelain").stdout
+    assert " M tracked.txt" in status
+    assert (repo / "tracked.txt").read_text(encoding="utf-8") == "foreign change\n"

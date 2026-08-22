@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ai_os_task_commit import closure_issues
+from ai_os_task_commit import closure_issues, commit_plan_payload, commit_task
 from ai_os_task_constants import SCHEMA_VERSION, WORKSPACE
 from ai_os_task_errors import TaskError
 from ai_os_task_git import git_branch, git_head, repo_path
@@ -381,6 +381,200 @@ def close_task(args: argparse.Namespace) -> int:
             print(f"summary_file: {target}")
             print(f"archived: {archive_path}")
     return 0
+
+
+def _extract_stale_gate_ids(issues: list[str]) -> list[str]:
+    """Parse close validation issues naming stale gate fingerprints."""
+    stale: list[str] = []
+    for issue in issues:
+        marker = "gate fingerprint is stale: "
+        if issue.startswith(marker):
+            stale.append(issue[len(marker):].strip())
+    return stale
+
+
+def _latest_gate_entry(data: dict[str, Any], gate_id: str) -> dict[str, Any] | None:
+    for entry in reversed(data.get("gates", [])):
+        if entry.get("gate_id") == gate_id:
+            return entry
+    return None
+
+
+def _run_gate_recorded(data: dict[str, Any], entry: dict[str, Any], *, always_fresh: bool) -> int:
+    """Re-run a recorded gate entry (deterministic, ownership-safe)."""
+    from ai_os_task_gates import command_contains_forbidden, run_gate
+
+    command_argv = entry.get("command_argv") or (entry.get("command") or "").split()
+    if not command_argv:
+        raise TaskError(f"cannot re-run gate {entry.get('gate_id')}: no recorded command")
+    forbidden = command_contains_forbidden(command_argv)
+    if forbidden:
+        raise TaskError(
+            f"refusing to re-run recorded gate {entry.get('gate_id')} with forbidden marker(s): "
+            + ", ".join(forbidden)
+        )
+    fp = entry.get("fingerprint") or {}
+    gate_args = argparse.Namespace(
+        task_id=data["task_id"],
+        repo=entry["repo"],
+        gate_id=entry["gate_id"],
+        scope=list(fp.get("scope") or []),
+        config_path=list(fp.get("config_paths") or []),
+        runtime_id="",
+        runtime_command=None,
+        always_fresh=always_fresh,
+        summary=f"task-finalize re-run (post-commit freshness for {entry['gate_id']})",
+        limitations="re-run by task-finalize to refresh the gate fingerprint after commit",
+        log_path="",
+        timeout=0,
+        profile=None,
+        command=list(command_argv),
+    )
+    return run_gate(gate_args)
+
+
+def finalize_task(args: argparse.Namespace) -> int:
+    """Deterministic orchestrator of the commit/close ceremony (no magic).
+
+    Order (existing steps only):
+      1. validate task state / scope / blockers / next_action;
+      2. commit-plan per target repo; COMMIT_READY -> task-commit (only owned
+         paths, LOCAL_ONLY, never force); NO_COMMIT -> skip; else STOP;
+      3. optional post-commit gate (--gate-id/--gate-repo + --gate-profile or
+         --gate-command); must PASS or STOP;
+      4. re-run any stale PASSED gate fingerprints with --always-fresh from
+         their recorded argv (never re-runs a failed gate);
+      5. checkpoint READY_TO_CLOSE -> task-close.
+
+    task-finalize never: skips gates, adopts foreign changes, pushes, force
+    commits, invents PASS, or treats a failed test as green.
+    """
+    task_id = resolve_task_id(getattr(args, "task_id", None))
+    data = load_checkpoint(task_id)
+    if data["status"] not in {"INITIALIZED", "IN_PROGRESS"}:
+        raise TaskError(f"task-finalize requires status INITIALIZED/IN_PROGRESS, got {data['status']}")
+    if data.get("next_action"):
+        raise TaskError(f"task-finalize requires empty next_action (got: {data['next_action']})")
+    if not data["declared_write_scope"]:
+        raise TaskError("task-finalize requires declared write scope")
+    from ai_os_task_gates import open_blockers
+
+    blockers = open_blockers(data)
+    if blockers:
+        raise TaskError(
+            "task-finalize blocked by open blockers: "
+            + ", ".join(str(b.get("id") or b.get("text") or "") for b in blockers)
+        )
+
+    # 1. Commit per target repository (only when the plan says COMMIT_READY).
+    for repo in list(data["target_repositories"]):
+        payload = commit_plan_payload(data, repo)
+        verdict = payload.get("verdict")
+        if verdict == "COMMIT_READY":
+            if not getattr(args, "message", ""):
+                raise TaskError(f"task-finalize: commit message required (--message) for {repo}")
+            commit_task(
+                argparse.Namespace(
+                    task_id=task_id,
+                    repo=repo,
+                    message=args.message,
+                    json=bool(getattr(args, "json", False)),
+                )
+            )
+        elif verdict == "NO_COMMIT":
+            print(f"task-finalize: {repo}: nothing to commit")
+        else:
+            raise TaskError(
+                f"task-finalize: {repo} commit plan not ready (verdict={verdict}): "
+                + "; ".join(payload.get("reasons") or payload.get("blockers") or [])
+            )
+
+    # 2. Optional explicit post-commit gate (the agent's final proof run).
+    gate_id = getattr(args, "gate_id", "") or ""
+    gate_repo = getattr(args, "gate_repo", "") or ""
+    gate_profile = getattr(args, "gate_profile", "") or ""
+    gate_command = getattr(args, "gate_command", None)
+    if gate_id and gate_repo:
+        from ai_os_task_gates import run_gate
+
+        if gate_profile:
+            from ai_os_task_profiles import resolve_profile
+
+            resolved = resolve_profile(gate_repo, gate_profile)
+            command = resolved.command()
+            gate_timeout = resolved.gate_timeout
+        elif gate_command:
+            command = list(gate_command)
+            if command and command[0] == "--":
+                command = command[1:]
+            gate_timeout = int(getattr(args, "gate_timeout", 0) or 0)
+        else:
+            raise TaskError("task-finalize: --gate-id/--gate-repo require --gate-profile or --gate-command")
+        gate_args = argparse.Namespace(
+            task_id=task_id,
+            repo=gate_repo,
+            gate_id=gate_id,
+            scope=getattr(args, "gate_scope", None),
+            config_path=[],
+            runtime_id="",
+            runtime_command=None,
+            always_fresh=True,
+            summary="task-finalize post-commit gate",
+            limitations="",
+            log_path="",
+            timeout=gate_timeout,
+            profile=None,
+            command=list(command),
+        )
+        result = run_gate(gate_args)
+        if result != 0:
+            raise TaskError(f"task-finalize: post-commit gate {gate_id} did not PASS")
+
+    # 3. Refresh any stale PASSED gate fingerprints (never re-run failed gates).
+    data = load_checkpoint(task_id)
+    issues = closure_issues(data)
+    stale_ids = _extract_stale_gate_ids(issues)
+    for gate_id in stale_ids:
+        entry = _latest_gate_entry(data, gate_id)
+        if entry is None or entry.get("verdict") not in {"PASS", "DEDUPLICATED"}:
+            raise TaskError(f"task-finalize: gate {gate_id} is not a PASSED gate; refusing auto re-run")
+        result = _run_gate_recorded(data, entry, always_fresh=True)
+        if result != 0:
+            raise TaskError(f"task-finalize: stale gate re-run {gate_id} did not PASS")
+    # Before checkpointing, only gate freshness may be validated; status/commit
+    # checks are satisfied by the checkpoint+close steps that follow.
+    data = load_checkpoint(task_id)
+    remaining_stale = _extract_stale_gate_ids(closure_issues(data))
+    if remaining_stale:
+        raise TaskError(
+            "task-finalize: stale gate fingerprints remain: " + ", ".join(remaining_stale)
+        )
+
+    # 4. Checkpoint READY_TO_CLOSE + close.
+    update_checkpoint(
+        argparse.Namespace(
+            task_id=task_id,
+            status="READY_TO_CLOSE",
+            phase="finalize-ready",
+            next_action="",
+            summary="task-finalize: gates fresh, ready to close",
+            publication_mode=None,
+            decision=[],
+            step=[],
+            blocker=[],
+            resolve_blocker=[],
+            commit=[],
+        )
+    )
+    return close_task(
+        argparse.Namespace(
+            task_id=task_id,
+            validate_only=False,
+            json=bool(getattr(args, "json", False)),
+            summary=getattr(args, "summary", ""),
+            summary_file=None,
+        )
+    )
 
 def _print_active_tasks(as_json: bool) -> None:
     migrate_legacy_checkpoint_if_present()

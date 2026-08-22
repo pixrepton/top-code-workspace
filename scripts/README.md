@@ -53,6 +53,42 @@ python scripts/ai_os_task.py task-close --validate-only
 python scripts/ai_os_task.py task-close --summary "Closed with final committed proof."
 ```
 
+## Harness ergonomics (2026-08-23)
+
+Deterministic shortcuts added by `CODING-AGENT-HARNESS-OPTIMIZATION`:
+
+- **Gate-level timeout + owned-process cleanup + structured logs**: `task-gate`
+  accepts `--timeout <seconds>`; on expiry the runner terminates ONLY the
+  process tree it spawned, records a `TIMEOUT`/`HUNG_TEST` verdict with
+  diagnostics, and always writes a UTF-8 gate log under
+  `<AI_OS_TASK_STATE_DIR>/gate-logs/<task_id>/<gate_id>-<ts>.log` (plus
+  `--log-path` override). Gate subprocesses run with `PYTHONUTF8=1` /
+  `PYTHONIOENCODING=utf-8` and are decoded as UTF-8 (deterministic logs).
+- **Test profiles**: `task-gate --profile <name>` resolves a deterministic
+  pytest collection from `scripts/ai_os_task_profiles.py` (repo-scoped).
+  Profiles today: `P1_MULTI_INTENT`, `P1_EPISTEMIC`, `SPINE_CORE`,
+  `HITL_WRITE`, `FULL_GATE_A` (gmail-agent). Unknown profile -> fail closed.
+  `--profile` is mutually exclusive with a raw command.
+- **task-finalize**: one deterministic orchestrator for the commit/close
+  ceremony:
+
+```powershell
+python scripts/ai_os_task.py task-finalize --message "fix(scope): ..." --summary "closed" --gate-id FULL_GATE_A --gate-repo gmail-agent --gate-profile FULL_GATE_A
+```
+
+  Order: validate task/scope/blockers/next_action -> commit-plan -> commit
+  (only COMMIT_READY, LOCAL_ONLY, owned paths) -> optional post-commit gate ->
+  re-run stale PASSED gate fingerprints from their recorded argv -> checkpoint
+  READY_TO_CLOSE -> close. Never: skips gates, auto-adopts foreign changes,
+  pushes, force-commits, invents PASS, or re-runs a failed gate.
+- **Proof artifact helper**: `scripts/ai_os_proof_artifact.py` provides
+  `ProofArtifact` (`record` / `assert_invariant` / `write`) for future bounded
+  trajectory scripts: deterministic JSON, secret redaction, PASS/FAIL summary.
+
+Encoding contract: source files and gate artifacts are UTF-8. Quick inline
+Python checks through PowerShell pipes should avoid non-ASCII literals
+(prefer `\u` escapes) because the console pipe encoding is host-controlled.
+
 Proof phases should make escalation visible.
 
 Prefer phase/gate names that distinguish:

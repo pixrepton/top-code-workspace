@@ -26,6 +26,7 @@ from ai_os_task_lifecycle import (
     adopt_path,
     close_task,
     clear_next,
+    finalize_task,
     list_tasks_cmd,
     new_checkpoint,
     remove_state,
@@ -126,6 +127,18 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--summary")
     gate.add_argument("--limitations")
     gate.add_argument("--log-path")
+    gate.add_argument(
+        "--timeout",
+        type=int,
+        default=0,
+        help="Gate-level timeout in seconds (0 = unlimited). On expiry the runner "
+        "terminates only its own spawned process tree and records a TIMEOUT verdict.",
+    )
+    gate.add_argument(
+        "--profile",
+        help="Resolve a deterministic test profile (see scripts/ai_os_task_profiles.py). "
+        "Mutually exclusive with a raw command.",
+    )
     gate.add_argument("command", nargs=argparse.REMAINDER)
     gate.set_defaults(func=run_gate)
 
@@ -160,6 +173,19 @@ def build_parser() -> argparse.ArgumentParser:
     close.add_argument("--summary")
     close.add_argument("--summary-file")
     close.set_defaults(func=close_task)
+
+    finalize = sub.add_parser("task-finalize")
+    add_task_id_arg(finalize)
+    finalize.add_argument("--message", default="", help="Commit message used when commit-plan says COMMIT_READY")
+    finalize.add_argument("--summary", default="", help="Close summary")
+    finalize.add_argument("--gate-id", default="")
+    finalize.add_argument("--gate-repo", default="")
+    finalize.add_argument("--gate-profile", default="", help="Resolve a test profile for the post-commit gate")
+    finalize.add_argument("--gate-scope", action="append")
+    finalize.add_argument("--gate-timeout", type=int, default=0)
+    finalize.add_argument("--gate-command", nargs=argparse.REMAINDER)
+    finalize.add_argument("--json", action="store_true")
+    finalize.set_defaults(func=finalize_task)
 
     cleanup = sub.add_parser("task-cleanup")
     add_task_id_arg(cleanup)
