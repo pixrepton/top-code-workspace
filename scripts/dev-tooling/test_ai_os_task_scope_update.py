@@ -150,3 +150,70 @@ def test_next_clear_has_explicit_command(task_repo):
 
     run_cmd(["task-next-clear"], env=env)
     assert load_checkpoint(env)["next_action"] == ""
+
+
+def test_next_clear_persists_after_checkpoint_and_status_reload(task_repo):
+    repo_name, _repo, env = task_repo
+    start_task(repo_name, env, next_action="finish slice")
+
+    run_cmd(["task-next-clear"], env=env)
+    run_cmd(["task-checkpoint", "--summary", "cleared"], env=env)
+
+    data = load_checkpoint(env)
+    assert data["next_action"] == ""
+    assert data["current_phase"] == "next-cleared"
+
+    status = json.loads(run_cmd(["task-status", "--json"], env=env).stdout)
+    assert status["next_action"] == ""
+
+    plan_proc = run_cmd(["task-commit-plan", "--repo", repo_name, "--json"], env=env, check=False)
+    plan = json.loads(plan_proc.stdout)
+    assert all("next_action niepuste" not in blocker for blocker in plan["decision"]["blockers"])
+
+
+def test_next_clear_missing_task_id_fails_closed(task_repo, tmp_path):
+    repo_name, _repo, env = task_repo
+    start_task(repo_name, env, next_action="task-one")
+
+    other_source = tmp_path / "other-source"
+    other_source.mkdir()
+    git(other_source, "init")
+    git(other_source, "config", "user.email", "test@example.invalid")
+    git(other_source, "config", "user.name", "Test User")
+    (other_source / "gamma.txt").write_text("gamma\n", encoding="utf-8")
+    git(other_source, "add", ".")
+    git(other_source, "commit", "-m", "init")
+    other_name = f"tmp-ai-os-scope-update-second-{tmp_path.name}"
+    other_repo = ROOT / other_name
+    if other_repo.exists():
+        remove_tree(other_repo)
+    git(ROOT, "clone", str(other_source), str(other_repo))
+    git(other_repo, "config", "user.email", "test@example.invalid")
+    git(other_repo, "config", "user.name", "Test User")
+    try:
+        run_cmd(
+            [
+                "task-start",
+                "--task-id",
+                "unit-two",
+                "--title",
+                "Unit two",
+                "--class",
+                "SMALL",
+                "--repo",
+                other_name,
+                "--scope",
+                f"{other_name}:gamma.txt",
+                "--next",
+                "task-two",
+            ],
+            env=env,
+        )
+
+        proc = run_cmd(["task-next-clear"], env=env, check=False)
+        assert proc.returncode == 2
+        assert "multiple active tasks" in proc.stderr
+        assert load_checkpoint(env)["next_action"] == "task-one"
+    finally:
+        if other_repo.exists():
+            remove_tree(other_repo)

@@ -12,7 +12,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ai_os_task_constants import (
     ACTIVE_TASK_STATUSES, ALLOWED_CLASSES, ALLOWED_PUBLICATION_MODES, ALLOWED_STATUSES,
@@ -253,28 +253,52 @@ def migrate_checkpoint(data: dict[str, Any]) -> dict[str, Any]:
         return _migrate_v2_to_current(data)
     raise TaskError(f"unsupported checkpoint schema_version: {version}")
 
+
+def _write_checkpoint_file(data: dict[str, Any], target: Path) -> None:
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    tmp.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    loaded = json.loads(tmp.read_text(encoding="utf-8"))
+    validate_checkpoint(loaded)
+    os.replace(tmp, target)
+
 def atomic_write(data: dict[str, Any], path: Path | None = None) -> None:
     validate_checkpoint(data)
     target = path or active_task_path(data["task_id"])
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    def _write() -> None:
-        tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
-        tmp.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
-        loaded = json.loads(tmp.read_text(encoding="utf-8"))
-        validate_checkpoint(loaded)
-        os.replace(tmp, target)
-
     # Serialize RMW on active checkpoint files; archive/summary writes stay unlocked.
     if target.parent == tasks_active_dir():
         with TaskCheckpointLock(str(data["task_id"])):
-            _write()
+            _write_checkpoint_file(data, target)
     else:
-        _write()
+        _write_checkpoint_file(data, target)
+
+
+def mutate_active_checkpoint(
+    task_id: str | None,
+    mutate: Callable[[dict[str, Any]], None],
+    *,
+    refresh: bool = True,
+) -> dict[str, Any]:
+    migrate_legacy_checkpoint_if_present()
+    resolved = resolve_task_id(task_id)
+    path = _active_checkpoint_path(resolved)
+    with TaskCheckpointLock(resolved):
+        data = _read_checkpoint_json(path)
+        if data.get("schema_version") in LEGACY_SCHEMA_VERSIONS:
+            data = migrate_checkpoint(data)
+        validate_checkpoint(data)
+        _require_active_identity(data, resolved)
+        mutate(data)
+        if refresh:
+            refresh_git_fields(data)
+        validate_checkpoint(data)
+        _write_checkpoint_file(data, path)
+    return data
 
 def refresh_git_fields(data: dict[str, Any]) -> None:
     data["current_shas"] = {repo: git_head(repo) for repo in data["target_repositories"]}

@@ -308,3 +308,40 @@ def test_nonpristine_legacy_checkpoint_is_not_synthesized(task_repo):
     assert proc.returncode == 2
     assert "has no ownership baseline" in proc.stderr
     assert json.loads(checkpoint.read_text(encoding="utf-8"))["schema_version"] == 1
+
+
+def test_stale_commit_evaluation_does_not_resurrect_cleared_next_action(task_repo):
+    name, _repo, env = task_repo
+    start_task(task_repo)
+    run_cmd(["task-checkpoint", "--next", "stale-next"], env=env)
+    run_cmd(["task-next-clear"], env=env)
+
+    scripts_dir = ROOT / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+    from ai_os_task_commit import _record_commit_evaluation
+    from ai_os_task_state import load_checkpoint
+
+    stale = load_checkpoint("unit")
+    stale["next_action"] = "stale-next"
+    stale["current_phase"] = "task-start"
+    _record_commit_evaluation(
+        stale,
+        {
+            "task_id": "unit",
+            "repo": name,
+            "branch": "branch",
+            "publication_mode": "LOCAL_ONLY",
+            "owned_paths": [],
+            "reasons": [],
+            "warnings": [],
+            "verdict": "NO_COMMIT",
+            "suggested_message": "noop",
+            "decision": {"decision": "NO_COMMIT", "blockers": []},
+        },
+    )
+
+    latest = load_checkpoint("unit")
+    assert latest["next_action"] == ""
+    assert latest["current_phase"] == "next-cleared"

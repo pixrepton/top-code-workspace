@@ -41,7 +41,7 @@ from ai_os_task_ownership import OwnershipError, collect_raw_git_state, prepare_
 from ai_os_task_paths import state_dir, utc_now
 from ai_os_task_scope import normalize_rel
 from ai_os_task_commit_decision import evaluate_commit_decision, print_commit_decision
-from ai_os_task_state import atomic_write, load_checkpoint, refresh_git_fields, resolve_task_id
+from ai_os_task_state import atomic_write, load_checkpoint, mutate_active_checkpoint, refresh_git_fields, resolve_task_id
 
 CommitStates = dict[str, dict[str, tuple[str, bytes | None]]]
 
@@ -189,10 +189,12 @@ def _owned_commit_findings(data: dict[str, Any], repo: str, owned_paths: list[st
     return reasons, warnings
 
 def _record_commit_evaluation(data: dict[str, Any], payload: dict[str, Any]) -> None:
-    data["commit_evaluations"].append({"timestamp": utc_now(), **payload})
-    data["commit_evaluations"] = data["commit_evaluations"][-20:]
-    data["last_summary"] = f"commit-plan {payload['repo']}: {payload['verdict']}"
-    atomic_write(data)
+    def _mutate(latest: dict[str, Any]) -> None:
+        latest["commit_evaluations"].append({"timestamp": utc_now(), **payload})
+        latest["commit_evaluations"] = latest["commit_evaluations"][-20:]
+        latest["last_summary"] = f"commit-plan {payload['repo']}: {payload['verdict']}"
+
+    mutate_active_checkpoint(data["task_id"], _mutate)
 
 def commit_plan_payload(data: dict[str, Any], repo: str) -> dict[str, Any]:
     if repo not in data["target_repositories"]:
@@ -346,19 +348,19 @@ def _write_isolated_commit(repo_root: Path, states: CommitStates, message: str) 
 
 def _record_created_commit(task_id: str, repo: str, record: str) -> None:
     # Record SHA before index restore so a later failure still leaves an audit trail.
-    data = load_checkpoint(task_id)
-    if record not in data["commits"]:
-        data["commits"].append(record)
-    data["completed_steps"].append(
-        {
-            "timestamp": utc_now(),
-            "text": f"Created scoped local commit {record} on {git_branch(repo)}",
-        }
-    )
-    data["current_phase"] = "commit-created"
-    data["last_summary"] = f"scoped local commit {record}"
-    refresh_git_fields(data)
-    atomic_write(data)
+    def _mutate(data: dict[str, Any]) -> None:
+        if record not in data["commits"]:
+            data["commits"].append(record)
+        data["completed_steps"].append(
+            {
+                "timestamp": utc_now(),
+                "text": f"Created scoped local commit {record} on {git_branch(repo)}",
+            }
+        )
+        data["current_phase"] = "commit-created"
+        data["last_summary"] = f"scoped local commit {record}"
+
+    mutate_active_checkpoint(task_id, _mutate)
 
 def _restore_real_index(repo_root: Path, states: CommitStates) -> list[str]:
     errors: list[str] = []

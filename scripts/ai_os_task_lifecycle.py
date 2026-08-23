@@ -42,6 +42,7 @@ from ai_os_task_state import (
     find_scope_conflicts,
     git_mismatches,
     load_checkpoint,
+    mutate_active_checkpoint,
     migrate_legacy_checkpoint,
     migrate_legacy_checkpoint_if_present,
     print_summary,
@@ -235,13 +236,13 @@ def _append_commits(args: argparse.Namespace, data: dict[str, Any]) -> None:
             data["commits"].append(value)
 
 def update_checkpoint(args: argparse.Namespace) -> int:
-    data = load_checkpoint(getattr(args, "task_id", None))
-    _apply_field_updates(args, data)
-    _apply_timeline_appends(args, data)
-    _resolve_blockers(args, data)
-    _append_commits(args, data)
-    refresh_git_fields(data)
-    atomic_write(data)
+    def _mutate(data: dict[str, Any]) -> None:
+        _apply_field_updates(args, data)
+        _apply_timeline_appends(args, data)
+        _resolve_blockers(args, data)
+        _append_commits(args, data)
+
+    data = mutate_active_checkpoint(getattr(args, "task_id", None), _mutate)
     print_summary(data, "CHECKPOINT")
     return 0
 
@@ -249,56 +250,60 @@ def add_scope(args: argparse.Namespace) -> int:
     additions = parse_scope(args.scope)
     task_id = getattr(args, "task_id", None)
     with RegistryLock():
-        data = load_checkpoint(task_id)
-        _require_known_scope_repos(data, additions)
-        _require_no_scope_conflict(additions, data["task_id"], replace=True)
+        current = load_checkpoint(task_id)
+        _require_known_scope_repos(current, additions)
+        _require_no_scope_conflict(additions, current["task_id"], replace=True)
         _require_clean_scope_addition(additions, args.adopt_existing)
-        data["declared_write_scope"] = _append_unique_scope(data["declared_write_scope"], additions)
-        if args.adopt_existing:
-            data["adopted_baseline_scope"] = _append_unique_scope(data["adopted_baseline_scope"], additions)
-        data["completed_steps"].append(
-            {
-                "timestamp": utc_now(),
-                "text": "Updated task scope: "
-                + ", ".join(f"{item['repo']}:{item['path']}" for item in additions),
-            }
-        )
-        if args.reason:
-            data["decisions"].append({"timestamp": utc_now(), "text": args.reason})
-        data["current_phase"] = "scope-updated"
-        refresh_git_fields(data)
-        atomic_write(data)
+
+        def _mutate(data: dict[str, Any]) -> None:
+            data["declared_write_scope"] = _append_unique_scope(data["declared_write_scope"], additions)
+            if args.adopt_existing:
+                data["adopted_baseline_scope"] = _append_unique_scope(data["adopted_baseline_scope"], additions)
+            data["completed_steps"].append(
+                {
+                    "timestamp": utc_now(),
+                    "text": "Updated task scope: "
+                    + ", ".join(f"{item['repo']}:{item['path']}" for item in additions),
+                }
+            )
+            if args.reason:
+                data["decisions"].append({"timestamp": utc_now(), "text": args.reason})
+            data["current_phase"] = "scope-updated"
+
+        data = mutate_active_checkpoint(task_id, _mutate)
     print_summary(data, "SCOPE_UPDATED")
     return 0
 
 def adopt_path(args: argparse.Namespace) -> int:
     additions = parse_scope(args.path)
-    data = load_checkpoint(getattr(args, "task_id", None))
-    _require_known_scope_repos(data, additions)
-    _require_adopted_inside_scope(data["declared_write_scope"], additions)
-    data["adopted_baseline_scope"] = _append_unique_scope(data["adopted_baseline_scope"], additions)
-    data["completed_steps"].append(
-        {
-            "timestamp": utc_now(),
-            "text": "Adopted baseline path(s): "
-            + ", ".join(f"{item['repo']}:{item['path']}" for item in additions),
-        }
-    )
-    if args.reason:
-        data["decisions"].append({"timestamp": utc_now(), "text": args.reason})
-    data["current_phase"] = "baseline-adopted"
-    refresh_git_fields(data)
-    atomic_write(data)
+    current = load_checkpoint(getattr(args, "task_id", None))
+    _require_known_scope_repos(current, additions)
+    _require_adopted_inside_scope(current["declared_write_scope"], additions)
+
+    def _mutate(data: dict[str, Any]) -> None:
+        data["adopted_baseline_scope"] = _append_unique_scope(data["adopted_baseline_scope"], additions)
+        data["completed_steps"].append(
+            {
+                "timestamp": utc_now(),
+                "text": "Adopted baseline path(s): "
+                + ", ".join(f"{item['repo']}:{item['path']}" for item in additions),
+            }
+        )
+        if args.reason:
+            data["decisions"].append({"timestamp": utc_now(), "text": args.reason})
+        data["current_phase"] = "baseline-adopted"
+
+    data = mutate_active_checkpoint(getattr(args, "task_id", None), _mutate)
     print_summary(data, "ADOPTED")
     return 0
 
 def clear_next(args: argparse.Namespace) -> int:
-    data = load_checkpoint(getattr(args, "task_id", None))
-    data["next_action"] = ""
-    data["completed_steps"].append({"timestamp": utc_now(), "text": "Cleared task next_action"})
-    data["current_phase"] = "next-cleared"
-    refresh_git_fields(data)
-    atomic_write(data)
+    def _mutate(data: dict[str, Any]) -> None:
+        data["next_action"] = ""
+        data["completed_steps"].append({"timestamp": utc_now(), "text": "Cleared task next_action"})
+        data["current_phase"] = "next-cleared"
+
+    data = mutate_active_checkpoint(getattr(args, "task_id", None), _mutate)
     print_summary(data, "NEXT_CLEARED")
     return 0
 

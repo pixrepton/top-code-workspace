@@ -20,7 +20,7 @@ from ai_os_task_errors import TaskError
 from ai_os_task_git import config_hash, git_head, repo_path, run, scope_hash, staged_diff_hash
 from ai_os_task_paths import sanitize_task_id, state_dir, utc_now
 from ai_os_task_scope import normalize_rel, scopes_for_repo
-from ai_os_task_state import atomic_write, load_checkpoint, refresh_git_fields
+from ai_os_task_state import atomic_write, load_checkpoint, mutate_active_checkpoint, refresh_git_fields
 
 def _runtime_identity(args: argparse.Namespace) -> str:
     if not args.runtime_command:
@@ -69,11 +69,12 @@ def _resolve_gate_command(args: argparse.Namespace) -> list[str]:
     return command
 
 def _record_gate(data: dict[str, Any], entry: dict[str, Any], phase: str, summary: str) -> None:
-    data["gates"].append(entry)
-    data["current_phase"] = phase
-    data["last_summary"] = summary
-    refresh_git_fields(data)
-    atomic_write(data)
+    def _mutate(latest: dict[str, Any]) -> None:
+        latest["gates"].append(entry)
+        latest["current_phase"] = phase
+        latest["last_summary"] = summary
+
+    mutate_active_checkpoint(data["task_id"], _mutate)
 
 def _deduplicated_entry(
     args: argparse.Namespace,
