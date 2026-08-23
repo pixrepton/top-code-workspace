@@ -470,10 +470,12 @@ def create_task_branch(args: argparse.Namespace) -> int:
     _require_creatable_branch_name(args.repo, args.name)
     with RepoCommitLock(args.repo):
         run(["git", "switch", "-c", args.name], repo_path(args.repo))
-    data["decisions"].append({"timestamp": utc_now(), "text": f"Created task branch {args.repo}:{args.name}"})
-    data["current_phase"] = "task-branch"
-    refresh_git_fields(data)
-    atomic_write(data)
+
+    def _mutate(latest: dict[str, Any]) -> None:
+        latest["decisions"].append({"timestamp": utc_now(), "text": f"Created task branch {args.repo}:{args.name}"})
+        latest["current_phase"] = "task-branch"
+
+    mutate_active_checkpoint(getattr(args, "task_id", None), _mutate)
     print(f"BRANCH: {args.repo}:{args.name}")
     return 0
 

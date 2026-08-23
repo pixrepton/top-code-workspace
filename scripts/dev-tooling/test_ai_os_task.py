@@ -345,3 +345,36 @@ def test_stale_commit_evaluation_does_not_resurrect_cleared_next_action(task_rep
     latest = load_checkpoint("unit")
     assert latest["next_action"] == ""
     assert latest["current_phase"] == "next-cleared"
+
+
+def test_create_task_branch_does_not_resurrect_stale_next_action(task_repo, monkeypatch):
+    name, _repo, env = task_repo
+    start_task(task_repo)
+    run_cmd(["task-checkpoint", "--next", "stale-next"], env=env)
+
+    scripts_dir = ROOT / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+
+    import argparse
+
+    import ai_os_task_commit as commit_mod
+    from ai_os_task_lifecycle import clear_next
+    from ai_os_task_state import load_checkpoint
+
+    original_run = commit_mod.run
+    injected = {"done": False}
+
+    def wrapped_run(args, cwd, check=True):
+        if args[:3] == ["git", "switch", "-c"] and not injected["done"]:
+            injected["done"] = True
+            clear_next(argparse.Namespace(task_id="unit"))
+        return original_run(args, cwd, check=check)
+
+    monkeypatch.setattr(commit_mod, "run", wrapped_run)
+    commit_mod.create_task_branch(argparse.Namespace(task_id="unit", repo=name, name="fix/rmw-branch"))
+
+    latest = load_checkpoint("unit")
+    assert latest["next_action"] == ""
+    assert latest["current_phase"] == "task-branch"

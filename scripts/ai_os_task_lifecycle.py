@@ -372,7 +372,6 @@ def close_task(args: argparse.Namespace) -> int:
         }
         if issues:
             _print_closure(payload, issues, args.json)
-            atomic_write(data, active_path)
             return 1
         if args.validate_only:
             _print_closure(payload, issues, args.json)

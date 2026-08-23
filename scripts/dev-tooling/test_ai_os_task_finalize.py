@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -222,3 +223,69 @@ def test_finalize_preserves_foreign_dirty_paths(task_repo) -> None:
     status = git(repo, "status", "--porcelain").stdout
     assert " M tracked.txt" in status
     assert (repo / "tracked.txt").read_text(encoding="utf-8") == "foreign change\n"
+
+
+def test_failed_close_validation_does_not_revert_newer_checkpoint(task_repo, monkeypatch) -> None:
+    name, _repo, env = task_repo
+    run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "unit",
+            "--title",
+            "Unit test",
+            "--class",
+            "SMALL",
+            "--repo",
+            name,
+            "--scope",
+            f"{name}:.",
+        ],
+        env=env,
+    )
+
+    scripts_dir = ROOT / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+
+    import ai_os_task_lifecycle as lifecycle_mod
+    from ai_os_task_state import load_checkpoint
+
+    injected = {"done": False}
+
+    def stale_issues(data):
+        if not injected["done"]:
+            injected["done"] = True
+            lifecycle_mod.update_checkpoint(
+                argparse.Namespace(
+                    task_id="unit",
+                    status="READY_TO_CLOSE",
+                    phase="ready-to-close",
+                    next_action="",
+                    summary="newer checkpoint",
+                    publication_mode=None,
+                    decision=[],
+                    step=[],
+                    blocker=[],
+                    resolve_blocker=[],
+                    commit=[],
+                )
+            )
+        return [f"status must be READY_TO_CLOSE, got {data['status']}"]
+
+    monkeypatch.setattr(lifecycle_mod, "closure_issues", stale_issues)
+    result = lifecycle_mod.close_task(
+        argparse.Namespace(
+            task_id="unit",
+            validate_only=True,
+            json=True,
+            summary="",
+            summary_file=None,
+        )
+    )
+
+    assert result == 1
+    latest = load_checkpoint("unit")
+    assert latest["status"] == "READY_TO_CLOSE"
+    assert latest["current_phase"] == "ready-to-close"
