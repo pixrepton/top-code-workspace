@@ -171,6 +171,55 @@ def test_next_clear_persists_after_checkpoint_and_status_reload(task_repo):
     assert all("next_action niepuste" not in blocker for blocker in plan["decision"]["blockers"])
 
 
+def test_commit_plan_ready_does_not_invent_stale_next_blocker_after_clear(task_repo):
+    repo_name, repo, env = task_repo
+    start_task(repo_name, env, next_action="finish slice")
+
+    run_cmd(
+        [
+            "task-branch",
+            "--task-id",
+            "unit",
+            "--repo",
+            repo_name,
+            "--name",
+            "fix/commit-plan-next-clear",
+        ],
+        env=env,
+    )
+    (repo / "alpha.txt").write_text("owned change\n", encoding="utf-8")
+
+    run_cmd(["task-next-clear"], env=env)
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "unit",
+            "--gate-id",
+            "unit-proof",
+            "--repo",
+            repo_name,
+            "--scope",
+            "alpha.txt",
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        env=env,
+    )
+
+    plan = json.loads(
+        run_cmd(
+            ["task-commit-plan", "--task-id", "unit", "--repo", repo_name, "--json"],
+            env=env,
+        ).stdout
+    )
+    assert plan["verdict"] == "COMMIT_READY"
+    assert plan["decision"]["decision"] == "COMMIT_NOW"
+    assert all("next_action niepuste" not in blocker for blocker in plan["decision"]["blockers"])
+
+
 def test_next_clear_missing_task_id_fails_closed(task_repo, tmp_path):
     repo_name, _repo, env = task_repo
     start_task(repo_name, env, next_action="task-one")
