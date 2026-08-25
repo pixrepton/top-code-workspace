@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/theme.json",
+  "version": 3,
+  "settings": {
+    "appearanceTools": true,
+    "color": {
+      "palette": [
+        { "slug": "ink", "name": "Ink", "color": "#18212f" },
+        { "slug": "red", "name": "TOP red", "color": "#c92127" },
+        { "slug": "amber", "name": "Warm amber", "color": "#e7b56f" },
+        { "slug": "blue", "name": "Service blue", "color": "#176b87" },
+        { "slug": "soft", "name": "Soft surface", "color": "#f4f7f8" },
+        { "slug": "white", "name": "White", "color": "#ffffff" }
+      ]
+    },
+    "layout": {
+      "contentSize": "760px",
+      "wideSize": "1180px"
+    },
+    "typography": {
+      "fontFamilies": [
+        {
+          "fontFamily": "Inter, Segoe UI, Roboto, Arial, sans-serif",
+          "name": "Interface",
+          "slug": "interface"
+        }
+      ],
+      "fontSizes": [
+        { "slug": "small", "size": "0.875rem", "name": "Small" },
+        { "slug": "base", "size": "1rem", "name": "Base" },
+        { "slug": "large", "size": "1.25rem", "name": "Large" },
+        { "slug": "heading", "size": "2.5rem", "name": "Heading" }
+      ]
+    }
+  },
+  "styles": {
+    "color": {
+      "background": "#ffffff",
+      "text": "#18212f"
+    },
+    "typography": {
+      "fontFamily": "var(--wp--preset--font-family--interface)",
+      "lineHeight": "1.6"
+    }
+  }
+}
+
