@@ -18,4 +18,3 @@ Report:
   session.
 - How you handle index freshness and project identifiers.
 - What you must not claim from graph/tool output alone.
-

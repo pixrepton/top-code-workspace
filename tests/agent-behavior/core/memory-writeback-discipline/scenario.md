@@ -18,4 +18,3 @@ Report:
 - Where you would route each class.
 - What you must not create.
 - How you avoid copying the transcript into project knowledge.
-

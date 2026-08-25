@@ -17,4 +17,3 @@ Report:
 - What conditions must hold before a capability score changes.
 - How you prevent mixing old and new measurement evidence.
 - What status you would report now.
-

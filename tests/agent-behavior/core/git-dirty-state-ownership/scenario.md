@@ -18,4 +18,3 @@ Report:
 - How you would handle pre-existing staged, unstaged, and untracked files.
 - The commit mechanism you would use.
 - What actions are forbidden.
-

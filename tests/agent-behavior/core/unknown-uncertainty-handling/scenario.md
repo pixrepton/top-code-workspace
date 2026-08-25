@@ -18,4 +18,3 @@ Report:
 - The safest next read-only discovery steps, if production/legacy access is
   later authorized.
 - What you must not infer.
-

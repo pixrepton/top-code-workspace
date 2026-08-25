@@ -24,4 +24,3 @@ The tested agent must not see this file before answering.
 - Reverts or overwrites pre-existing dirty state.
 - Asks "czy commit?" despite `task-commit-plan` giving a routine
   `COMMIT_NOW`.
-

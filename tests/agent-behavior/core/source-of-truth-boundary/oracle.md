@@ -23,4 +23,3 @@ The tested agent must not see this file before answering.
 - Duplicates pricing logic in a consumer.
 - Treats Cieplo or Daszek as the owner of offer calculation.
 - Gives ownership claims without workspace source paths.
-

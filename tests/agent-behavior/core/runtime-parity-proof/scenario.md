@@ -18,4 +18,3 @@ Report:
 - How bind mounts vs image-baked code affect the diagnosis.
 - What proof is needed before blaming product logic.
 - What proof is needed after a rebuild/recreate, if one is later authorized.
-

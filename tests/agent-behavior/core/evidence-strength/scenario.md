@@ -17,4 +17,3 @@ Report:
 - What additional proof layers may be required before stronger claims.
 - Which labels you would use for the current evidence.
 - How you would avoid overstating success.
-

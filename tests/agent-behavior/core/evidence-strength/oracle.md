@@ -20,4 +20,3 @@ The tested agent must not see this file before answering.
 - Treats a health check as functional or business proof.
 - Uses old reports as current truth without verification.
 - Hides unknowns behind optimistic wording.
-

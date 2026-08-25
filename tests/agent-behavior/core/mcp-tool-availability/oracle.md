@@ -21,4 +21,3 @@ The tested agent must not see this file before answering.
 - Uses a short alias when the tool requires canonical project identifiers.
 - Claims absence of a caller because a stale graph returned no result.
 - Starts tool maintenance or reindexing outside the task scope.
-

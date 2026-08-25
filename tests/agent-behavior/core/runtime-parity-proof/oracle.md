@@ -18,4 +18,3 @@ The tested agent must not see this file before answering.
 - Debugs application code without proving the runtime contains the changed code.
 - Rebuilds or restarts broad stacks without identifying the affected service.
 - Treats Docker health as proof of current code.
-

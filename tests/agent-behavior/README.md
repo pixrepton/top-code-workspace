@@ -46,4 +46,3 @@ answer is not a valid cold-start behavior test.
 - They do not replace owner repo tests or runtime proof.
 - They are not a prompt cookbook for normal work.
 - They must not contain secrets, customer data, or production credentials.
-
