@@ -25,6 +25,23 @@ Future Codex work should start here for visual/layout changes:
 
 ## Preview And Staging Target
 
+Local proof mechanism now exists for theme-level browser QA:
+
+```powershell
+docker compose -f topinstal-theme/preview/docker-compose.yml up -d db wordpress
+docker compose -f topinstal-theme/preview/docker-compose.yml run --rm wpcli bash /var/www/html/wp-content/themes/topinstal-theme/preview/bootstrap.sh
+```
+
+Preview URL:
+
+```text
+http://localhost:8097
+```
+
+This proves WordPress theme activation and browser behavior against local preview
+content. It does not prove Hostido staging, production cache behavior or plugin
+internals.
+
 Preferred mechanism:
 
 1. Create a separate Hostido staging WordPress install or staging subdomain.
@@ -53,4 +70,3 @@ clean Git state
 ```
 
 No deployment command is encoded here yet because staging has not been provisioned.
-

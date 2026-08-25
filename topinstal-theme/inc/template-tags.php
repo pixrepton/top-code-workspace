@@ -46,6 +46,14 @@ function topinstal_theme_excerpt_or_trimmed_content( int $words = 30 ): string {
 	return wp_trim_words( wp_strip_all_tags( get_the_content() ), $words );
 }
 
+function topinstal_theme_page_lead(): string {
+	if ( ! has_excerpt() ) {
+		return '';
+	}
+
+	return get_the_excerpt();
+}
+
 function topinstal_theme_has_builder_content(): bool {
 	return 'builder' === get_post_meta( get_the_ID(), '_elementor_edit_mode', true );
 }

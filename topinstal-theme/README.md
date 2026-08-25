@@ -14,30 +14,31 @@ behavior, CSS, JS and design tokens.
 
 ```text
 topinstal-theme/
-├── style.css
-├── functions.php
-├── theme.json
-├── header.php
-├── footer.php
-├── front-page.php
-├── page.php
-├── single.php
-├── index.php
-├── inc/
-│   ├── setup.php
-│   └── template-tags.php
-├── template-parts/
-│   ├── site-header.php
-│   ├── site-footer.php
-│   ├── page-hero.php
-│   └── post-card.php
-├── assets/
-│   ├── css/
-│   │   ├── tokens.css
-│   │   └── main.css
-│   └── js/
-│       └── site.js
-└── docs/
++-- style.css
++-- functions.php
++-- theme.json
++-- header.php
++-- footer.php
++-- front-page.php
++-- page.php
++-- single.php
++-- index.php
++-- inc/
+|   +-- setup.php
+|   +-- template-tags.php
++-- template-parts/
+|   +-- site-header.php
+|   +-- site-footer.php
+|   +-- page-hero.php
+|   +-- post-card.php
++-- assets/
+|   +-- css/
+|   |   +-- tokens.css
+|   |   +-- main.css
+|   +-- js/
+|       +-- site.js
++-- preview/
++-- docs/
 ```
 
 ## Boundaries

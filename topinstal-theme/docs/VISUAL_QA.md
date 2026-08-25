@@ -22,3 +22,32 @@ Check:
 Screenshot is evidence, not the whole proof. Record DOM assertions and interaction
 results with the screenshot path.
 
+## Current Local Preview Proof
+
+Local preview target:
+
+```text
+http://localhost:8097
+```
+
+Representative artifact directory:
+
+```text
+.artifacts/topinstal-theme-preview-20260825/
+```
+
+The current foundation has been proven locally with:
+
+- WordPress runtime active on Docker;
+- active `stylesheet/template=topinstal-theme`;
+- browser checks for `/`, `/kalkulator/`, `/pdf/`;
+- mobile `390px`, tablet `768px`, desktop `1440px`;
+- header/nav/main/footer present;
+- no horizontal overflow;
+- no broken images;
+- mobile menu open/close works;
+- primary CTA points to `/kalkulator/`;
+- no verification interstitial;
+- shortcode placeholders remain in page body, not in hero lead.
+
+This is `FRESHLY_PROVEN_LOCALLY`, not `DEPLOYED`.
