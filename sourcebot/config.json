@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/sourcebot-dev/sourcebot/main/schemas/v3/index.json",
+  "settings": {
+    "maxConnectionSyncJobConcurrency": 2,
+    "maxRepoIndexingJobConcurrency": 2,
+    "reindexIntervalMs": 86400000,
+    "resyncConnectionIntervalMs": 86400000
+  },
+  "connections": {
+    "top-code-workspace": {
+      "type": "git",
+      "url": "file:///repos/top-code"
+    },
+    "knowledge": {
+      "type": "git",
+      "url": "file:///repos/top-code/knowledge"
+    },
+    "gmail-agent": {
+      "type": "git",
+      "url": "file:///repos/top-code/gmail-agent"
+    },
+    "kalk-top": {
+      "type": "git",
+      "url": "file:///repos/top-code/kalk-top"
+    },
+    "daszek": {
+      "type": "git",
+      "url": "file:///repos/top-code/daszek"
+    },
+    "rag-chat-asystent": {
+      "type": "git",
+      "url": "file:///repos/top-code/rag-chat-asystent"
+    },
+    "rag-widget": {
+      "type": "git",
+      "url": "file:///repos/top-code/rag-widget"
+    },
+    "cieplo-orchestrator": {
+      "type": "git",
+      "url": "file:///repos/top-code/cieplo-orchestrator"
+    },
+    "top-instal-generator": {
+      "type": "git",
+      "url": "file:///repos/top-code/top-instal-generator"
+    },
+    "fast-kalk": {
+      "type": "git",
+      "url": "file:///repos/top-code/fast-kalk"
+    }
+  }
+}

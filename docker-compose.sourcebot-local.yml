@@ -1,0 +1,62 @@
+name: top-code-sourcebot-local
+
+services:
+  sourcebot:
+    image: ${SOURCEBOT_IMAGE:-docker.sourcebot.dev/sourcebot-dev/sourcebot:latest}
+    pull_policy: missing
+    user: sourcebot
+    container_name: top-code-sourcebot
+    restart: unless-stopped
+    depends_on:
+      sourcebot-postgres:
+        condition: service_healthy
+      sourcebot-redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./sourcebot/config.json:/data/config.json:ro
+      - ./:/repos/top-code:ro
+      - sourcebot_data:/data
+    environment:
+      CONFIG_PATH: /data/config.json
+      AUTH_URL: http://127.0.0.1:3000
+      AUTH_SECRET: "top-code-sourcebot-local-auth-secret-not-prod"
+      SOURCEBOT_ENCRYPTION_KEY: "topcode-sourcebot-local-key-0000"
+      SOURCEBOT_TELEMETRY_DISABLED: "true"
+      DATABASE_URL: postgresql://postgres:postgres@sourcebot-postgres:5432/postgres
+      REDIS_URL: redis://sourcebot-redis:6379
+
+  sourcebot-postgres:
+    image: docker.io/postgres:16
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - sourcebot_postgres_data:/var/lib/postgresql/data
+
+  sourcebot-redis:
+    image: docker.io/redis:8
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - sourcebot_redis_data:/data
+
+volumes:
+  sourcebot_data:
+    driver: local
+  sourcebot_postgres_data:
+    driver: local
+  sourcebot_redis_data:
+    driver: local

@@ -24,6 +24,10 @@ CBM_PIN = "codebase-memory-mcp==0.9.0"
 PLAYWRIGHT_PIN = "@playwright/mcp@0.0.78"
 CODESCENE_PIN = "@codescene/codehealth-mcp@1.4.1"
 CONTEXT7_PIN = "@upstash/context7-mcp@3.2.5"
+EXPECTED_CBM_ENV = {
+    "CBM_ALLOWED_ROOT": "C:/Users/compg/Desktop/top-code workspace",
+    "CBM_CACHE_DIR": "C:/ai-os-codebase-memory",
+}
 
 REQUIRED_SERVERS = {"codebase-memory", "gitnexus", "playwright"}
 SMOKE_CONFIRMED_OPTIONAL = {"codescene", "context7"}
@@ -42,6 +46,8 @@ SERENA_ARGS = [
 ]
 
 CLAUDE_SETTINGS_LOCAL = ROOT / ".claude" / "settings.local.json"
+SOURCEBOT_COMPOSE = ROOT / "docker-compose.sourcebot-local.yml"
+SOURCEBOT_CONFIG = ROOT / "sourcebot" / "config.json"
 
 SECRET_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
@@ -126,6 +132,10 @@ class TestRequiredCapabilities:
 
     def test_cursor_has_codescene_after_smoke(self, cursor_config):
         assert "codescene" in server_names(cursor_config)
+
+    def test_sourcebot_not_registered_as_free_mcp(self, claude_config, cursor_config):
+        assert "sourcebot" not in server_names(claude_config)
+        assert "sourcebot" not in server_names(cursor_config)
 
 
 class TestForbiddenAndPins:
@@ -212,11 +222,10 @@ class TestCursorNativeShape:
         assert PLAYWRIGHT_PIN in args_blob(pw)
         assert "cmd.exe" not in args_blob(pw)
 
-    def test_codebase_memory_has_no_hardcoded_env(self, cursor_config, claude_config):
+    def test_codebase_memory_has_expected_scoped_env(self, cursor_config, claude_config):
         for config in (cursor_config, claude_config):
             env = config["mcpServers"]["codebase-memory"].get("env") or {}
-            assert "CBM_ALLOWED_ROOT" not in env
-            assert "CBM_CACHE_DIR" not in env
+            assert env == EXPECTED_CBM_ENV
 
     def test_serena_uses_path_and_cwd_project(self, cursor_config, claude_config):
         for config in (cursor_config, claude_config):
@@ -256,13 +265,35 @@ class TestSecretsAndLocalPaths:
     def test_no_machine_absolute_paths_in_configs(self, path):
         config = load_json(path)
         strings = flatten_strings(config)
-        hits = [value for value in strings if any(marker in value for marker in MACHINE_PATH_MARKERS)]
+        allowed = set(EXPECTED_CBM_ENV.values())
+        hits = [
+            value
+            for value in strings
+            if value not in allowed and any(marker in value for marker in MACHINE_PATH_MARKERS)
+        ]
         assert not hits, f"{path.name} must not hardcode machine paths: {hits}"
 
     def test_codex_config_classified_local_only_not_in_workspace(self):
         assert CODEX_CONFIG.exists(), "local Codex config expected on developer machine"
         assert CODEX_CONFIG.is_relative_to(Path.home())
         assert not (ROOT / ".codex" / "config.toml").exists()
+
+
+class TestSourcebotLocalConfig:
+    def test_sourcebot_config_parses_and_uses_local_git_urls(self):
+        config = load_json(SOURCEBOT_CONFIG)
+        connections = config.get("connections") or {}
+        assert {"gmail-agent", "kalk-top"}.issubset(connections)
+        for name, connection in connections.items():
+            assert connection["type"] == "git", name
+            assert connection["url"].startswith("file:///repos/top-code"), name
+
+    def test_sourcebot_compose_is_local_read_only_and_telemetry_off(self):
+        text = SOURCEBOT_COMPOSE.read_text(encoding="utf-8")
+        assert "127.0.0.1:3000:3000" in text
+        assert "./:/repos/top-code:ro" in text
+        assert 'SOURCEBOT_TELEMETRY_DISABLED: "true"' in text
+        assert "/api/mcp" not in text
 
 
 @pytest.mark.integration
@@ -305,6 +336,11 @@ class TestMcpSmoke:
         result = smoke_stdio("npx", ["-y", CODESCENE_PIN])
         assert result["ok"]
         assert "get_config" in result["tool_names"]
+
+    def test_context7_smoke(self):
+        result = smoke_stdio("npx", ["-y", CONTEXT7_PIN])
+        assert result["ok"]
+        assert "resolve-library-id" in result["tool_names"]
 
     @pytest.mark.skipif(not SERENA_SMOKE_OPT_IN, reason=SERENA_SMOKE_SKIP_REASON)
     def test_serena_smoke(self):
