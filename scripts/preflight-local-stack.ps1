@@ -137,7 +137,7 @@ if (-not $coreOk) {
 
 
 
-function Ensure-KalkTopRuntime {
+function Initialize-KalkTopRuntime {
     $healthUrl = 'http://127.0.0.1:8091/index.php?rest_route=/'
     if (Test-HttpHealth 'kalk-top runtime' $healthUrl) {
         return $true
@@ -224,7 +224,7 @@ if ($FullStack) {
 
     if (-not (Test-HttpHealth 'Daszek sandbox' 'http://127.0.0.1:8090/wp-json/')) { $warn++ }
 
-    if (-not (Ensure-KalkTopRuntime)) { $warn++ }
+    if (-not (Initialize-KalkTopRuntime)) { $warn++ }
 
     if (-not (Test-TcpPort 'GraphStore Postgres' '127.0.0.1' 54130)) { $warn++ }
 
