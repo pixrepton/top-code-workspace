@@ -815,3 +815,151 @@ def test_q_gate_subprocess_uses_hermetic_profile_paths(plane_workspace):
         ],
         env=env,
     )
+
+
+def _active_checkpoint(env, task_id: str) -> dict:
+    path = Path(env["AI_OS_TASK_STATE_DIR"]) / "tasks" / "active" / f"{task_id}.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_r_task_start_default_provisions_plane(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f0-default")
+    proc = run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "f0-default",
+            "--title",
+            "F0 default plane",
+            "--class",
+            "SMALL",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+            "--execution-mode",
+            "TEST",
+        ],
+        env=env,
+    )
+    assert "TASK READY" in proc.stdout
+    checkpoint = _active_checkpoint(env, "f0-default")
+    assert checkpoint.get("execution_id")
+    assert checkpoint.get("execution_mode") == "TEST"
+    assert not checkpoint.get("execution_legacy")
+
+
+def test_s_legacy_small_docs_checkpoint_only(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f0-legacy")
+    run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "f0-legacy",
+            "--title",
+            "F0 legacy docs",
+            "--class",
+            "SMALL",
+            "--legacy",
+            "--execution-mode",
+            "DOCS",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+        ],
+        env=env,
+    )
+    checkpoint = _active_checkpoint(env, "f0-legacy")
+    assert checkpoint.get("execution_legacy") is True
+    assert checkpoint.get("execution_mode") == "DOCS"
+    assert not checkpoint.get("execution_id")
+    index = Path(env["AI_OS_TASK_STATE_DIR"]) / "executions" / "index.json"
+    if index.exists():
+        mapping = json.loads(index.read_text(encoding="utf-8"))
+        assert "f0-legacy" not in mapping
+
+
+def test_t_legacy_small_mutate_rejected(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f0-mutate")
+    proc = run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "f0-mutate",
+            "--title",
+            "F0 legacy mutate",
+            "--class",
+            "SMALL",
+            "--legacy",
+            "--execution-mode",
+            "MUTATE",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+        ],
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "LEGACY_EXECUTION_MODES" in proc.stderr or "DOCS" in proc.stderr
+
+
+def test_u_legacy_medium_rejected(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f0-medium")
+    proc = run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "f0-medium",
+            "--title",
+            "F0 legacy medium",
+            "--class",
+            "MEDIUM",
+            "--legacy",
+            "--execution-mode",
+            "DOCS",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+        ],
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "SMALL" in proc.stderr
+
+
+def test_v_start_rejects_legacy_flag(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f0-start-legacy")
+    proc = run_cmd(
+        [
+            "start",
+            "--task-id",
+            "f0-start-legacy",
+            "--title",
+            "F0 start legacy",
+            "--class",
+            "SMALL",
+            "--legacy",
+            "--execution-mode",
+            "TEST",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+        ],
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "legacy" in proc.stderr.lower()

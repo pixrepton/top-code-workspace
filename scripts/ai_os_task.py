@@ -37,10 +37,14 @@ from ai_os_task_lifecycle import (
 from ai_os_task_scope import normalize_scope_path, scope_entries_overlap, scopes_conflict
 
 try:
-    from ai_os_execution import SEED_ORIGINS, WRITE_MODES
+    from ai_os_execution import EXECUTION_MODES, LEGACY_EXECUTION_MODES, SEED_ORIGINS, WRITE_MODES
 except Exception:  # pragma: no cover - package always ships with this change
     WRITE_MODES = {"TEST", "BENCHMARK", "REPLAY", "PROOF", "LIVE_READ_ONLY", "MUTATE"}
+    EXECUTION_MODES = WRITE_MODES
+    LEGACY_EXECUTION_MODES = {"DOCS", "STATIC", "READ_ONLY_LOCAL"}
     SEED_ORIGINS = {"EMPTY", "FIXTURE", "SNAPSHOT", "HISTORICAL_REPLAY"}
+
+START_EXECUTION_MODES = sorted(EXECUTION_MODES | LEGACY_EXECUTION_MODES)
 
 # Re-exports required by tests / external imports
 __all__ = [
@@ -80,8 +84,17 @@ def add_start_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--publication-mode", choices=sorted(ALLOWED_PUBLICATION_MODES), default="LOCAL_ONLY")
     parser.add_argument("--summary", default="")
     parser.add_argument("--replace", action="store_true")
-    parser.add_argument("--execution-plane", action="store_true", help="Allocate V1 Execution Bundle + worktrees")
-    parser.add_argument("--execution-mode", default="TEST", choices=sorted(WRITE_MODES))
+    parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="Checkpoint-only SMALL docs/static path (no Execution Plane provisioning)",
+    )
+    parser.add_argument(
+        "--execution-plane",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument("--execution-mode", default="TEST", choices=START_EXECUTION_MODES)
     parser.add_argument("--campaign-id", default="")
     parser.add_argument("--seed-origin", default="EMPTY", choices=sorted(SEED_ORIGINS))
     parser.add_argument("--db-isolation", dest="db_isolation", action="store_true")
@@ -121,10 +134,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     start = sub.add_parser("task-start")
     add_start_args(start)
+    start.set_defaults(cmd="task-start", legacy=False)
 
     plane_start = sub.add_parser("start", help="task-start with Execution Plane V1 provisioning")
     add_start_args(plane_start)
-    plane_start.set_defaults(execution_plane=True, db_isolation=None, func=new_checkpoint)
+    plane_start.set_defaults(cmd="start", db_isolation=None, func=new_checkpoint)
 
     status = sub.add_parser("task-status")
     add_task_id_arg(status)

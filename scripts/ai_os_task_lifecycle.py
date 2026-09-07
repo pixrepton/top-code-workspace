@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ai_os_task_commit import closure_issues, commit_plan_payload, commit_task
+from ai_os_execution import LEGACY_EXECUTION_MODES, PLANE_REQUIRED_MODES
 from ai_os_task_constants import SCHEMA_VERSION, WORKSPACE
 from ai_os_task_errors import TaskError
 from ai_os_task_git import git_branch, git_head, repo_path
@@ -122,6 +123,46 @@ def _require_no_scope_conflict(scope: list[dict[str, str]], task_id: str, replac
         f"{first['task_id']}: requested {first['requested_scope']} overlaps {first['existing_scope']}"
     )
 
+def require_plane_bundle(data: dict[str, Any]) -> None:
+    """FAIL CLOSED when a plane execution_mode checkpoint has no Execution Bundle."""
+    mode = str(data.get("execution_mode") or "")
+    if mode in PLANE_REQUIRED_MODES and not data.get("execution_id"):
+        raise TaskError(
+            f"execution_mode={mode} requires an Execution Plane bundle; "
+            "use start (or task-start without --legacy), not checkpoint-only legacy start"
+        )
+
+
+def _resolve_start_mode(args: argparse.Namespace) -> bool:
+    """Return True when Execution Plane provisioning is required."""
+    legacy = bool(getattr(args, "legacy", False))
+    execution_mode = str(getattr(args, "execution_mode", "TEST") or "TEST")
+    cmd = str(getattr(args, "cmd", "") or "")
+
+    if cmd == "start" and legacy:
+        raise TaskError("start always provisions Execution Plane; --legacy is not allowed")
+
+    if legacy:
+        if bool(getattr(args, "execution_plane", False)):
+            raise TaskError("--legacy cannot be combined with --execution-plane or start")
+        if args.task_class != "SMALL":
+            raise TaskError("--legacy is only allowed with --class SMALL")
+        if execution_mode not in LEGACY_EXECUTION_MODES:
+            raise TaskError(
+                "--legacy requires --execution-mode in "
+                f"{sorted(LEGACY_EXECUTION_MODES)}; got {execution_mode}"
+            )
+        return False
+
+    if execution_mode in LEGACY_EXECUTION_MODES:
+        raise TaskError(
+            f"--execution-mode {execution_mode} requires --legacy for checkpoint-only start"
+        )
+    if execution_mode not in PLANE_REQUIRED_MODES:
+        raise TaskError(f"unsupported execution_mode for plane start: {execution_mode}")
+    return True
+
+
 def _head_map(repos: list[str]) -> dict[str, str]:
     return {repo: git_head(repo) for repo in repos}
 
@@ -196,7 +237,8 @@ def new_checkpoint(args: argparse.Namespace) -> int:
         active_path = active_task_path(task_id)
         _require_free_task_slot(active_path, task_id, args.replace)
         _require_no_scope_conflict(scope, task_id, args.replace)
-        if getattr(args, "execution_plane", False):
+        use_plane = _resolve_start_mode(args)
+        if use_plane:
             from ai_os_execution.plane import print_task_ready, provision_execution
 
             skeleton = {
@@ -217,6 +259,8 @@ def new_checkpoint(args: argparse.Namespace) -> int:
             print(f"checkpoint: {active_path}")
             return 0
         data = _initial_checkpoint(args, scope, adopted, utc_now())
+        data["execution_mode"] = str(getattr(args, "execution_mode", "DOCS") or "DOCS")
+        data["execution_legacy"] = True
         refresh_git_fields(data)
         atomic_write(data, active_path)
     print_summary(data, "INITIALIZED")

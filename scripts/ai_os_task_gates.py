@@ -277,6 +277,9 @@ def _execute_gate(
 
 def run_gate(args: argparse.Namespace) -> int:
     data = load_checkpoint(getattr(args, "task_id", None))
+    from ai_os_task_lifecycle import require_plane_bundle
+
+    require_plane_bundle(data)
     if args.repo not in data["target_repositories"]:
         raise TaskError(f"gate repo is not in checkpoint target_repositories: {args.repo}")
     profile = getattr(args, "profile", None)
