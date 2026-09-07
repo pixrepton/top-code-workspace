@@ -149,21 +149,15 @@ def _default_gate_log_path(task_id: str, gate_id: str) -> str:
     return str(directory / f"{gate_id}-{utc_now().replace(':', '-')}.log")
 
 
-def _gate_env() -> dict[str, str]:
-    """Deterministic UTF-8 environment for gate subprocesses.
+def _gate_env(data: dict[str, Any], repo: str) -> dict[str, str]:
+    """Synthesized workload env for gate subprocesses (V1.1 — never full host copy)."""
+    from ai_os_execution.child_env import gate_subprocess_env
 
-    The workspace encoding contract is UTF-8; without this, Windows subprocess
-    text mode follows the locale (cp1250) and Polish pytest output in gate logs
-    becomes non-deterministic. User-set values are preserved.
-    """
-    env = os.environ.copy()
-    env.setdefault("PYTHONUTF8", "1")
-    env.setdefault("PYTHONIOENCODING", "utf-8")
-    env.setdefault("PYTHONLEGACYWINDOWSSTDIO", "0")
-    # Parent CLI sets AI_OS_TASK_ID for fingerprint/worktree routing.
-    # Nested task-engine tests must not inherit the live parent task identity.
-    env.pop("AI_OS_TASK_ID", None)
-    return env
+    return gate_subprocess_env(
+        task_id=data["task_id"],
+        execution_id=str(data.get("execution_id") or ""),
+        cwd=repo_path(repo),
+    )
 
 
 def _terminate_owned_process_tree(proc: subprocess.Popen[Any]) -> None:
@@ -221,7 +215,7 @@ def _execute_gate(
             errors="replace",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=_gate_env(),
+            env=_gate_env(data, args.repo),
             creationflags=creationflags,
             start_new_session=start_new_session,
         )

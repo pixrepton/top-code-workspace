@@ -31,6 +31,13 @@ from ai_os_execution.preflight import (
     write_preflight,
 )
 from ai_os_execution.stores import fail_closed_if_canonical_writable, inspect_env_stores
+from ai_os_execution.child_env import (
+    control_plane_fingerprint,
+    provision_hermetic_profile,
+    write_public_env_file,
+    write_workload_secrets_file,
+)
+from ai_os_execution.public_bundle import public_bundle as serialize_public_bundle
 from ai_os_execution.worktree import add_repo_worktree, remove_repo_worktree, task_branch_name, worktree_head
 from ai_os_task_errors import TaskError
 from ai_os_task_git import canonical_repo_path, run
@@ -44,13 +51,15 @@ def _source_tree_hash(worktree: Path) -> str:
 
 
 def _write_env_layers(root: Path, host_env: dict[str, str], container_env: dict[str, str]) -> dict[str, str]:
+    public_host = {k: v for k, v in host_env.items() if "://" not in str(v)}
+    public_container = {k: v for k, v in container_env.items() if "://" not in str(v)}
     host_path = root / "HOST_ENV.json"
     container_path = root / "CONTAINER_ENV.json"
-    host_path.write_text(json.dumps(host_env, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    container_path.write_text(json.dumps(container_env, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    host_path.write_text(json.dumps(public_host, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    container_path.write_text(json.dumps(public_container, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     manifest = {
-        "host_env": host_env,
-        "container_env": container_env,
+        "host_env": public_host,
+        "container_env": public_container,
         "created_at": utc_now(),
     }
     manifest_path = root / "ENVIRONMENT_MANIFEST.json"
@@ -77,6 +86,14 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
     root.mkdir(parents=True, exist_ok=True)
     scratch = root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
+    hermetic_env = provision_hermetic_profile(root)
+    host_store_rows = inspect_env_stores(
+        dict(os.environ),
+        execution_mode=execution_mode,
+        task_database="",
+        task_principal="",
+    )
+    fail_closed_if_canonical_writable(host_store_rows, execution_mode=execution_mode)
     assert_scope_leases_free(data["declared_write_scope"])
 
     repos: dict[str, dict[str, Any]] = {}
@@ -115,8 +132,19 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         execution_mode=execution_mode,
         now=now,
     )
+    bundle["seed_origin"] = seed_origin
+    bundle["capability_profile"] = str(getattr(args, "capability_profile", None) or "NO_EXTERNAL")
     bundle["scratch_path"] = str(scratch)
+    bundle["hermetic"] = dict(hermetic_env)
 
+    declared_public: dict[str, str] = {
+        "AI_OS_EXECUTION_ID": execution_id,
+        "AI_OS_TASK_ID": data["task_id"],
+        "AI_OS_EXECUTION_MODE": execution_mode,
+        "COMPOSE_PROJECT_NAME": docker_namespace(execution_id),
+    }
+    declared_public.update(hermetic_env)
+    workload_secrets: dict[str, str] = {}
     host_db = str(getattr(args, "db_host", None) or os.environ.get("AI_OS_DB_HOST", "") or "127.0.0.1")
     container_db = str(
         getattr(args, "db_container_host", None) or os.environ.get("AI_OS_DB_CONTAINER_HOST", "") or "mailbox-memory-db"
@@ -125,13 +153,7 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
     if not topology["ok"]:
         raise TaskError("HOST/CONTAINER precheck failed: " + "; ".join(topology["errors"]))
 
-    host_env: dict[str, str] = {
-        "AI_OS_EXECUTION_ID": execution_id,
-        "AI_OS_TASK_ID": data["task_id"],
-        "AI_OS_EXECUTION_MODE": execution_mode,
-        "COMPOSE_PROJECT_NAME": docker_namespace(execution_id),
-    }
-    container_env = dict(host_env)
+    container_env = dict(declared_public)
     db_info: dict[str, Any] = {
         "isolation_mode": "NONE",
         "database_name": "",
@@ -160,12 +182,12 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
             port=str(getattr(args, "db_port", None) or os.environ.get("MAILBOX_MEMORY_PG_PORT") or "54129"),
         )
         for key in ("MAILBOX_MEMORY_DATABASE_URL", "MAILBOX_MEMORY_ASOF_DATABASE_URL", "DATABASE_URL"):
-            host_env[key] = db_info["host_dsn"]
-            container_env[key] = db_info["container_dsn"]
-        host_env["MAILBOX_MEMORY_CANONICAL_DATABASE_URL"] = ""
-        container_env["MAILBOX_MEMORY_CANONICAL_DATABASE_URL"] = ""
-    merged_store_env = dict(os.environ)
-    merged_store_env.update(host_env)
+            workload_secrets[key] = db_info["host_dsn"]
+            container_env[f"CONTAINER_{key}"] = db_info["container_dsn"]
+        workload_secrets["MAILBOX_MEMORY_CANONICAL_DATABASE_URL"] = ""
+        container_env["CONTAINER_MAILBOX_MEMORY_CANONICAL_DATABASE_URL"] = ""
+    merged_store_env = dict(declared_public)
+    merged_store_env.update(workload_secrets)
     store_rows = inspect_env_stores(
         merged_store_env,
         execution_mode=execution_mode,
@@ -178,6 +200,11 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         for key, value in db_info.items()
         if key not in {"password", "host_dsn", "container_dsn"}
     }
+    bundle["database"]["control_plane_fingerprint"] = control_plane_fingerprint(
+        admin_url=admin_url if isolate_db else "",
+        docker_container=os.environ.get("AI_OS_EXECUTION_DB_CONTAINER", "").strip() if isolate_db else "",
+        admin_user=os.environ.get("AI_OS_EXECUTION_DB_ADMIN_USER", "").strip() if isolate_db else "",
+    )
 
     capabilities = collect_tool_capabilities(host_db_host=host_db, container_db_host=container_db)
     preflight = write_preflight(execution_id, capabilities, topology, graph, store_rows)
@@ -187,14 +214,11 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         "graph_freshness": graph,
     }
 
-    env_layers = _write_env_layers(root, host_env, container_env)
+    env_layers = _write_env_layers(root, declared_public, container_env)
     bundle["environment_manifest_hash"] = env_layers["hash"]
-    secrets_path = root / "task.env.secret"
-    if isolate_db:
-        secrets_path.write_text(
-            "\n".join(f"{key}={value}" for key, value in host_env.items() if "URL" in key) + "\n",
-            encoding="utf-8",
-        )
+    write_public_env_file(execution_id, declared_public)
+    if workload_secrets:
+        write_workload_secrets_file(execution_id, workload_secrets)
 
     owned_paths = [f"{item['repo']}:{item['path']}" for item in data["declared_write_scope"]]
     if mutation_mode == "MUTATE":
@@ -260,7 +284,7 @@ def resume_execution(task_id: str) -> dict[str, Any]:
         "status": "RESUMED",
         "task_id": task_id,
         "execution_id": bundle["execution_id"],
-        "execution_bundle": _public_bundle(bundle),
+        "execution_bundle": serialize_public_bundle(bundle),
         "worktrees": {name: entry.get("worktree_path") for name, entry in bundle["repos"].items()},
         "heads": {name: entry.get("current_sha") for name, entry in bundle["repos"].items()},
         "owned_paths": (bundle.get("ownership") or {}).get("owned_paths") or [],
@@ -284,16 +308,6 @@ def destroy_execution(task_id: str, *, retain_evidence: bool = True) -> dict[str
     bundle["status"] = "CLOSED_RETAINED" if retain_evidence else "DESTROYABLE"
     save_bundle(bundle)
     return {"execution_id": bundle["execution_id"], "status": bundle["status"]}
-
-
-def _public_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
-    clone = json.loads(json.dumps(bundle))
-    db = clone.get("database") or {}
-    for key in ("password", "host_dsn", "container_dsn"):
-        db.pop(key, None)
-    clone["database"] = db
-    return clone
-
 
 def print_task_ready(bundle: dict[str, Any]) -> None:
     print("TASK READY")

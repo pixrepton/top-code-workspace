@@ -689,3 +689,129 @@ def test_c_and_j_live_write_denied_and_db_isolation(plane_workspace):
         assert cross.returncode != 0
     finally:
         subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+
+
+def test_n_hermetic_userprofile_differs_from_host(tmp_path, monkeypatch):
+    from ai_os_execution.bundle import execution_dir, new_bundle, save_bundle
+    from ai_os_execution.child_env import build_effective_child_env, provision_hermetic_profile, write_public_env_file
+
+    state = tmp_path / "state"
+    monkeypatch.setenv("AI_OS_TASK_STATE_DIR", str(state))
+    host_home = tmp_path / "host-home"
+    host_home.mkdir()
+    monkeypatch.setenv("USERPROFILE", str(host_home))
+    monkeypatch.setenv("HOME", str(host_home))
+
+    execution_id = "exec_20250101T120000Z_aabbcc"
+    root = execution_dir(execution_id)
+    root.mkdir(parents=True)
+    hermetic = provision_hermetic_profile(root)
+    write_public_env_file(execution_id, {"AI_OS_EXECUTION_MODE": "TEST"})
+    bundle = new_bundle(
+        execution_id=execution_id,
+        task_id="hermetic-userprofile",
+        campaign_id="hermetic-userprofile",
+        repos={
+            "tmp": {
+                "canonical_repo": str(tmp_path / "repo"),
+                "worktree_path": str(tmp_path / "wt"),
+                "base_sha": "abc",
+                "current_sha": "abc",
+                "branch": "task/hermetic",
+                "mutation_mode": "MUTATE",
+            }
+        },
+    )
+    save_bundle(bundle)
+
+    env = build_effective_child_env(bundle)
+    assert env["USERPROFILE"] != str(host_home)
+    assert env["USERPROFILE"] == hermetic["USERPROFILE"]
+    assert env.get("PYTHONNOUSERSITE") == "1"
+
+
+def test_o_host_poison_tokens_absent_from_child_env(tmp_path, monkeypatch):
+    from ai_os_execution.bundle import execution_dir, new_bundle, save_bundle
+    from ai_os_execution.child_env import build_effective_child_env, provision_hermetic_profile, write_public_env_file
+
+    state = tmp_path / "state"
+    monkeypatch.setenv("AI_OS_TASK_STATE_DIR", str(state))
+    monkeypatch.setenv("GMAIL_ACCESS_TOKEN", "host-live-token")
+    monkeypatch.setenv("MAILBOX_MEMORY_CANONICAL_DATABASE_URL", "postgresql://canonical:secret@127.0.0.1/mailbox_memory")
+    monkeypatch.setenv("PYTHONPATH", "/host/site-packages")
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/ssh-agent")
+
+    execution_id = "exec_20250101T120001Z_aabbcc"
+    root = execution_dir(execution_id)
+    root.mkdir(parents=True)
+    provision_hermetic_profile(root)
+    write_public_env_file(execution_id, {"AI_OS_EXECUTION_MODE": "TEST"})
+    bundle = new_bundle(
+        execution_id=execution_id,
+        task_id="poison-env",
+        campaign_id="poison-env",
+        repos={
+            "tmp": {
+                "canonical_repo": str(tmp_path / "repo"),
+                "worktree_path": str(tmp_path / "wt"),
+                "base_sha": "abc",
+                "current_sha": "abc",
+                "branch": "task/poison",
+                "mutation_mode": "MUTATE",
+            }
+        },
+    )
+    save_bundle(bundle)
+
+    env = build_effective_child_env(bundle)
+    for key in ("GMAIL_ACCESS_TOKEN", "MAILBOX_MEMORY_CANONICAL_DATABASE_URL", "PYTHONPATH", "SSH_AUTH_SOCK"):
+        assert key not in env
+
+
+def test_p_public_bundle_whitelist_excludes_secrets(plane_workspace):
+    from ai_os_execution.public_bundle import public_bundle
+
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "public-bundle")
+    start_plane(env, repo_name, task_id="public-bundle")
+    bundle, _ = bundle_for(env, "public-bundle")
+    payload = public_bundle(bundle)
+    blob = json.dumps(payload).lower()
+    assert "postgresql://" not in blob
+    assert "host_dsn" not in blob
+    assert "container_dsn" not in blob
+    assert "password" not in blob
+    assert payload.get("hermetic")
+
+
+def test_q_gate_subprocess_uses_hermetic_profile_paths(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "gate-hermetic")
+    start_plane(env, repo_name, task_id="gate-hermetic")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "gate-hermetic",
+            "--gate-id",
+            "hermetic-profile",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            (
+                "import os; "
+                "up = os.environ['USERPROFILE'].replace('\\\\', '/'); "
+                "dc = os.environ['DOCKER_CONFIG'].replace('\\\\', '/'); "
+                "gc = os.environ['GIT_CONFIG_GLOBAL'].replace('\\\\', '/'); "
+                "assert '/scratch/profile/' in up; "
+                "assert '/scratch/profile/' in dc; "
+                "assert '/scratch/profile/' in gc; "
+                "assert 'PYTHONPATH' not in os.environ; "
+                "assert os.environ.get('PYTHONNOUSERSITE') == '1'; "
+                "print('ok')"
+            ),
+        ],
+        env=env,
+    )

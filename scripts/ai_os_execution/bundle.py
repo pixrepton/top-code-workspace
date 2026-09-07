@@ -9,7 +9,7 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-from ai_os_execution import EXECUTION_BUNDLE_VERSION, LIFECYCLE_STATES, MUTATION_MODES, WRITE_MODES
+from ai_os_execution import EXECUTION_BUNDLE_VERSION, EXECUTION_MODES, LIFECYCLE_STATES, MUTATION_MODES
 from ai_os_task_errors import TaskError
 from ai_os_task_paths import list_active_task_ids, state_dir, utc_now
 
@@ -150,7 +150,7 @@ def validate_bundle(bundle: dict[str, Any]) -> None:
     if bundle.get("status") not in LIFECYCLE_STATES:
         raise TaskError(f"invalid execution status: {bundle.get('status')}")
     mode = str(bundle.get("execution_mode") or "TEST")
-    if mode not in WRITE_MODES:
+    if mode not in EXECUTION_MODES:
         raise TaskError(f"invalid execution_mode: {mode}")
     repos = bundle.get("repos")
     if not isinstance(repos, dict) or not repos:
