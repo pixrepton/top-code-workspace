@@ -158,6 +158,9 @@ def write_preflight(
     topology: dict[str, Any],
     graph: dict[str, Any],
     stores: list[dict[str, Any]],
+    *,
+    effective_capabilities: dict[str, Any] | None = None,
+    semantic_clock: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     root = execution_dir(execution_id)
     root.mkdir(parents=True, exist_ok=True)
@@ -170,6 +173,8 @@ def write_preflight(
         "topology": topology,
         "graph_freshness": graph,
         "writable_stores": stores,
+        "effective_capabilities": effective_capabilities or {},
+        "semantic_clock": semantic_clock or {},
         "verdict": "PASS" if topology.get("ok") else "FAIL",
     }
     atomic_json(payload, preflight_path)

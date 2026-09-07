@@ -37,11 +37,12 @@ from ai_os_task_lifecycle import (
 from ai_os_task_scope import normalize_scope_path, scope_entries_overlap, scopes_conflict
 
 try:
-    from ai_os_execution import EXECUTION_MODES, LEGACY_EXECUTION_MODES, SEED_ORIGINS, WRITE_MODES
+    from ai_os_execution import CAPABILITY_PROFILES, EXECUTION_MODES, LEGACY_EXECUTION_MODES, SEED_ORIGINS, WRITE_MODES
 except Exception:  # pragma: no cover - package always ships with this change
     WRITE_MODES = {"TEST", "BENCHMARK", "REPLAY", "PROOF", "LIVE_READ_ONLY", "MUTATE"}
     EXECUTION_MODES = WRITE_MODES
     LEGACY_EXECUTION_MODES = {"DOCS", "STATIC", "READ_ONLY_LOCAL"}
+    CAPABILITY_PROFILES = {"NO_EXTERNAL", "DECLARED_LLM", "LIVE_READ_ONLY"}
     SEED_ORIGINS = {"EMPTY", "FIXTURE", "SNAPSHOT", "HISTORICAL_REPLAY"}
 
 START_EXECUTION_MODES = sorted(EXECUTION_MODES | LEGACY_EXECUTION_MODES)
@@ -97,6 +98,17 @@ def add_start_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--execution-mode", default="TEST", choices=START_EXECUTION_MODES)
     parser.add_argument("--campaign-id", default="")
     parser.add_argument("--seed-origin", default="EMPTY", choices=sorted(SEED_ORIGINS))
+    parser.add_argument("--capability-profile", default="NO_EXTERNAL", choices=sorted(CAPABILITY_PROFILES))
+    parser.add_argument("--replay-as-of", default="", help="Semantic clock pin (ISO-8601)")
+    parser.add_argument("--replay-timezone", default="Europe/Warsaw")
+    parser.add_argument("--schema-revision", default="")
+    parser.add_argument("--evaluator-version", default="")
+    parser.add_argument("--fixture-hash", default="")
+    parser.add_argument(
+        "--scoring-paths-proven",
+        action="store_true",
+        help="Assert temporal scoring paths use semantic clock (HISTORICAL_REPLAY)",
+    )
     parser.add_argument("--db-isolation", dest="db_isolation", action="store_true")
     parser.add_argument("--no-db-isolation", dest="db_isolation", action="store_false")
     parser.add_argument("--db-host", default="")

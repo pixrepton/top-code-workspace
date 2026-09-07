@@ -385,6 +385,8 @@ def _record_execution_proof(data: dict[str, Any], entry: dict[str, Any]) -> None
         benchmark=bundle.get("benchmark") or {},
         environment_manifest_hash=str(bundle.get("environment_manifest_hash") or ""),
         artifacts={"log_path": entry.get("log_path") or ""},
+        semantic_clock=bundle.get("semantic_clock") or {},
+        effective_capabilities=bundle.get("capabilities") or {},
     )
     bundle["proof"] = {"latest_proof_bundle": str(path)}
     if entry.get("gate_id") == "FINAL_HEAD_GATE" or (entry.get("fingerprint") or {}).get("gate_class") == "FINAL_HEAD":

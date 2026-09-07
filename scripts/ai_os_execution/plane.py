@@ -30,6 +30,16 @@ from ai_os_execution.preflight import (
     require_preflight_pass,
     write_preflight,
 )
+from ai_os_execution.capabilities import (
+    assert_mutate_denies_gmail_send,
+    capability_trigger_keys,
+    compile_effective_capabilities,
+)
+from ai_os_execution.semantic_clock import (
+    build_semantic_clock,
+    require_semantic_clock_ready,
+    semantic_env_from_clock,
+)
 from ai_os_execution.stores import fail_closed_if_canonical_writable, inspect_env_stores
 from ai_os_execution.child_env import (
     control_plane_fingerprint,
@@ -87,11 +97,13 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
     scratch = root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
     hermetic_env = provision_hermetic_profile(root)
+    target_repos = data["target_repositories"]
     host_store_rows = inspect_env_stores(
         dict(os.environ),
         execution_mode=execution_mode,
         task_database="",
         task_principal="",
+        target_repositories=[],
     )
     fail_closed_if_canonical_writable(host_store_rows, execution_mode=execution_mode)
     assert_scope_leases_free(data["declared_write_scope"])
@@ -132,8 +144,9 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         execution_mode=execution_mode,
         now=now,
     )
+    capability_profile = str(getattr(args, "capability_profile", None) or "NO_EXTERNAL")
     bundle["seed_origin"] = seed_origin
-    bundle["capability_profile"] = str(getattr(args, "capability_profile", None) or "NO_EXTERNAL")
+    bundle["capability_profile"] = capability_profile
     bundle["scratch_path"] = str(scratch)
     bundle["hermetic"] = dict(hermetic_env)
 
@@ -188,13 +201,50 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         container_env["CONTAINER_MAILBOX_MEMORY_CANONICAL_DATABASE_URL"] = ""
     merged_store_env = dict(declared_public)
     merged_store_env.update(workload_secrets)
+    capability_env = dict(merged_store_env)
+    for key in capability_trigger_keys():
+        value = os.environ.get(key, "").strip()
+        if value:
+            capability_env[key] = value
     store_rows = inspect_env_stores(
         merged_store_env,
         execution_mode=execution_mode,
         task_database=str(db_info.get("database_name") or ""),
         task_principal=str(db_info.get("principal") or ""),
+        target_repositories=target_repos,
     )
     fail_closed_if_canonical_writable(store_rows, execution_mode=execution_mode)
+
+    effective_caps = compile_effective_capabilities(
+        execution_mode=execution_mode,
+        seed_origin=seed_origin,
+        capability_profile=capability_profile,
+        declared_env=capability_env,
+        declared_secrets={},
+    )
+    assert_mutate_denies_gmail_send(
+        execution_mode=execution_mode,
+        seed_origin=seed_origin,
+        capability_profile=capability_profile,
+        declared_env=capability_env,
+    )
+    bundle["capabilities"] = effective_caps
+
+    semantic_clock = build_semantic_clock(
+        seed_origin=seed_origin,
+        execution_mode=execution_mode,
+        seed_identity=str(db_info.get("seed_identity") or ""),
+        replay_as_of=str(getattr(args, "replay_as_of", None) or ""),
+        timezone_name=str(getattr(args, "replay_timezone", None) or ""),
+        schema_revision=str(getattr(args, "schema_revision", None) or ""),
+        evaluator_version=str(getattr(args, "evaluator_version", None) or ""),
+        fixture_hash=str(getattr(args, "fixture_hash", None) or ""),
+        scoring_paths_proven=bool(getattr(args, "scoring_paths_proven", False)),
+    )
+    if seed_origin == "HISTORICAL_REPLAY":
+        require_semantic_clock_ready(semantic_clock)
+    bundle["semantic_clock"] = semantic_clock
+    declared_public.update(semantic_env_from_clock(semantic_clock))
     bundle["database"] = {
         key: value
         for key, value in db_info.items()
@@ -207,7 +257,15 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
     )
 
     capabilities = collect_tool_capabilities(host_db_host=host_db, container_db_host=container_db)
-    preflight = write_preflight(execution_id, capabilities, topology, graph, store_rows)
+    preflight = write_preflight(
+        execution_id,
+        capabilities,
+        topology,
+        graph,
+        store_rows,
+        effective_capabilities=effective_caps,
+        semantic_clock=semantic_clock,
+    )
     require_preflight_pass(preflight)
     bundle["tooling"] = {
         "preflight_manifest": preflight["preflight_path"],

@@ -132,14 +132,18 @@ def write_proof_bundle(
     benchmark: dict[str, Any] | None = None,
     environment_manifest_hash: str = "",
     artifacts: dict[str, str] | None = None,
+    semantic_clock: dict[str, Any] | None = None,
+    effective_capabilities: dict[str, Any] | None = None,
 ) -> Path:
     root = execution_dir(execution_id)
     root.mkdir(parents=True, exist_ok=True)
+    executed_at = utc_now()
     payload = {
         "proof_bundle_version": PROOF_BUNDLE_VERSION,
         "task_id": task_id,
         "execution_id": execution_id,
-        "timestamp": utc_now(),
+        "timestamp": executed_at,
+        "executed_at": executed_at,
         "repos": repos,
         "source_tree_hashes": source_tree_hashes or {},
         "gate": {
@@ -153,6 +157,8 @@ def write_proof_bundle(
         "database": database or {},
         "benchmark": benchmark or {},
         "environment_manifest_hash": environment_manifest_hash,
+        "semantic_clock": semantic_clock or {},
+        "effective_capabilities": effective_capabilities or {},
         "artifacts": artifacts or {},
         "verdict": verdict,
     }

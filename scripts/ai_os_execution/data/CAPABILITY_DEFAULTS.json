@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "capabilities": [
+    "gmail_send",
+    "gmail_read",
+    "drive_write",
+    "calendar_write",
+    "llm_invoke",
+    "business_mutations"
+  ],
+  "env_triggers": {
+    "GMAIL_SEND_ENABLED": "gmail_send",
+    "AI_OS_GMAIL_SEND": "gmail_send",
+    "GMAIL_PRODUCTION_SEND": "gmail_send",
+    "DRIVE_WRITE_ENABLED": "drive_write",
+    "CALENDAR_WRITE_ENABLED": "calendar_write",
+    "AI_OS_BUSINESS_MUTATION": "business_mutations"
+  },
+  "defaults": {
+    "*": {
+      "gmail_send": "DENY",
+      "gmail_read": "DENY",
+      "drive_write": "DENY",
+      "calendar_write": "DENY",
+      "llm_invoke": "DENY",
+      "business_mutations": "DENY"
+    },
+    "LIVE_READ_ONLY+LIVE_READ_ONLY": {
+      "gmail_read": "ALLOW_DECLARED"
+    },
+    "BENCHMARK+HISTORICAL_REPLAY+DECLARED_LLM": {
+      "llm_invoke": "ALLOW"
+    },
+    "REPLAY+HISTORICAL_REPLAY+DECLARED_LLM": {
+      "llm_invoke": "ALLOW"
+    },
+    "PROOF+HISTORICAL_REPLAY+DECLARED_LLM": {
+      "llm_invoke": "ALLOW"
+    }
+  }
+}

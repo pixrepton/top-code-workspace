@@ -963,3 +963,114 @@ def test_v_start_rejects_legacy_flag(plane_workspace):
     )
     assert proc.returncode == 2
     assert "legacy" in proc.stderr.lower()
+
+
+def test_w_mutate_gmail_send_request_fail_closed(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f2-gmail")
+    leak_env = dict(env)
+    leak_env["GMAIL_PRODUCTION_SEND"] = "1"
+    proc = run_cmd(
+        [
+            "start",
+            "--task-id",
+            "f2-gmail",
+            "--title",
+            "gmail send deny",
+            "--class",
+            "SMALL",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+            "--execution-mode",
+            "MUTATE",
+        ],
+        env=leak_env,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "gmail_send" in (proc.stderr + proc.stdout).lower()
+
+
+def test_x_semantic_clock_sentinel_uses_replay_as_of():
+    from ai_os_execution.semantic_clock import build_semantic_clock, scoring_temporal_instant
+
+    clock = build_semantic_clock(
+        seed_origin="HISTORICAL_REPLAY",
+        execution_mode="REPLAY",
+        seed_identity="seed-abc",
+        replay_as_of="2024-06-15T12:00:00+02:00",
+        timezone_name="Europe/Warsaw",
+        schema_revision="rev1",
+        evaluator_version="eval1",
+        fixture_hash="fix1",
+        scoring_paths_proven=True,
+    )
+    instant = scoring_temporal_instant(clock)
+    assert instant.year == 2024
+    assert instant.month == 6
+    assert instant.day == 15
+
+
+def test_y_proof_bundle_records_wall_executed_at(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f2-proof")
+    start_plane(env, repo_name, task_id="f2-proof")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f2-proof",
+            "--gate-id",
+            "proof-clock",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        env=env,
+    )
+    bundle, _ = bundle_for(env, "f2-proof")
+    proof_path = (
+        Path(env["AI_OS_TASK_STATE_DIR"]) / "executions" / bundle["execution_id"] / "PROOF_BUNDLE.json"
+    )
+    assert proof_path.exists()
+    proof = json.loads(proof_path.read_text(encoding="utf-8"))
+    assert proof.get("executed_at")
+    assert proof.get("timestamp") == proof.get("executed_at")
+    replay_pin = (proof.get("semantic_clock") or {}).get("pins", {}).get("replay_as_of")
+    if replay_pin:
+        assert replay_pin != proof.get("executed_at")
+
+
+def test_z_historical_replay_without_pins_blocked(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f2-blocked")
+    proc = run_cmd(
+        [
+            "start",
+            "--task-id",
+            "f2-blocked",
+            "--title",
+            "blocked replay",
+            "--class",
+            "SMALL",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+            "--execution-mode",
+            "REPLAY",
+            "--seed-origin",
+            "HISTORICAL_REPLAY",
+        ],
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "BLOCKED_TIME_NOT_CONTROLLED" in (proc.stderr + proc.stdout)

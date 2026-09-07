@@ -57,7 +57,7 @@ def public_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         for name, entry in repos.items()
         if isinstance(entry, dict)
     }
-    for section in ("runtime", "benchmark", "tooling", "ownership", "proof", "final_head", "hermetic", "capabilities"):
+    for section in ("runtime", "benchmark", "tooling", "ownership", "proof", "final_head", "hermetic", "capabilities", "semantic_clock"):
         if section in bundle:
             out[section] = copy.deepcopy(bundle[section])
     return out

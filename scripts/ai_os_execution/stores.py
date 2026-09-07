@@ -12,6 +12,38 @@ from ai_os_task_constants import WORKSPACE
 from ai_os_task_errors import TaskError
 
 DEFAULT_CATALOG = WORKSPACE / "knowledge" / "system-atlas" / "tooling" / "WRITABLE_STORES.json"
+BUNDLED_CATALOG = Path(__file__).resolve().parent / "data" / "WRITABLE_STORES.json"
+
+
+def catalog_path(path: Path | None = None) -> Path:
+    if path is not None:
+        return path
+    if BUNDLED_CATALOG.exists():
+        return BUNDLED_CATALOG
+    return DEFAULT_CATALOG
+
+
+def load_catalog(path: Path | None = None) -> dict[str, Any]:
+    target = catalog_path(path)
+    if not target.exists():
+        raise TaskError(f"WRITABLE_STORES catalog missing: {target}")
+    return json.loads(target.read_text(encoding="utf-8"))
+
+
+def stores_for_repos(catalog: dict[str, Any], repos: list[str]) -> list[dict[str, Any]]:
+    repo_set = set(repos or [])
+    stores = catalog.get("stores") or []
+    if not repo_set:
+        return list(stores)
+    filtered: list[dict[str, Any]] = []
+    for store in stores:
+        store_repos = store.get("repos")
+        if not store_repos:
+            filtered.append(store)
+            continue
+        if repo_set.intersection(store_repos):
+            filtered.append(store)
+    return filtered
 
 
 def parse_dsn(url: str) -> dict[str, str]:
@@ -27,13 +59,6 @@ def parse_dsn(url: str) -> dict[str, str]:
         "database": database,
         "scheme": parsed.scheme,
     }
-
-
-def load_catalog(path: Path | None = None) -> dict[str, Any]:
-    target = path or DEFAULT_CATALOG
-    if not target.exists():
-        raise TaskError(f"WRITABLE_STORES catalog missing: {target}")
-    return json.loads(target.read_text(encoding="utf-8"))
 
 
 def is_canonical_target(dsn: dict[str, str], catalog: dict[str, Any]) -> bool:
@@ -56,10 +81,12 @@ def inspect_env_stores(
     execution_mode: str,
     task_database: str = "",
     task_principal: str = "",
+    target_repositories: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     catalog = catalog or load_catalog()
+    store_defs = stores_for_repos(catalog, target_repositories or [])
     rows: list[dict[str, Any]] = []
-    for store in catalog.get("stores") or []:
+    for store in store_defs:
         env_key = str(store.get("env") or "")
         url = (env.get(env_key) or "").strip()
         dsn = parse_dsn(url)
@@ -80,6 +107,7 @@ def inspect_env_stores(
             {
                 "store": store.get("id") or env_key,
                 "env": env_key,
+                "repos": list(store.get("repos") or []),
                 "connection_mode": "configured" if url else "absent",
                 "target_database": dsn.get("database") or "",
                 "target_host": dsn.get("host") or "",
