@@ -28,12 +28,12 @@ def _runtime_identity(args: argparse.Namespace) -> str:
     proc = run(args.runtime_command, repo_path(args.repo), check=False)
     return (proc.stdout or proc.stderr).strip()
 
-def gate_fingerprint(args: argparse.Namespace, data: dict[str, Any]) -> dict[str, Any]:
+def gate_fingerprint(args: argparse.Namespace, data: dict[str, Any], command: list[str] | None = None) -> dict[str, Any]:
     repo = args.repo
     rel_paths = args.scope or scopes_for_repo(data["declared_write_scope"], repo)
     config_paths = args.config_path or []
     runtime_identity = _runtime_identity(args)
-    return {
+    v1 = {
         "head_sha": git_head(repo),
         "staged_diff_hash": staged_diff_hash(repo),
         "scope_hash": scope_hash(repo, rel_paths),
@@ -42,6 +42,38 @@ def gate_fingerprint(args: argparse.Namespace, data: dict[str, Any]) -> dict[str
         "runtime_identity": runtime_identity,
         "scope": [normalize_rel(p) for p in rel_paths],
     }
+    if not data.get("execution_id"):
+        return v1
+    from ai_os_execution.bundle import load_bundle_for_task
+    from ai_os_execution.proof import build_fingerprint_v2
+
+    bundle = load_bundle_for_task(data["task_id"]) or {}
+    db = bundle.get("database") or {}
+    runtime = bundle.get("runtime") or {}
+    digest_entry = (runtime.get("image_digests") or {}).get(repo) or {}
+    if isinstance(digest_entry, str):
+        digest_entry = {"digest": digest_entry}
+    gate_class = "FINAL_HEAD" if args.gate_id == "FINAL_HEAD_GATE" or getattr(args, "final_head", False) else "DEVELOPMENT"
+    argv = list(command or getattr(args, "command", None) or [])
+    return build_fingerprint_v2(
+        task_id=data["task_id"],
+        repo=repo,
+        command=argv,
+        rel_paths=rel_paths,
+        config_hash_value=v1["config_hash"],
+        config_paths=config_paths,
+        runtime_identity=runtime_identity,
+        staged=v1["staged_diff_hash"],
+        execution_id=str(data.get("execution_id") or ""),
+        environment_manifest_hash=str(bundle.get("environment_manifest_hash") or ""),
+        image_digest=str(digest_entry.get("digest") or ""),
+        db_seed_identity=str(db.get("seed_identity") or ""),
+        db_seed_hash=str(db.get("seed_hash") or ""),
+        benchmark_manifest_hash=str((bundle.get("benchmark") or {}).get("manifest_hash") or ""),
+        scorer_hash=str((bundle.get("benchmark") or {}).get("scorer_hash") or ""),
+        gate_class=gate_class,
+        target_repositories=list(data.get("target_repositories") or [repo]),
+    )
 
 def previous_matching_pass(data: dict[str, Any], gate_id: str, repo: str, fingerprint: dict[str, Any]) -> dict[str, Any] | None:
     for entry in reversed(data["gates"]):
@@ -128,6 +160,9 @@ def _gate_env() -> dict[str, str]:
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("PYTHONLEGACYWINDOWSSTDIO", "0")
+    # Parent CLI sets AI_OS_TASK_ID for fingerprint/worktree routing.
+    # Nested task-engine tests must not inherit the live parent task identity.
+    env.pop("AI_OS_TASK_ID", None)
     return env
 
 
@@ -235,6 +270,8 @@ def _execute_gate(
     }
     phase = "gate-pass" if verdict == "PASS" else "gate-fail"
     _record_gate(data, entry, phase, f"{args.gate_id}: {verdict} - {short}")
+    if verdict == "PASS" and data.get("execution_id"):
+        _record_execution_proof(data, entry)
     print(f"GATE {args.gate_id}: {verdict} ({duration}s)")
     print(f"summary: {short}")
     print(f"log: {log_path}")
@@ -266,7 +303,7 @@ def run_gate(args: argparse.Namespace) -> int:
             args.summary = resolved.description
     else:
         command = _resolve_gate_command(args)
-    fingerprint = gate_fingerprint(args, data)
+    fingerprint = gate_fingerprint(args, data, command)
     previous = None if args.always_fresh else previous_matching_pass(data, args.gate_id, args.repo, fingerprint)
     if not previous:
         return _execute_gate(args, data, command, fingerprint)
@@ -303,12 +340,62 @@ def latest_current_passing_gate(data: dict[str, Any], repo: str) -> dict[str, An
 def recompute_gate_fingerprint_from_entry(gate: dict[str, Any]) -> dict[str, Any]:
     fp = gate["fingerprint"]
     repo = gate["repo"]
-    return {
-        "head_sha": git_head(repo),
-        "staged_diff_hash": staged_diff_hash(repo),
-        "scope_hash": scope_hash(repo, fp.get("scope") or ["."]),
-        "config_hash": config_hash(repo, fp.get("config_paths") or []),
-        "config_paths": fp.get("config_paths") or [],
-        "runtime_identity": fp.get("runtime_identity", ""),
-        "scope": fp.get("scope") or ["."],
-    }
+    if int(fp.get("fingerprint_version") or 1) < 2:
+        return {
+            "head_sha": git_head(repo),
+            "staged_diff_hash": staged_diff_hash(repo),
+            "scope_hash": scope_hash(repo, fp.get("scope") or ["."]),
+            "config_hash": config_hash(repo, fp.get("config_paths") or []),
+            "config_paths": fp.get("config_paths") or [],
+            "runtime_identity": fp.get("runtime_identity", ""),
+            "scope": fp.get("scope") or ["."],
+        }
+    args = argparse.Namespace(
+        repo=repo,
+        scope=fp.get("scope") or ["."],
+        config_path=fp.get("config_paths") or [],
+        runtime_id=fp.get("runtime_identity") or "",
+        runtime_command=None,
+        gate_id=gate.get("gate_id") or "",
+        final_head=fp.get("gate_class") == "FINAL_HEAD",
+        command=list(gate.get("command_argv") or []),
+    )
+    from ai_os_task_state import load_checkpoint
+
+    data = load_checkpoint(fp.get("task_id"))
+    return gate_fingerprint(args, data, list(gate.get("command_argv") or []))
+
+
+def _record_execution_proof(data: dict[str, Any], entry: dict[str, Any]) -> None:
+    from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+    from ai_os_execution.proof import write_proof_bundle
+
+    bundle = load_bundle_for_task(data["task_id"])
+    if not bundle:
+        return
+    repos = {name: item.get("current_sha") or git_head(name) for name, item in (bundle.get("repos") or {}).items()}
+    path = write_proof_bundle(
+        task_id=data["task_id"],
+        execution_id=bundle["execution_id"],
+        repos=repos,
+        gate=entry,
+        verdict=entry.get("verdict") or "PASS",
+        runtime=bundle.get("runtime") or {},
+        database={
+            "seed_identity": (bundle.get("database") or {}).get("seed_identity"),
+            "seed_hash": (bundle.get("database") or {}).get("seed_hash"),
+        },
+        benchmark=bundle.get("benchmark") or {},
+        environment_manifest_hash=str(bundle.get("environment_manifest_hash") or ""),
+        artifacts={"log_path": entry.get("log_path") or ""},
+    )
+    bundle["proof"] = {"latest_proof_bundle": str(path)}
+    if entry.get("gate_id") == "FINAL_HEAD_GATE" or (entry.get("fingerprint") or {}).get("gate_class") == "FINAL_HEAD":
+        bundle["final_head"] = {
+            **(bundle.get("final_head") or {}),
+            "required": True,
+            "valid": True,
+            "gate_id": "FINAL_HEAD_GATE",
+            "invalidated_reason": "",
+        }
+    save_bundle(bundle)

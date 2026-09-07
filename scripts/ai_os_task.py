@@ -36,6 +36,12 @@ from ai_os_task_lifecycle import (
 )
 from ai_os_task_scope import normalize_scope_path, scope_entries_overlap, scopes_conflict
 
+try:
+    from ai_os_execution import SEED_ORIGINS, WRITE_MODES
+except Exception:  # pragma: no cover - package always ships with this change
+    WRITE_MODES = {"TEST", "BENCHMARK", "REPLAY", "PROOF", "LIVE_READ_ONLY", "MUTATE"}
+    SEED_ORIGINS = {"EMPTY", "FIXTURE", "SNAPSHOT", "HISTORICAL_REPLAY"}
+
 # Re-exports required by tests / external imports
 __all__ = [
     "TaskError",
@@ -49,26 +55,76 @@ __all__ = [
 def add_task_id_arg(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--task-id", help="Explicit task id (default: AI_OS_TASK_ID or single active task)")
 
+
+def add_execution_context_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--execution-id", help="Execution Bundle id (sets AI_OS_EXECUTION_ID)")
+    parser.add_argument(
+        "--repo-path",
+        dest="repo_path_flag",
+        help="Override runtime repo/worktree path for this invocation",
+    )
+
+
+def add_start_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--task-id", required=True)
+    parser.add_argument("--title", required=True)
+    parser.add_argument("--class", dest="task_class", choices=sorted(ALLOWED_CLASSES), required=True)
+    parser.add_argument("--repo", action="append")
+    parser.add_argument("--scope", action="append", required=True, help="repo:path")
+    parser.add_argument(
+        "--adopt-baseline",
+        action="append",
+        help="repo:path already dirty at task start that this task is explicitly authorized to own",
+    )
+    parser.add_argument("--next", dest="next_action", default="")
+    parser.add_argument("--publication-mode", choices=sorted(ALLOWED_PUBLICATION_MODES), default="LOCAL_ONLY")
+    parser.add_argument("--summary", default="")
+    parser.add_argument("--replace", action="store_true")
+    parser.add_argument("--execution-plane", action="store_true", help="Allocate V1 Execution Bundle + worktrees")
+    parser.add_argument("--execution-mode", default="TEST", choices=sorted(WRITE_MODES))
+    parser.add_argument("--campaign-id", default="")
+    parser.add_argument("--seed-origin", default="EMPTY", choices=sorted(SEED_ORIGINS))
+    parser.add_argument("--db-isolation", dest="db_isolation", action="store_true")
+    parser.add_argument("--no-db-isolation", dest="db_isolation", action="store_false")
+    parser.add_argument("--db-host", default="")
+    parser.add_argument("--db-container-host", default="")
+    parser.add_argument("--db-port", default="")
+    parser.set_defaults(db_isolation=None, func=new_checkpoint)
+
+
+def task_repo_cmd(args: argparse.Namespace) -> int:
+    from ai_os_task_git import canonical_repo_path, repo_path
+
+    payload = {
+        "repo": args.repo,
+        "path": str(repo_path(args.repo)),
+        "canonical": str(canonical_repo_path(args.repo)),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def apply_runtime_context(args: argparse.Namespace) -> None:
+    task_id = getattr(args, "task_id", None)
+    if task_id:
+        os.environ["AI_OS_TASK_ID"] = str(task_id)
+    execution_id = getattr(args, "execution_id", None)
+    if execution_id:
+        os.environ["AI_OS_EXECUTION_ID"] = str(execution_id)
+    repo_override = getattr(args, "repo_path_flag", None)
+    if repo_override:
+        os.environ["AI_OS_REPO_PATH"] = str(repo_override)
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI-OS Codex execution task checkpoint helper")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     start = sub.add_parser("task-start")
-    start.add_argument("--task-id", required=True)
-    start.add_argument("--title", required=True)
-    start.add_argument("--class", dest="task_class", choices=sorted(ALLOWED_CLASSES), required=True)
-    start.add_argument("--repo", action="append")
-    start.add_argument("--scope", action="append", required=True, help="repo:path")
-    start.add_argument(
-        "--adopt-baseline",
-        action="append",
-        help="repo:path already dirty at task start that this task is explicitly authorized to own",
-    )
-    start.add_argument("--next", dest="next_action", default="")
-    start.add_argument("--publication-mode", choices=sorted(ALLOWED_PUBLICATION_MODES), default="LOCAL_ONLY")
-    start.add_argument("--summary", default="")
-    start.add_argument("--replace", action="store_true")
-    start.set_defaults(func=new_checkpoint)
+    add_start_args(start)
+
+    plane_start = sub.add_parser("start", help="task-start with Execution Plane V1 provisioning")
+    add_start_args(plane_start)
+    plane_start.set_defaults(execution_plane=True, db_isolation=None, func=new_checkpoint)
 
     status = sub.add_parser("task-status")
     add_task_id_arg(status)
@@ -78,7 +134,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     resume = sub.add_parser("task-resume")
     add_task_id_arg(resume)
+    add_execution_context_args(resume)
     resume.set_defaults(func=resume_task)
+
+    resume_alias = sub.add_parser("resume", help="Alias of task-resume")
+    add_task_id_arg(resume_alias)
+    add_execution_context_args(resume_alias)
+    resume_alias.set_defaults(func=resume_task)
+
+    repo_cmd = sub.add_parser("task-repo", help="Print Execution Bundle worktree path for a repo")
+    add_task_id_arg(repo_cmd)
+    add_execution_context_args(repo_cmd)
+    repo_cmd.add_argument("--repo", required=True)
+    repo_cmd.set_defaults(func=task_repo_cmd)
+
+    owner_add = sub.add_parser("task-owner-add", help="Expand write scope with lease conflict check")
+    add_task_id_arg(owner_add)
+    owner_add.add_argument("--scope", action="append", required=True, help="repo:path to add")
+    owner_add.add_argument("--adopt-existing", action="store_true")
+    owner_add.add_argument("--reason", default="")
+    owner_add.set_defaults(func=add_scope)
 
     checkpoint = sub.add_parser("task-checkpoint")
     add_task_id_arg(checkpoint)
@@ -117,6 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     gate = sub.add_parser("task-gate")
     add_task_id_arg(gate)
+    add_execution_context_args(gate)
     gate.add_argument("--gate-id", required=True)
     gate.add_argument("--repo", required=True)
     gate.add_argument("--scope", action="append")
@@ -139,6 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Resolve a deterministic test profile (see scripts/ai_os_task_profiles.py). "
         "Mutually exclusive with a raw command.",
     )
+    gate.add_argument("--final-head", action="store_true", help="Record this gate as FINAL_HEAD_GATE class")
     gate.add_argument("command", nargs=argparse.REMAINDER)
     gate.set_defaults(func=run_gate)
 
@@ -150,12 +227,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     commit_plan = sub.add_parser("task-commit-plan")
     add_task_id_arg(commit_plan)
+    add_execution_context_args(commit_plan)
     commit_plan.add_argument("--repo", required=True)
     commit_plan.add_argument("--json", action="store_true")
     commit_plan.set_defaults(func=plan_commit)
 
     commit = sub.add_parser("task-commit")
     add_task_id_arg(commit)
+    add_execution_context_args(commit)
     commit.add_argument("--repo", required=True)
     commit.add_argument("--message", required=True)
     commit.add_argument("--json", action="store_true")
@@ -168,6 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     close = sub.add_parser("task-close")
     add_task_id_arg(close)
+    add_execution_context_args(close)
     close.add_argument("--validate-only", action="store_true")
     close.add_argument("--json", action="store_true")
     close.add_argument("--summary")
@@ -201,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        apply_runtime_context(args)
         return int(args.func(args))
     except TaskError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

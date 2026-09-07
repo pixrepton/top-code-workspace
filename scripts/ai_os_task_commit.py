@@ -417,6 +417,7 @@ def commit_task(args: argparse.Namespace) -> int:
                 "commit was created but contains paths outside owned scope; do not rewrite history automatically: "
                 + ", ".join(unexpected)
             )
+        _invalidate_final_head_after_commit(task_id, args.repo)
         data = load_checkpoint(task_id)
         _print_commit_result(
             {
@@ -431,6 +432,61 @@ def commit_task(args: argparse.Namespace) -> int:
             args.json,
         )
         return 0
+
+
+def _invalidate_final_head_after_commit(task_id: str, repo: str) -> None:
+    data = load_checkpoint(task_id)
+    if not data.get("execution_id"):
+        return
+    from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+    from ai_os_execution.plane import refresh_bundle_heads
+
+    bundle = load_bundle_for_task(task_id)
+    if not bundle:
+        return
+    bundle = refresh_bundle_heads(bundle)
+    bundle["final_head"] = {
+        **(bundle.get("final_head") or {}),
+        "required": True,
+        "valid": False,
+        "gate_id": "FINAL_HEAD_GATE",
+        "invalidated_reason": f"commit changed {repo} HEAD; FINAL_HEAD_GATE required",
+    }
+    save_bundle(bundle)
+    last = None
+    for gate in reversed(data.get("gates") or []):
+        if gate.get("verdict") in PASSING_GATE_VERDICTS and gate.get("command_argv"):
+            if gate.get("gate_id") == "FINAL_HEAD_GATE":
+                continue
+            last = gate
+            break
+    if not last:
+        print("FINAL_HEAD_GATE: invalidated; no prior development gate to rerun")
+        return
+    from ai_os_task_gates import run_gate
+
+    result = run_gate(
+        argparse.Namespace(
+            task_id=task_id,
+            repo=last.get("repo") or repo,
+            gate_id="FINAL_HEAD_GATE",
+            scope=list((last.get("fingerprint") or {}).get("scope") or []),
+            config_path=list((last.get("fingerprint") or {}).get("config_paths") or []),
+            runtime_id="",
+            runtime_command=None,
+            always_fresh=True,
+            summary="automatic FINAL_HEAD_GATE after commit",
+            limitations="pre-commit gates are development evidence only",
+            log_path="",
+            timeout=0,
+            profile=None,
+            final_head=True,
+            command=list(last.get("command_argv") or []),
+        )
+    )
+    if result != 0:
+        print("FINAL_HEAD_GATE: automatic rerun did not PASS; task-close blocked until it does")
+
 
 def _require_clean_branch_ownership(data: dict[str, Any], repo: str) -> None:
     if data["ownership_conflicts"]:
@@ -531,6 +587,8 @@ def _split_commit_record(commit: str, default_repo: str) -> tuple[str, str]:
 
 def _commit_existence_issues(data: dict[str, Any]) -> list[str]:
     issues: list[str] = []
+    if data.get("execution_mode") == "LIVE_READ_ONLY":
+        return issues
     if not data["commits"]:
         issues.append("no created commits recorded")
     for commit in data["commits"]:
@@ -556,6 +614,8 @@ def _gate_currency_issues(gate_id: str, gate: dict[str, Any]) -> list[str]:
     return []
 
 def _gate_issues(data: dict[str, Any]) -> list[str]:
+    if data.get("execution_id"):
+        return _execution_plane_gate_issues(data)
     issues: list[str] = []
     if not data["gates"]:
         issues.append("no gates recorded")
@@ -565,6 +625,29 @@ def _gate_issues(data: dict[str, Any]) -> list[str]:
         issues.extend(_forbidden_marker_issues(gate))
     for gate_id, gate in latest_by_gate.items():
         issues.extend(_gate_currency_issues(gate_id, gate))
+    return issues
+
+
+def _execution_plane_gate_issues(data: dict[str, Any]) -> list[str]:
+    issues: list[str] = []
+    if not data["gates"]:
+        issues.append("no gates recorded")
+    for gate in data["gates"]:
+        issues.extend(_forbidden_marker_issues(gate))
+    latest_final = None
+    for gate in reversed(data["gates"]):
+        if gate.get("gate_id") == "FINAL_HEAD_GATE":
+            latest_final = gate
+            break
+    if latest_final is None:
+        issues.append("FINAL_HEAD_GATE required after final commit")
+        return issues
+    issues.extend(_gate_currency_issues("FINAL_HEAD_GATE", latest_final))
+    from ai_os_execution.bundle import load_bundle_for_task
+
+    bundle = load_bundle_for_task(data["task_id"])
+    if bundle and not (bundle.get("final_head") or {}).get("valid"):
+        issues.append("FINAL_HEAD_GATE is not valid for current execution bundle HEAD")
     return issues
 
 def _frozen_path_issues(data: dict[str, Any]) -> list[str]:

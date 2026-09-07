@@ -20,6 +20,7 @@ Notable E2E harnesses:
 | ------------------------------------------------ | ------------------------------ |
 | Gate orchestration; task engine; path resolution | Case / RAG / HVAC domain logic |
 | Scoped commit / ownership guards                 | Secrets committed into Git     |
+| Execution Plane V1 (`ai_os_execution/`)          | Product mailbox/case semantics |
 
 ## Read first
 

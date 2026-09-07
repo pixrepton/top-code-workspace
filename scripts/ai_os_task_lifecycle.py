@@ -196,6 +196,26 @@ def new_checkpoint(args: argparse.Namespace) -> int:
         active_path = active_task_path(task_id)
         _require_free_task_slot(active_path, task_id, args.replace)
         _require_no_scope_conflict(scope, task_id, args.replace)
+        if getattr(args, "execution_plane", False):
+            from ai_os_execution.plane import print_task_ready, provision_execution
+
+            skeleton = {
+                "task_id": task_id,
+                "task_title": args.title,
+                "target_repositories": args.repo or sorted({item["repo"] for item in scope}),
+                "declared_write_scope": scope,
+            }
+            bundle = provision_execution(skeleton, args)
+            data = _initial_checkpoint(args, scope, adopted, utc_now())
+            data["execution_id"] = bundle["execution_id"]
+            data["execution_bundle_version"] = 1
+            data["execution_mode"] = bundle.get("execution_mode")
+            refresh_git_fields(data)
+            atomic_write(data, active_path)
+            print_summary(data, "INITIALIZED")
+            print_task_ready(bundle)
+            print(f"checkpoint: {active_path}")
+            return 0
         data = _initial_checkpoint(args, scope, adopted, utc_now())
         refresh_git_fields(data)
         atomic_write(data, active_path)
@@ -252,8 +272,20 @@ def add_scope(args: argparse.Namespace) -> int:
     with RegistryLock():
         current = load_checkpoint(task_id)
         _require_known_scope_repos(current, additions)
+        current_bundle_id = str(current.get("execution_id") or "")
+        if current_bundle_id:
+            from ai_os_execution.lease import acquire_lease, assert_scope_leases_free
+
+            assert_scope_leases_free(additions, exclude_execution_id=current_bundle_id)
         _require_no_scope_conflict(additions, current["task_id"], replace=True)
         _require_clean_scope_addition(additions, args.adopt_existing)
+        if current_bundle_id:
+            acquire_lease(
+                task_id=current["task_id"],
+                execution_id=current_bundle_id,
+                repo=additions[0]["repo"],
+                owned_paths=[f"{item['repo']}:{item['path']}" for item in additions],
+            )
 
         def _mutate(data: dict[str, Any]) -> None:
             data["declared_write_scope"] = _append_unique_scope(data["declared_write_scope"], additions)
@@ -377,6 +409,13 @@ def close_task(args: argparse.Namespace) -> int:
             _print_closure(payload, issues, args.json)
             return 0
         archive_path, target = _finalize_closed_task(data, args)
+        if data.get("execution_id"):
+            from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+
+            bundle = load_bundle_for_task(data["task_id"])
+            if bundle:
+                bundle["status"] = "CLOSED_RETAINED"
+                save_bundle(bundle)
         if args.json:
             payload["summary_file"] = str(target)
             payload["archived"] = str(archive_path)
@@ -432,6 +471,7 @@ def _run_gate_recorded(data: dict[str, Any], entry: dict[str, Any], *, always_fr
         log_path="",
         timeout=0,
         profile=None,
+        final_head=entry.get("gate_id") == "FINAL_HEAD_GATE",
         command=list(command_argv),
     )
     return run_gate(gate_args)
@@ -606,6 +646,13 @@ def resume_task(args: argparse.Namespace) -> int:
     data = load_checkpoint(getattr(args, "task_id", None))
     refresh_git_fields(data)
     print_summary(data, "RESUME")
+    if data.get("execution_id"):
+        from ai_os_execution.plane import resume_execution
+
+        payload = resume_execution(data["task_id"])
+        payload["next_action"] = data.get("next_action") or ""
+        print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+        return 0
     print("--- recovery ---")
     mismatches = git_mismatches(data)
     if mismatches:

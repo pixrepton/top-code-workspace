@@ -25,7 +25,8 @@ def run(args: list[str], cwd: Path, check: bool = True, text: bool = True) -> su
         raise TaskError(f"command failed ({proc.returncode}): {' '.join(args)}\n{detail}")
     return proc
 
-def repo_path(repo: str) -> Path:
+def canonical_repo_path(repo: str) -> Path:
+    """Shared checkout. Execution Bundle worktrees are never this path."""
     if repo in {".", "root", "workspace"}:
         path = WORKSPACE
     else:
@@ -35,6 +36,21 @@ def repo_path(repo: str) -> Path:
     if not (path / ".git").exists():
         raise TaskError(f"path is not a git repository root: {path}")
     return path.resolve()
+
+
+def repo_path(repo: str) -> Path:
+    """Task runtime path: Execution Bundle worktree when present, else canonical checkout."""
+    from ai_os_execution.bundle import configured_worktree_path
+
+    configured = configured_worktree_path(repo)
+    if configured is not None:
+        path = configured
+        if not path.exists():
+            raise TaskError(f"execution worktree missing: {path}")
+        if not (path / ".git").exists():
+            raise TaskError(f"execution worktree is not a git checkout: {path}")
+        return path.resolve()
+    return canonical_repo_path(repo)
 
 def git_head(repo: str) -> str:
     return run(["git", "rev-parse", "--verify", "HEAD"], repo_path(repo)).stdout.strip()

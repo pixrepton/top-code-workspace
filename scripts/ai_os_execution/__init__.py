@@ -1,0 +1,13 @@
+"""AI-OS Reproducible Execution Plane V1 — additive task-engine substrate."""
+
+from __future__ import annotations
+
+EXECUTION_BUNDLE_VERSION = 1
+PROOF_BUNDLE_VERSION = 2
+LEASE_TTL_SECONDS = 4 * 60 * 60
+WRITE_MODES = frozenset({"TEST", "BENCHMARK", "REPLAY", "PROOF", "LIVE_READ_ONLY", "MUTATE"})
+FAIL_CLOSED_WRITE_MODES = frozenset({"TEST", "BENCHMARK", "REPLAY", "PROOF"})
+SEED_ORIGINS = frozenset({"EMPTY", "FIXTURE", "SNAPSHOT", "HISTORICAL_REPLAY"})
+GRAPH_STATUSES = frozenset({"CURRENT", "STALE_ADVISORY", "UNAVAILABLE"})
+LIFECYCLE_STATES = frozenset({"ACTIVE", "CLOSED_RETAINED", "DESTROYABLE", "DESTROYED"})
+MUTATION_MODES = frozenset({"MUTATE", "READ_ONLY", "LEGACY"})
