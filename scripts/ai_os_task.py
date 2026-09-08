@@ -167,6 +167,21 @@ def exec_task_cmd(args: argparse.Namespace) -> int:
         print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", file=sys.stderr)
     return 1 if result.exit_code != 0 else 0
 
+
+def session_start_cmd(args: argparse.Namespace) -> int:
+    from ai_os_execution.session_start import project_session_state
+
+    result = project_session_state(task_id=str(getattr(args, "task_id", None) or ""))
+    if getattr(args, "json", False):
+        payload = dict(result["state"])
+        payload["inject"] = result["inject"]
+        payload["mutated_execution"] = False
+        print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+        return 0
+    print(result["inject"])
+    return 0
+
+
 def apply_runtime_context(args: argparse.Namespace) -> None:
     task_id = getattr(args, "task_id", None)
     if task_id:
@@ -264,6 +279,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     exec_cmd.add_argument("command", nargs=argparse.REMAINDER)
     exec_cmd.set_defaults(func=exec_task_cmd)
+
+    session_start = sub.add_parser(
+        "session-start",
+        help="Read-only cold-start projection: refresh CAMPAIGN_STATE/TASK_ENTRY and print inject",
+    )
+    add_task_id_arg(session_start)
+    session_start.add_argument("--json", action="store_true")
+    session_start.set_defaults(func=session_start_cmd)
 
     owner_add = sub.add_parser("task-owner-add", help="Expand write scope with lease conflict check")
     add_task_id_arg(owner_add)

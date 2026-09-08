@@ -140,9 +140,15 @@ Default publication mode:
 - `PUBLISH` — push and draft PR allowed; no merge.
 - `SHIP` — prepare a merge-ready PR; merge and deployment still require separate approval.
 
-Local commit authorization does not authorize push, PR creation, merge, deployment, VPS work or any live mutation.
+Canonical mutating workflow (Execution Plane V1.1):
 
-Do not use raw `git add` or `git commit` for agent work. **Never run `git add -A` from workspace root** — nested product repos are separate Git units; stage only via `task-commit` with explicit owned paths.
+```text
+start → repo → exec → gate → commit → FINAL_HEAD → close
+```
+
+Resume: `resume → repo → exec → …`. Stateful proof commands go through mediated `exec` / trusted `task-gate`. Raw pytest/build is not close proof. Session-start is a projection (`session-start`); it does not takeover.
+
+Local commit authorization does not authorize push, PR creation, merge, deployment, VPS work or any live mutation.
 
 Use:
 
@@ -160,7 +166,7 @@ The wrapper must:
 - verify final commit paths;
 - record the resulting SHA.
 
-Full task lifecycle (`task-start` → `task-branch` → `task-gate` → `task-checkpoint` → `task-close`): `scripts/README.md` §Agent task and Git workflow.
+Full task lifecycle (`start` → `repo` → `exec` → `task-gate` → `task-commit` → `FINAL_HEAD` → `task-close`): `scripts/README.md` §Agent task and Git workflow. Legacy `task-start --legacy` is compatibility-only.
 
 ### Commit decision (mandatory before `task-commit`)
 

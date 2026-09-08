@@ -37,6 +37,7 @@ _PUBLIC_REPO_ENTRY_KEYS = frozenset(
 def public_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {
         "execution_bundle_version": bundle.get("execution_bundle_version"),
+        "execution_protocol_version": bundle.get("execution_protocol_version") or "legacy",
         "execution_id": bundle.get("execution_id"),
         "task_id": bundle.get("task_id"),
         "campaign_id": bundle.get("campaign_id"),

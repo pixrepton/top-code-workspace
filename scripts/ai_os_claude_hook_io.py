@@ -66,12 +66,22 @@ def compact_summary(data: dict[str, Any]) -> str:
     branches = ", ".join(
         f"{repo}={branch or '<detached>'}" for repo, branch in data.get("current_branches", {}).items()
     )
-    return (
+    base = (
         f"AI-OS task {data.get('task_id')} [{data.get('status')}] route={data.get('task_class')}\n"
         f"phase={data.get('current_phase')} publication={data.get('publication_mode')}\n"
         f"branches={branches or '<none>'}\n"
         f"next={str(data.get('next_action') or '<none>')[:180]}"
     )
+    try:
+        from ai_os_execution.session_start import project_session_state
+
+        projected = project_session_state(task_id=str(data.get("task_id") or ""))
+        inject = str(projected.get("inject") or "").strip()
+        if inject:
+            return f"{inject}\n\n{base}"
+    except Exception:
+        pass
+    return base
 
 
 def refresh(cwd: Path, *, strict: bool) -> tuple[bool, str]:

@@ -72,6 +72,24 @@ function tasksActiveDir() {
   return path.join(scratch, "ai-os-execution", "top-code-workspace", "tasks", "active");
 }
 
+function formatExecutionInject() {
+  const script = path.join(root, "scripts", "ai_os_task.py");
+  const python = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+  try {
+    const raw = execSync(`${python} "${script}" session-start`, {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 8000,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+    const text = (raw || "").trim();
+    return text || "CURRENT TASK: none\nKIND: NONE\nDo not invent an Execution Bundle.";
+  } catch {
+    return "CURRENT EXECUTION: UNAVAILABLE (session-start projection failed; do not invent a bundle)";
+  }
+}
+
 function formatActiveTasks() {
   const dir = tasksActiveDir();
   if (!fs.existsSync(dir)) {
@@ -266,7 +284,8 @@ readJsonStdin((payload) => {
       return;
     }
 
-    const parts = [
+    parts = [
+      "--- CURRENT EXECUTION ---\n" + formatExecutionInject() + "\n",
       "TOP-INSTAL session context (memory read live from repo; scratch SESSION_START_CONTEXT.md is not SoT):\n",
     ];
 

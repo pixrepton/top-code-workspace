@@ -477,6 +477,8 @@ def takeover_execution(task_id: str) -> dict[str, Any]:
         "invalidated_reason": f"takeover generation {generation}",
     }
     save_bundle(bundle)
+    state = generate_campaign_state(current_task_id=task_id, current_program=bundle.get("campaign_id") or "")
+    write_task_entry(bundle, campaign=state)
     return {
         "task_id": task_id,
         "execution_id": execution_id,

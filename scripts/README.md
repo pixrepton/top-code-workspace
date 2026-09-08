@@ -22,7 +22,28 @@ Cross-repo PowerShell harness for local Docker stack. Versioned in the workspace
 
 ## Agent task and Git workflow
 
-All agent write tasks use the same engine:
+Mutating work uses Execution Plane V1.1:
+
+```text
+start → repo → exec → gate → commit → FINAL_HEAD → close
+```
+
+```powershell
+python scripts/ai_os_task.py start --task-id RP-XX --title "Bounded repair" --class MEDIUM --repo gmail-agent --scope gmail-agent:path/to/file.py --publication-mode LOCAL_ONLY
+python scripts/ai_os_task.py task-repo --repo gmail-agent
+python scripts/ai_os_task.py exec --repo gmail-agent -- python -m pytest path/to/test.py -q
+python scripts/ai_os_task.py task-gate --gate-id focused --repo gmail-agent -- python -m pytest path/to/test.py -q
+python scripts/ai_os_task.py task-commit-plan --repo gmail-agent --json
+python scripts/ai_os_task.py task-commit --repo gmail-agent --message "fix(scope): describe the completed result"
+python scripts/ai_os_task.py task-gate --gate-id FINAL_HEAD_GATE --repo gmail-agent --final-head -- python -m pytest path/to/test.py -q
+python scripts/ai_os_task.py task-close --validate-only
+```
+
+`session-start` refreshes generated `CAMPAIGN_STATE` / `TASK_ENTRY` and prints the inject. It does not takeover.
+
+Legacy `task-start --legacy` is SMALL docs/static/read-only compatibility only. See `knowledge/system-atlas/tooling/EXECUTION_PLANE_V1.md`.
+
+All agent write tasks use the same engine. Older checkpoint-only example (compatibility appendix):
 
 ```powershell
 # Initialize exact repo:path scope and local-only publication

@@ -9,7 +9,14 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-from ai_os_execution import EXECUTION_BUNDLE_VERSION, EXECUTION_MODES, LIFECYCLE_STATES, MUTATION_MODES
+from ai_os_execution import (
+    EXECUTION_BUNDLE_VERSION,
+    EXECUTION_MODES,
+    EXECUTION_PROTOCOL_VERSION,
+    LIFECYCLE_STATES,
+    MUTATION_MODES,
+    SUPPORTED_EXECUTION_PROTOCOL_VERSIONS,
+)
 from ai_os_task_errors import TaskError
 from ai_os_task_paths import list_active_task_ids, state_dir, utc_now
 
@@ -143,6 +150,9 @@ def validate_bundle(bundle: dict[str, Any]) -> None:
         raise TaskError("execution bundle must be an object")
     if int(bundle.get("execution_bundle_version") or 0) != EXECUTION_BUNDLE_VERSION:
         raise TaskError("unsupported execution_bundle_version")
+    protocol = str(bundle.get("execution_protocol_version") or "").strip()
+    if protocol and protocol not in SUPPORTED_EXECUTION_PROTOCOL_VERSIONS:
+        raise TaskError(f"unsupported execution_protocol_version: {protocol}")
     for key in ("execution_id", "task_id", "created_at", "status", "repos"):
         if key not in bundle:
             raise TaskError(f"execution bundle missing {key}")
@@ -198,6 +208,7 @@ def new_bundle(
     stamp = now or utc_now()
     return {
         "execution_bundle_version": EXECUTION_BUNDLE_VERSION,
+        "execution_protocol_version": EXECUTION_PROTOCOL_VERSION,
         "execution_id": execution_id,
         "task_id": task_id,
         "campaign_id": campaign_id,

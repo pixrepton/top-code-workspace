@@ -1495,3 +1495,246 @@ def test_al_receipt_has_no_secrets(plane_workspace):
     stdout_path = Path(receipt["stdout_path"])
     assert "postgresql://" not in stdout_path.read_text(encoding="utf-8").lower()
 
+
+def session_start_json(env, task_id=""):
+    args = ["session-start", "--json"]
+    if task_id:
+        args.extend(["--task-id", task_id])
+    proc = run_cmd(args, env=env)
+    return json.loads(proc.stdout), proc
+
+
+def test_am_session_start_active_execution(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-a")
+    start_plane(env, repo_name, task_id="f4-a")
+    payload, _ = session_start_json(env, "f4-a")
+    bundle, _ = bundle_for(env, "f4-a")
+    assert payload["current_task"] == "f4-a"
+    assert payload["execution_id"] == bundle["execution_id"]
+    assert payload["execution_generation"] == 1
+    assert payload["execution_protocol_version"] == "1.1"
+    assert "CURRENT TASK: f4-a" in payload["inject"]
+    assert payload["mutated_execution"] is False
+
+
+def test_an_session_start_generation_two_worktree(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-b")
+    start_plane(env, repo_name, task_id="f4-b", extra=["--execution-mode", "MUTATE"])
+    bundle, _ = bundle_for(env, "f4-b")
+    g1 = Path(bundle["repos"][repo_name]["worktree_path"])
+    run_cmd(["execution-takeover", "--task-id", "f4-b"], env=env)
+    payload, _ = session_start_json(env, "f4-b")
+    bundle, _ = bundle_for(env, "f4-b")
+    g2 = Path(bundle["repos"][repo_name]["worktree_path"])
+    assert payload["execution_generation"] == 2
+    assert str(g2) in payload["inject"]
+    assert payload["worktrees"][repo_name] == str(g2)
+    assert payload["worktrees"][repo_name] != str(g1)
+    assert "g2" in str(payload["worktrees"][repo_name]).replace("\\", "/")
+
+
+def test_ao_session_start_shows_tainted(plane_workspace):
+    from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+    from ai_os_execution.tainted import mark_tainted
+
+    names, env, _ = plane_workspace
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+    repo_name, _ = add_named_repo(plane_workspace, "f4-c")
+    start_plane(env, repo_name, task_id="f4-c")
+    bundle = load_bundle_for_task("f4-c")
+    mark_tainted(bundle, "UNTRUSTED_PROOF_EXECUTION", detail="raw pytest")
+    save_bundle(bundle)
+    payload, _ = session_start_json(env, "f4-c")
+    assert payload["taint_status"] == "TAINTED"
+    assert "TAINTED" in payload["inject"]
+    assert "UNTRUSTED_PROOF_EXECUTION" in payload["inject"]
+    assert "ACTIVE_CLEAN" not in payload["inject"]
+    assert "PASS" in payload["inject"] and "not PASS" in payload["inject"]
+
+
+def test_ap_session_start_no_active_task(plane_workspace):
+    names, env, _ = plane_workspace
+    payload, proc = session_start_json(env)
+    assert payload["kind"] == "NONE"
+    assert not payload["execution_id"]
+    assert "Do not invent" in payload["inject"]
+    assert "CURRENT TASK: none" in proc.stdout
+
+
+def test_aq_session_start_legacy_task(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-e")
+    run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "f4-legacy",
+            "--title",
+            "legacy",
+            "--class",
+            "SMALL",
+            "--legacy",
+            "--execution-mode",
+            "DOCS",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+        ],
+        env=env,
+    )
+    payload, _ = session_start_json(env, "f4-legacy")
+    assert payload["kind"] == "LEGACY"
+    assert not payload["execution_id"]
+    assert "LEGACY" in payload["inject"]
+    assert "Do not fabricate" in payload["inject"]
+
+
+def test_ar_generated_state_matches_bundle(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-f")
+    start_plane(env, repo_name, task_id="f4-f")
+    bundle, _ = bundle_for(env, "f4-f")
+    payload, _ = session_start_json(env, "f4-f")
+    assert payload["current_task"] == "f4-f"
+    assert payload["execution_id"] == bundle["execution_id"]
+    assert payload["execution_generation"] == bundle.get("lease_generation", 1)
+    campaign_path = Path(env["AI_OS_TASK_STATE_DIR"]) / "CAMPAIGN_STATE.generated.json"
+    campaign = json.loads(campaign_path.read_text(encoding="utf-8"))
+    assert campaign["execution_id"] == bundle["execution_id"]
+    assert campaign["execution_generation"] == 1
+
+
+def test_as_task_entry_has_worktree_no_secrets(plane_workspace):
+    from ai_os_execution.child_env import write_workload_secrets_file
+
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-g")
+    start_plane(env, repo_name, task_id="f4-g")
+    bundle, _ = bundle_for(env, "f4-g")
+    write_workload_secrets_file(
+        bundle["execution_id"],
+        {"MAILBOX_MEMORY_DATABASE_URL": "postgresql://task:secret@127.0.0.1/taskdb"},
+    )
+    session_start_json(env, "f4-g")
+    entry = Path(env["AI_OS_TASK_STATE_DIR"]) / "executions" / bundle["execution_id"] / "TASK_ENTRY.md"
+    text = entry.read_text(encoding="utf-8")
+    worktree = bundle["repos"][repo_name]["worktree_path"]
+    assert worktree in text
+    assert "NEXT:" in text
+    assert "postgresql://" not in text.lower()
+    assert "secret" not in text.lower()
+
+
+def test_at_session_inject_has_no_secrets(plane_workspace):
+    from ai_os_execution.child_env import write_workload_secrets_file
+
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-h")
+    start_plane(env, repo_name, task_id="f4-h")
+    bundle, _ = bundle_for(env, "f4-h")
+    write_workload_secrets_file(
+        bundle["execution_id"],
+        {"MAILBOX_MEMORY_DATABASE_URL": "postgresql://task:secret@127.0.0.1/taskdb"},
+    )
+    payload, proc = session_start_json(env, "f4-h")
+    blob = (proc.stdout + json.dumps(payload)).lower()
+    assert "postgresql://" not in blob
+    assert "password" not in blob
+    assert "secret@" not in blob
+
+
+def test_au_latest_receipt_from_current_generation(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-i")
+    start_plane(env, repo_name, task_id="f4-i", extra=["--execution-mode", "MUTATE"])
+    run_cmd(
+        ["exec", "--task-id", "f4-i", "--repo", repo_name, "--", sys.executable, "-c", "print('g1')"],
+        env=env,
+    )
+    run_cmd(["execution-takeover", "--task-id", "f4-i"], env=env)
+    run_cmd(
+        ["exec", "--task-id", "f4-i", "--repo", repo_name, "--", sys.executable, "-c", "print('g2')"],
+        env=env,
+    )
+    payload, _ = session_start_json(env, "f4-i")
+    receipt = payload["latest_command_receipt"]
+    assert receipt.get("generation") == 2
+    assert payload["execution_generation"] == 2
+
+
+def test_av_final_head_valid_invalid_stale(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-j")
+    start_plane(env, repo_name, task_id="f4-j", extra=["--execution-mode", "MUTATE"])
+    payload, _ = session_start_json(env, "f4-j")
+    assert payload["final_head_status"] in {"INVALID", "STALE"}
+    bundle, _ = bundle_for(env, "f4-j")
+    worktree = Path(bundle["repos"][repo_name]["worktree_path"])
+    (worktree / "tracked.txt").write_text("f4j\n", encoding="utf-8")
+    git(worktree, "add", "--", "tracked.txt")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f4-j",
+            "--gate-id",
+            "dev",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('dev')",
+        ],
+        env=env,
+    )
+    run_cmd(["task-commit", "--task-id", "f4-j", "--repo", repo_name, "--message", "f4j"], env=env)
+    payload, _ = session_start_json(env, "f4-j")
+    assert payload["final_head_status"] in {"STALE", "INVALID", "VALID"}
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f4-j",
+            "--gate-id",
+            "FINAL_HEAD_GATE",
+            "--repo",
+            repo_name,
+            "--final-head",
+            "--",
+            sys.executable,
+            "-c",
+            "print('final')",
+        ],
+        env=env,
+    )
+    payload, _ = session_start_json(env, "f4-j")
+    assert payload["final_head_status"] == "VALID"
+    run_cmd(["execution-takeover", "--task-id", "f4-j"], env=env)
+    payload, _ = session_start_json(env, "f4-j")
+    assert payload["final_head_status"] == "STALE"
+
+
+def test_aw_skill_promotes_mediated_exec(plane_workspace):
+    skill = ROOT / ".agents" / "skills" / "ai-os-execution" / "SKILL.md"
+    text = skill.read_text(encoding="utf-8")
+    assert "exec" in text
+    assert "FINAL_HEAD" in text
+    assert "raw pytest" in text.lower() or "not close proof" in text.lower() or "not proof" in text.lower()
+
+
+def test_ax_graph_stale_advisory_uses_worktree_sha(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f4-l")
+    start_plane(env, repo_name, task_id="f4-l")
+    env = dict(env)
+    env["AI_OS_GRAPH_INDEX_SHA"] = "0" * 40
+    payload, _ = session_start_json(env, "f4-l")
+    heads = payload["current_heads"]
+    status = next(iter(heads.values()))["graph_status"]
+    assert status == "STALE_ADVISORY"
+
+
