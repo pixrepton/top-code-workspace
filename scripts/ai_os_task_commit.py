@@ -644,10 +644,39 @@ def _execution_plane_gate_issues(data: dict[str, Any]) -> list[str]:
         return issues
     issues.extend(_gate_currency_issues("FINAL_HEAD_GATE", latest_final))
     from ai_os_execution.bundle import load_bundle_for_task
+    from ai_os_execution.execution_context import compile_execution_context
+    from ai_os_execution.receipt import load_receipt, validate_receipt_for_proof
+    from ai_os_execution.tainted import is_tainted
 
     bundle = load_bundle_for_task(data["task_id"])
     if bundle and not (bundle.get("final_head") or {}).get("valid"):
         issues.append("FINAL_HEAD_GATE is not valid for current execution bundle HEAD")
+    if bundle and is_tainted(bundle):
+        reasons = ", ".join((bundle.get("tainted") or {}).get("reasons") or [])
+        issues.append(f"execution bundle is TAINTED ({reasons})")
+    if latest_final.get("verdict") in PASSING_GATE_VERDICTS:
+        receipt_id = str(latest_final.get("command_receipt_id") or "")
+        if not receipt_id:
+            issues.append("FINAL_HEAD_GATE missing trusted command_receipt_id")
+        elif bundle:
+            receipt = load_receipt(bundle["execution_id"], receipt_id)
+            if not receipt:
+                issues.append(f"FINAL_HEAD_GATE receipt not found: {receipt_id}")
+            else:
+                try:
+                    context = compile_execution_context(
+                        execution_id=bundle["execution_id"],
+                        repo=str(latest_final.get("repo") or ""),
+                        operation_kind="FINAL_HEAD",
+                    )
+                    validate_receipt_for_proof(
+                        receipt,
+                        bundle=bundle,
+                        current_context_hash=context["execution_context_hash"],
+                        operation_kind="FINAL_HEAD",
+                    )
+                except TaskError as exc:
+                    issues.append(str(exc))
     return issues
 
 def _frozen_path_issues(data: dict[str, Any]) -> list[str]:

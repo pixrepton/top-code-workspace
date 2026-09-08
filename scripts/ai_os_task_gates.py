@@ -149,7 +149,7 @@ def _default_gate_log_path(task_id: str, gate_id: str) -> str:
     return str(directory / f"{gate_id}-{utc_now().replace(':', '-')}.log")
 
 
-def _gate_env(data: dict[str, Any], repo: str) -> dict[str, str]:
+def _gate_env(data: dict[str, Any], repo: str, operation_kind: str = "GATE") -> dict[str, str]:
     """Synthesized workload env for gate subprocesses (V1.1 — never full host copy)."""
     from ai_os_execution.child_env import gate_subprocess_env
 
@@ -157,6 +157,8 @@ def _gate_env(data: dict[str, Any], repo: str) -> dict[str, str]:
         task_id=data["task_id"],
         execution_id=str(data.get("execution_id") or ""),
         cwd=repo_path(repo),
+        repo=repo,
+        operation_kind=operation_kind,
     )
 
 
@@ -191,6 +193,140 @@ def _print_failure_tail(output: str) -> None:
         print(tail)
 
 def _execute_gate(
+    args: argparse.Namespace,
+    data: dict[str, Any],
+    command: list[str],
+    fingerprint: dict[str, Any],
+) -> int:
+    execution_id = str(data.get("execution_id") or "")
+    if execution_id:
+        return _execute_gate_mediated(args, data, command, fingerprint)
+    return _execute_gate_legacy(args, data, command, fingerprint)
+
+
+def _execute_gate_mediated(
+    args: argparse.Namespace,
+    data: dict[str, Any],
+    command: list[str],
+    fingerprint: dict[str, Any],
+) -> int:
+    from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+    from ai_os_execution.execution_context import PROOF_OPERATION_KINDS, operation_kind_for_gate
+    from ai_os_execution.mediated_exec import run_mediated_command
+    from ai_os_execution.receipt import validate_receipt_for_proof
+    from ai_os_execution.tainted import clear_tainted, mark_tainted
+
+    print(f"GATE {args.gate_id}: RUN (mediated)")
+    print("command: " + " ".join(command))
+    operation_kind = operation_kind_for_gate(
+        args.gate_id,
+        final_head=getattr(args, "final_head", False),
+    )
+    bundle = load_bundle_for_task(data["task_id"])
+    if not bundle:
+        raise TaskError("execution bundle missing for mediated gate")
+    gate_timeout = int(getattr(args, "timeout", 0) or 0)
+    try:
+        result = run_mediated_command(
+            execution_id=bundle["execution_id"],
+            repo=args.repo,
+            operation_kind=operation_kind,
+            command=command,
+            gate_timeout=gate_timeout,
+            bundle=bundle,
+        )
+    except TaskError as exc:
+        entry = {
+            "gate_id": args.gate_id,
+            "repo": args.repo,
+            "command": " ".join(command),
+            "command_argv": list(command),
+            "working_directory": str(repo_path(args.repo)),
+            "timestamp": utc_now(),
+            "exit_code": 1,
+            "verdict": "FAIL",
+            "duration_seconds": 0.0,
+            "fingerprint": fingerprint,
+            "log_path": "",
+            "short_result": str(exc),
+            "limitations": args.limitations or "",
+            "mediated": True,
+            "diagnostics": {"failure_kind": "EXECUTION_CONTEXT", "detail": str(exc)},
+        }
+        _record_gate(data, entry, "gate-fail", f"{args.gate_id}: FAIL - {exc}")
+        print(f"GATE {args.gate_id}: FAIL")
+        print(f"summary: {exc}")
+        return 1
+
+    output = (result.stdout or "") + (("\n" + result.stderr) if result.stderr else "")
+    verdict = "PASS" if result.exit_code == 0 and not result.timed_out else ("TIMEOUT" if result.timed_out else "FAIL")
+    receipt = result.receipt or {}
+    context = result.context or {}
+    proof_error = ""
+    if verdict == "PASS" and receipt and operation_kind in PROOF_OPERATION_KINDS:
+        try:
+            validate_receipt_for_proof(
+                receipt,
+                bundle=bundle,
+                current_context_hash=context.get("execution_context_hash") or "",
+                operation_kind=operation_kind,
+            )
+            clear_tainted(bundle)
+            save_bundle(bundle)
+        except TaskError as exc:
+            mark_tainted(bundle, str(exc).split(":", 1)[0].strip(), detail=str(exc))
+            save_bundle(bundle)
+            verdict = "FAIL"
+            proof_error = str(exc)
+    short = proof_error or args.summary or summarize_output(output, verdict)
+    log_path = args.log_path or _default_gate_log_path(data["task_id"], args.gate_id)
+    entry = {
+        "gate_id": args.gate_id,
+        "repo": args.repo,
+        "command": " ".join(command),
+        "command_argv": list(command),
+        "working_directory": str(repo_path(args.repo)),
+        "timestamp": utc_now(),
+        "exit_code": result.exit_code,
+        "verdict": verdict,
+        "duration_seconds": result.duration_seconds,
+        "fingerprint": fingerprint,
+        "log_path": _write_gate_log(log_path, output),
+        "short_result": short,
+        "limitations": args.limitations or "",
+        "mediated": True,
+        "command_receipt_id": receipt.get("receipt_id") or "",
+        "execution_context_hash": context.get("execution_context_hash") or "",
+        "environment_manifest_hash": context.get("environment_manifest_hash") or "",
+        "diagnostics": (
+            {
+                "failure_kind": "TIMEOUT",
+                "hung": True,
+                "gate_timeout_seconds": gate_timeout,
+                "terminated": True,
+                "partial_output_tail": "\n".join(output.splitlines()[-40:]),
+            }
+            if result.timed_out
+            else ({"failure_kind": "UNTRUSTED_PROOF_EXECUTION", "detail": proof_error} if proof_error else None)
+        ),
+    }
+    phase = "gate-pass" if verdict == "PASS" else "gate-fail"
+    _record_gate(data, entry, phase, f"{args.gate_id}: {verdict} - {short}")
+    if verdict == "PASS":
+        _record_execution_proof(data, entry, bundle=bundle)
+    print(f"GATE {args.gate_id}: {verdict} ({result.duration_seconds}s)")
+    print(f"summary: {short}")
+    if receipt.get("receipt_id"):
+        print(f"receipt: {receipt['receipt_id']}")
+    print(f"log: {log_path}")
+    if verdict != "PASS":
+        if result.timed_out:
+            print(f"HUNG_TEST: gate exceeded {gate_timeout}s; mediated child terminated")
+        _print_failure_tail(output)
+    return 0 if verdict == "PASS" else 1
+
+
+def _execute_gate_legacy(
     args: argparse.Namespace,
     data: dict[str, Any],
     command: list[str],
@@ -265,7 +401,11 @@ def _execute_gate(
     phase = "gate-pass" if verdict == "PASS" else "gate-fail"
     _record_gate(data, entry, phase, f"{args.gate_id}: {verdict} - {short}")
     if verdict == "PASS" and data.get("execution_id"):
-        _record_execution_proof(data, entry)
+        from ai_os_execution.bundle import load_bundle_for_task
+
+        bundle = load_bundle_for_task(data["task_id"])
+        if bundle:
+            _record_execution_proof(data, entry, bundle=bundle)
     print(f"GATE {args.gate_id}: {verdict} ({duration}s)")
     print(f"summary: {short}")
     print(f"log: {log_path}")
@@ -372,13 +512,38 @@ def recompute_gate_fingerprint_from_entry(gate: dict[str, Any]) -> dict[str, Any
     return gate_fingerprint(args, data, list(gate.get("command_argv") or []))
 
 
-def _record_execution_proof(data: dict[str, Any], entry: dict[str, Any]) -> None:
+def _record_execution_proof(data: dict[str, Any], entry: dict[str, Any], *, bundle: dict[str, Any] | None = None) -> None:
     from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+    from ai_os_execution.execution_context import PROOF_OPERATION_KINDS, compile_execution_context, operation_kind_for_gate
     from ai_os_execution.proof import write_proof_bundle
+    from ai_os_execution.receipt import load_receipt, validate_receipt_for_proof
 
-    bundle = load_bundle_for_task(data["task_id"])
+    if bundle is None:
+        bundle = load_bundle_for_task(data["task_id"])
     if not bundle:
         return
+    operation_kind = operation_kind_for_gate(
+        str(entry.get("gate_id") or ""),
+        final_head=(entry.get("fingerprint") or {}).get("gate_class") == "FINAL_HEAD",
+    )
+    receipt_id = str(entry.get("command_receipt_id") or "")
+    if operation_kind in PROOF_OPERATION_KINDS:
+        if not receipt_id:
+            raise TaskError("UNTRUSTED_PROOF_EXECUTION: FINAL_HEAD/proof gate missing command_receipt_id")
+        receipt = load_receipt(bundle["execution_id"], receipt_id)
+        if not receipt:
+            raise TaskError(f"command receipt not found: {receipt_id}")
+        context = compile_execution_context(
+            execution_id=bundle["execution_id"],
+            repo=str(entry.get("repo") or ""),
+            operation_kind=operation_kind,
+        )
+        validate_receipt_for_proof(
+            receipt,
+            bundle=bundle,
+            current_context_hash=context["execution_context_hash"],
+            operation_kind=operation_kind,
+        )
     repos = {name: item.get("current_sha") or git_head(name) for name, item in (bundle.get("repos") or {}).items()}
     path = write_proof_bundle(
         task_id=data["task_id"],

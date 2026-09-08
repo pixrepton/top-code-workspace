@@ -466,6 +466,9 @@ def takeover_execution(task_id: str) -> dict[str, Any]:
         bundle["ownership"]["expires_at"] = lease["expires_at"]
     bundle["ownership"]["lease_generation"] = generation
     bundle["ownership"]["fencing_token"] = bundle["fencing_token"]
+    from ai_os_execution.tainted import clear_tainted
+
+    clear_tainted(bundle)
     bundle["final_head"] = {
         **(bundle.get("final_head") or {}),
         "required": True,

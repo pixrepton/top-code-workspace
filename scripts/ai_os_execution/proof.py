@@ -148,10 +148,12 @@ def write_proof_bundle(
         "source_tree_hashes": source_tree_hashes or {},
         "gate": {
             "command": gate.get("command"),
+            "command_receipt_id": gate.get("command_receipt_id") or "",
             "exit_code": gate.get("exit_code"),
             "results": gate.get("short_result") or gate.get("verdict"),
             "gate_id": gate.get("gate_id"),
             "fingerprint": gate.get("fingerprint"),
+            "execution_context_hash": gate.get("execution_context_hash") or "",
         },
         "runtime": runtime or {},
         "database": database or {},

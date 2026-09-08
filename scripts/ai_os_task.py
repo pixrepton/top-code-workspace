@@ -133,6 +133,40 @@ def task_repo_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def exec_task_cmd(args: argparse.Namespace) -> int:
+    from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+    from ai_os_execution.mediated_exec import run_mediated_command
+    from ai_os_task_lifecycle import require_plane_bundle
+    from ai_os_task_state import load_checkpoint
+
+    data = load_checkpoint(getattr(args, "task_id", None))
+    require_plane_bundle(data)
+    command = list(getattr(args, "command", None) or [])
+    if command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        raise TaskError("exec requires a command after --")
+    bundle = load_bundle_for_task(data["task_id"])
+    if not bundle:
+        raise TaskError("execution bundle missing for exec")
+    result = run_mediated_command(
+        execution_id=bundle["execution_id"],
+        repo=args.repo,
+        operation_kind="TASK_EXEC",
+        command=command,
+        gate_timeout=int(getattr(args, "timeout", 0) or 0),
+        bundle=bundle,
+    )
+    save_bundle(bundle)
+    receipt = result.receipt or {}
+    if receipt.get("receipt_id"):
+        print(f"receipt: {receipt['receipt_id']}")
+    if result.stdout:
+        print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+    if result.stderr:
+        print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", file=sys.stderr)
+    return 1 if result.exit_code != 0 else 0
+
 def apply_runtime_context(args: argparse.Namespace) -> None:
     task_id = getattr(args, "task_id", None)
     if task_id:
@@ -217,6 +251,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_task_id_arg(exec_destroy)
     exec_destroy.add_argument("--no-retain-evidence", action="store_true")
     exec_destroy.set_defaults(func=destroy_execution_cmd)
+
+    exec_cmd = sub.add_parser("exec", help="Mediated trusted execution in bundle worktree with command receipt")
+    add_task_id_arg(exec_cmd)
+    add_execution_context_args(exec_cmd)
+    exec_cmd.add_argument("--repo", required=True)
+    exec_cmd.add_argument(
+        "--timeout",
+        type=int,
+        default=0,
+        help="Timeout in seconds (0 = unlimited)",
+    )
+    exec_cmd.add_argument("command", nargs=argparse.REMAINDER)
+    exec_cmd.set_defaults(func=exec_task_cmd)
 
     owner_add = sub.add_parser("task-owner-add", help="Expand write scope with lease conflict check")
     add_task_id_arg(owner_add)

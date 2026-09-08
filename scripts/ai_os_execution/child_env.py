@@ -334,10 +334,20 @@ def gate_subprocess_env(
     task_id: str,
     execution_id: str,
     cwd: str | Path,
+    repo: str = "",
+    operation_kind: str = "GATE",
 ) -> dict[str, str]:
     if execution_id:
-        bundle = load_bundle(execution_id)
-        return build_effective_child_env(bundle, cwd=cwd, include_execution_ids=True)
+        from ai_os_execution.execution_context import compile_execution_context
+
+        if not repo:
+            raise TaskError("gate_subprocess_env requires repo when execution_id is set")
+        context = compile_execution_context(
+            execution_id=execution_id,
+            repo=repo,
+            operation_kind=operation_kind,
+        )
+        return dict(context["synthesized_env"])
     return minimal_legacy_gate_env()
 
 

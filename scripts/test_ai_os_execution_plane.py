@@ -1211,3 +1211,287 @@ def test_ad_container_profile_with_image_succeeds(plane_workspace):
     digest = (bundle.get("runtime") or {}).get("image_digests", {}).get(repo_name) or {}
     assert digest.get("digest") == "sha256:deadbeef"
     assert digest.get("build_context") == "worktree"
+
+
+def receipts_for(env, task_id="plane-unit"):
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+    bundle, _ = bundle_for(env, task_id)
+    from ai_os_execution.receipt import load_receipts
+
+    return load_receipts(bundle["execution_id"]), bundle
+
+
+def test_ae_task_exec_worktree_and_receipt(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f35-exec")
+    start_plane(env, repo_name, task_id="f35-exec")
+    bundle, _ = bundle_for(env, "f35-exec")
+    worktree = Path(bundle["repos"][repo_name]["worktree_path"])
+    proc = run_cmd(
+        [
+            "exec",
+            "--task-id",
+            "f35-exec",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "import os; print(os.getcwd())",
+        ],
+        env=env,
+    )
+    receipts, bundle = receipts_for(env, "f35-exec")
+    assert len(receipts) == 1
+    receipt = receipts[0]
+    assert receipt["generation"] == bundle.get("lease_generation", 1)
+    assert receipt["trusted"] is True
+    assert receipt["operation"] == "TASK_EXEC"
+    assert receipt["execution_context_hash"]
+    lines = [line for line in proc.stdout.splitlines() if line and not line.startswith("receipt:")]
+    assert Path(lines[-1]).resolve() == worktree.resolve()
+
+
+def test_af_gate_receipt_has_context_hash(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f35-gate")
+    start_plane(env, repo_name, task_id="f35-gate")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f35-gate",
+            "--gate-id",
+            "dev",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('gate-ok')",
+        ],
+        env=env,
+    )
+    receipts, bundle = receipts_for(env, "f35-gate")
+    assert receipts
+    from ai_os_execution.execution_context import compile_execution_context
+
+    context = compile_execution_context(
+        execution_id=bundle["execution_id"],
+        repo=repo_name,
+        operation_kind="GATE",
+    )
+    assert receipts[-1]["execution_context_hash"] == context["execution_context_hash"]
+
+
+def test_ag_takeover_invalidates_prior_receipt(plane_workspace):
+    from ai_os_execution.receipt import validate_receipt_for_proof
+
+    names, env, _ = plane_workspace
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+    repo_name, _ = add_named_repo(plane_workspace, "f35-takeover")
+    start_plane(env, repo_name, task_id="f35-takeover", extra=["--execution-mode", "MUTATE"])
+    run_cmd(
+        [
+            "exec",
+            "--task-id",
+            "f35-takeover",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('gen1')",
+        ],
+        env=env,
+    )
+    receipts, bundle = receipts_for(env, "f35-takeover")
+    old_receipt = receipts[-1]
+    run_cmd(["execution-takeover", "--task-id", "f35-takeover"], env=env)
+    bundle, _ = bundle_for(env, "f35-takeover")
+    from ai_os_execution.execution_context import compile_execution_context
+
+    context = compile_execution_context(
+        execution_id=bundle["execution_id"],
+        repo=repo_name,
+        operation_kind="FINAL_HEAD",
+    )
+    with pytest.raises(Exception) as exc:
+        validate_receipt_for_proof(
+            old_receipt,
+            bundle=bundle,
+            current_context_hash=context["execution_context_hash"],
+            operation_kind="FINAL_HEAD",
+        )
+    assert "GENERATION_LOST" in str(exc.value)
+
+
+def test_ah_final_head_without_trusted_receipt_blocks_close(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f35-close")
+    start_plane(env, repo_name, task_id="f35-close", extra=["--execution-mode", "MUTATE"])
+    bundle, _ = bundle_for(env, "f35-close")
+    worktree = Path(bundle["repos"][repo_name]["worktree_path"])
+    (worktree / "tracked.txt").write_text("close-test\n", encoding="utf-8")
+    git(worktree, "add", "--", "tracked.txt")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f35-close",
+            "--gate-id",
+            "dev",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('dev')",
+        ],
+        env=env,
+    )
+    run_cmd(
+        ["task-commit", "--task-id", "f35-close", "--repo", repo_name, "--message", "f35 close"],
+        env=env,
+    )
+    run_cmd(["execution-takeover", "--task-id", "f35-close"], env=env)
+    run_cmd(
+        ["task-checkpoint", "--task-id", "f35-close", "--status", "READY_TO_CLOSE", "--next", ""],
+        env=env,
+    )
+    proc = run_cmd(["task-close", "--task-id", "f35-close", "--validate-only"], env=env, check=False)
+    assert proc.returncode == 1
+    output = proc.stdout + proc.stderr
+    assert "FINAL_HEAD_GATE" in output or "GENERATION_LOST" in output or "command_receipt_id" in output
+
+
+def test_ai_raw_unwrapped_execution_not_close_proof(plane_workspace):
+    names, env, tmp_path = plane_workspace
+    repo_name, canonical = add_named_repo(plane_workspace, "f35-raw")
+    start_plane(env, repo_name, task_id="f35-raw", extra=["--execution-mode", "MUTATE"])
+    bundle, _ = bundle_for(env, "f35-raw")
+    worktree = Path(bundle["repos"][repo_name]["worktree_path"])
+    (worktree / "tracked.txt").write_text("raw-test\n", encoding="utf-8")
+    git(worktree, "add", "--", "tracked.txt")
+    raw = subprocess.run(
+        [sys.executable, "-m", "pytest", "--version"],
+        cwd=str(canonical),
+        text=True,
+        capture_output=True,
+    )
+    assert raw.returncode == 0
+    run_cmd(
+        ["task-checkpoint", "--task-id", "f35-raw", "--status", "READY_TO_CLOSE", "--next", ""],
+        env=env,
+    )
+    proc = run_cmd(["task-close", "--task-id", "f35-raw", "--validate-only"], env=env, check=False)
+    assert proc.returncode == 1
+    output = proc.stdout + proc.stderr
+    assert "FINAL_HEAD_GATE" in output or "no gates recorded" in output
+
+
+def test_aj_stale_fencing_token_fails_mediated_exec(plane_workspace):
+    from ai_os_execution.mediated_exec import run_mediated_command
+
+    names, env, _ = plane_workspace
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+    repo_name, _ = add_named_repo(plane_workspace, "f35-fence")
+    start_plane(env, repo_name, task_id="f35-fence")
+    bundle, _ = bundle_for(env, "f35-fence")
+    with pytest.raises(Exception) as exc:
+        run_mediated_command(
+            execution_id=bundle["execution_id"],
+            repo=repo_name,
+            operation_kind="TASK_EXEC",
+            command=[sys.executable, "-c", "print('x')"],
+            fencing_token_value="deadbeef00000000",
+        )
+    assert "fencing" in str(exc.value).lower()
+
+
+def test_ak_proof_bundle_references_receipt(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f35-proof")
+    start_plane(env, repo_name, task_id="f35-proof", extra=["--execution-mode", "MUTATE"])
+    bundle, _ = bundle_for(env, "f35-proof")
+    worktree = Path(bundle["repos"][repo_name]["worktree_path"])
+    (worktree / "tracked.txt").write_text("proof\n", encoding="utf-8")
+    git(worktree, "add", "--", "tracked.txt")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f35-proof",
+            "--gate-id",
+            "dev",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('dev')",
+        ],
+        env=env,
+    )
+    run_cmd(
+        ["task-commit", "--task-id", "f35-proof", "--repo", repo_name, "--message", "proof commit"],
+        env=env,
+    )
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f35-proof",
+            "--gate-id",
+            "FINAL_HEAD_GATE",
+            "--repo",
+            repo_name,
+            "--final-head",
+            "--",
+            sys.executable,
+            "-c",
+            "import pathlib; assert pathlib.Path('tracked.txt').read_text() == 'proof\\n'",
+        ],
+        env=env,
+    )
+    proof_path = Path(bundle["execution_id"])
+    state_root = Path(env["AI_OS_TASK_STATE_DIR"]) / "executions" / bundle["execution_id"] / "PROOF_BUNDLE.json"
+    proof = json.loads(state_root.read_text(encoding="utf-8"))
+    assert proof["gate"].get("command_receipt_id")
+    receipts, _ = receipts_for(env, "f35-proof")
+    assert any(row["receipt_id"] == proof["gate"]["command_receipt_id"] for row in receipts)
+
+
+def test_al_receipt_has_no_secrets(plane_workspace):
+    from ai_os_execution.child_env import write_workload_secrets_file
+
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f35-secrets")
+    start_plane(env, repo_name, task_id="f35-secrets")
+    bundle, _ = bundle_for(env, "f35-secrets")
+    write_workload_secrets_file(
+        bundle["execution_id"],
+        {"MAILBOX_MEMORY_DATABASE_URL": "postgresql://task:secret@127.0.0.1/taskdb"},
+    )
+    run_cmd(
+        [
+            "exec",
+            "--task-id",
+            "f35-secrets",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        env=env,
+    )
+    receipts, _ = receipts_for(env, "f35-secrets")
+    receipt = receipts[-1]
+    blob = json.dumps(receipt).lower()
+    assert "postgresql://" not in blob
+    assert "mailbox_memory_database_url" not in blob
+    stdout_path = Path(receipt["stdout_path"])
+    assert "postgresql://" not in stdout_path.read_text(encoding="utf-8").lower()
+
