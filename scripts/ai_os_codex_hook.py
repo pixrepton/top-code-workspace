@@ -15,7 +15,6 @@ from ai_os_codex_hook_checkpoint import (  # noqa: E402
     active_checkpoint,
     checkpoint_is_active,
     checkpoint_state,
-    maybe_resume,
     refresh_checkpoint,
 )
 from ai_os_codex_hook_io import clip, resolve_cwd, stop, success  # noqa: E402
@@ -23,27 +22,27 @@ from ai_os_codex_hook_summary import build_session_summary  # noqa: E402
 
 
 def session_start_gate(state: str, data: dict[str, Any] | None, detail: str) -> int | None:
-    """Return a final exit code when there is nothing active to summarize."""
-    if state in {"missing", "multiple"}:
-        return success()
+    """Return a final exit code only for hard failures.
+
+    missing/multiple/inactive/archived fall through so the shared projector can inject
+    NONE / MULTIPLE / LEGACY / PLANE summaries (read-only projection).
+    """
     if state == "corrupt":
         return stop("AI-OS checkpoint is corrupt; repair it before continuing.")
-    if state != "ok" or data is None:
-        return success(system_message=f"AI-OS checkpoint refresh failed: {clip(detail, 180)}")
-    if not checkpoint_is_active(data):
-        return success()
+    if state == "error":
+        lowered = detail.lower()
+        if any(token in lowered for token in ("archived", "no active task", "checkpoint not found")):
+            return None
+        return success(system_message=f"AI-OS checkpoint lookup failed: {clip(detail, 180)}")
+    if state == "ok" and data is not None and not checkpoint_is_active(data):
+        # Closed/aborted: still emit NONE/legacy projector output rather than inventing work.
+        return None
     return None
 
 
-def session_start_report(cwd: Path, resumed: bool, resume_detail: str) -> int:
-    state, data, detail = checkpoint_state(cwd)
-    if state != "ok" or data is None:
-        message = "AI-OS checkpoint refreshed but summary is unavailable."
-        if detail:
-            message = f"{message} {clip(detail, 140)}"
-        return success(system_message=message)
-    message = None if resumed else f"AI-OS task-resume failed: {clip(resume_detail, 180)}"
-    return success(system_message=message, additional_context=build_session_summary(data))
+def session_start_report(cwd: Path, data: dict[str, Any] | None) -> int:
+    """Emit shared Execution Plane inject. Does not resume, takeover, or bump generation."""
+    return success(additional_context=build_session_summary(data))
 
 
 def handle_session_start(payload: dict[str, Any], cwd: Path) -> int:
@@ -51,11 +50,18 @@ def handle_session_start(payload: dict[str, Any], cwd: Path) -> int:
     early = session_start_gate(state, data, detail)
     if early is not None:
         return early
-    refreshed, refresh_detail = refresh_checkpoint(cwd, timeout=5.0)
-    if not refreshed:
-        return success(system_message=f"AI-OS checkpoint refresh failed: {clip(refresh_detail, 180)}")
-    resumed, resume_detail = maybe_resume(cwd)
-    return session_start_report(cwd, resumed, resume_detail)
+    if state == "ok" and data is not None and checkpoint_is_active(data):
+        refreshed, refresh_detail = refresh_checkpoint(cwd, timeout=5.0)
+        if not refreshed:
+            return success(
+                system_message=f"AI-OS checkpoint refresh failed: {clip(refresh_detail, 180)}",
+                additional_context=build_session_summary(data),
+            )
+        # Re-read after soft timestamp refresh so summary sees latest next_action/phase.
+        refreshed_state, refreshed_data, _detail = checkpoint_state(cwd)
+        if refreshed_state == "ok" and refreshed_data is not None:
+            state, data = refreshed_state, refreshed_data
+    return session_start_report(cwd, data if state == "ok" else None)
 
 
 def handle_pre_compact(cwd: Path) -> int:

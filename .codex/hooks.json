@@ -1,5 +1,5 @@
 {
-  "description": "Project-scoped AI-OS Codex lifecycle hooks. Shared Git decisions remain in scripts/ai_os_task.py; hooks refresh and resume checkpoint state.",
+  "description": "Project-scoped AI-OS Codex lifecycle hooks. SessionStart projects shared Execution Plane state (CAMPAIGN_STATE/TASK_ENTRY); does not takeover or bump generation.",
   "hooks": {
     "SessionStart": [
       {
@@ -9,9 +9,9 @@
             "type": "command",
             "command": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
             "commandWindows": "python -X utf8 -c \"from pathlib import Path; import runpy; p=next((d/'scripts'/'ai_os_codex_hook.py') for d in (Path.cwd(), *Path.cwd().parents) if (d/'scripts'/'ai_os_codex_hook.py').is_file()); runpy.run_path(str(p), run_name='__main__')\"",
-            "statusMessage": "Refreshing AI-OS task context",
-            "additionalContextLimit": 900,
-            "timeout": 5
+            "statusMessage": "Refreshing AI-OS Execution Plane context",
+            "additionalContextLimit": 2500,
+            "timeout": 8
           }
         ]
       }
