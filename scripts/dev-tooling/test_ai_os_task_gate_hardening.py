@@ -16,12 +16,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ai_os_task.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plane_harness import child_env, plane_start_args  # noqa: E402
 
 
 def run_cmd(args, cwd=ROOT, env=None, check=True):
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
+    merged_env = child_env(env)
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         cwd=str(cwd),
@@ -102,19 +102,12 @@ def task_repo(tmp_path):
 def start_task(task_repo):
     name, _, env = task_repo
     run_cmd(
-        [
-            "task-start",
-            "--task-id",
-            "unit",
-            "--title",
-            "Unit test",
-            "--class",
-            "SMALL",
-            "--repo",
-            name,
-            "--scope",
-            f"{name}:.",
-        ],
+        plane_start_args(
+            task_id="unit",
+            title="Unit test",
+            repo=name,
+            scope=f"{name}:.",
+        ),
         env=env,
     )
 

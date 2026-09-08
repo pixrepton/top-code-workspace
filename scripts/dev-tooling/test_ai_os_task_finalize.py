@@ -16,12 +16,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ai_os_task.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plane_harness import child_env, plane_start_args, worktree_path  # noqa: E402
 
 
 def run_cmd(args, cwd=ROOT, env=None, check=True):
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
+    merged_env = child_env(env)
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         cwd=str(cwd),
@@ -86,32 +86,14 @@ def task_repo(tmp_path):
 
 def start_task(task_repo, scope: str | None = None):
     name, _, env = task_repo
-    args = [
-        "task-start",
-        "--task-id",
-        "unit",
-        "--title",
-        "Unit test",
-        "--class",
-        "SMALL",
-        "--repo",
-        name,
-        "--scope",
-        scope or f"{name}:.",
-    ]
-    run_cmd(args, env=env)
-    run_cmd(
-        [
-            "task-branch",
-            "--task-id",
-            "unit",
-            "--repo",
-            name,
-            "--name",
-            "fix/finalize",
-        ],
-        env=env,
+    args = plane_start_args(
+        task_id="unit",
+        title="Unit test",
+        repo=name,
+        scope=scope or f"{name}:.",
     )
+    run_cmd(args, env=env)
+    return worktree_path(run_cmd, env, name, "unit")
 
 
 def run_gate(task_repo, gate_id="G1", *, code="print('ok')", expect_fail=False):
@@ -149,8 +131,8 @@ def finalize(task_repo, **extra):
 
 
 def test_finalize_commits_refreshes_gate_and_closes(task_repo) -> None:
-    start_task(task_repo)
-    name, repo, env = task_repo
+    name, _canonical, env = task_repo
+    repo = start_task(task_repo)
     (repo / "task.txt").write_text("task change\n", encoding="utf-8")
     run_gate(task_repo)
     proc = finalize(task_repo)
@@ -171,8 +153,8 @@ def test_finalize_commits_refreshes_gate_and_closes(task_repo) -> None:
 
 
 def test_finalize_refuses_when_gate_failed(task_repo) -> None:
-    start_task(task_repo)
-    name, repo, _ = task_repo
+    name, _canonical, _ = task_repo
+    repo = start_task(task_repo)
     run_gate(task_repo, code="import sys; sys.exit(1)", expect_fail=True)
     (repo / "task.txt").write_text("task change\n", encoding="utf-8")
     proc = finalize(task_repo)
@@ -187,19 +169,13 @@ def test_finalize_refuses_when_next_action_pending(task_repo) -> None:
     name, _, env = task_repo
     run_cmd(
         [
-            "task-start",
-            "--task-id",
-            "unit",
-            "--title",
-            "Unit test",
-            "--class",
-            "SMALL",
-            "--repo",
-            name,
-            "--scope",
-            f"{name}:.",
-            "--next",
-            "still working",
+            *plane_start_args(
+                task_id="unit",
+                title="Unit test",
+                repo=name,
+                scope=f"{name}:.",
+                extra=["--next", "still working"],
+            ),
         ],
         env=env,
     )
@@ -209,10 +185,10 @@ def test_finalize_refuses_when_next_action_pending(task_repo) -> None:
 
 
 def test_finalize_preserves_foreign_dirty_paths(task_repo) -> None:
-    name, repo, _ = task_repo
-    start_task(task_repo, scope=f"{name}:task.txt")
+    name, canonical, _ = task_repo
+    repo = start_task(task_repo, scope=f"{name}:task.txt")
     (repo / "task.txt").write_text("task change\n", encoding="utf-8")
-    (repo / "tracked.txt").write_text("foreign change\n", encoding="utf-8")
+    (canonical / "tracked.txt").write_text("foreign change\n", encoding="utf-8")
     run_gate(task_repo)
     proc = finalize(task_repo)
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -220,27 +196,20 @@ def test_finalize_preserves_foreign_dirty_paths(task_repo) -> None:
     committed = git(repo, "show", "--name-only", "--format=", "HEAD").stdout.strip()
     assert "task.txt" in committed
     assert "tracked.txt" not in committed
-    status = git(repo, "status", "--porcelain").stdout
+    status = git(canonical, "status", "--porcelain").stdout
     assert " M tracked.txt" in status
-    assert (repo / "tracked.txt").read_text(encoding="utf-8") == "foreign change\n"
+    assert (canonical / "tracked.txt").read_text(encoding="utf-8") == "foreign change\n"
 
 
 def test_failed_close_validation_does_not_revert_newer_checkpoint(task_repo, monkeypatch) -> None:
     name, _repo, env = task_repo
     run_cmd(
-        [
-            "task-start",
-            "--task-id",
-            "unit",
-            "--title",
-            "Unit test",
-            "--class",
-            "SMALL",
-            "--repo",
-            name,
-            "--scope",
-            f"{name}:.",
-        ],
+        plane_start_args(
+            task_id="unit",
+            title="Unit test",
+            repo=name,
+            scope=f"{name}:.",
+        ),
         env=env,
     )
 

@@ -12,6 +12,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ai_os_task.py"
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plane_harness import child_env, parse_json_stdout, plane_start_args, worktree_path  # noqa: E402
 
 from ai_os_task import (
     normalize_scope_path,
@@ -21,9 +23,7 @@ from ai_os_task import (
 
 
 def run_cmd(args, *, cwd=ROOT, env=None, check=True):
-    merged = os.environ.copy()
-    if env:
-        merged.update(env)
+    merged = child_env(env)
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         cwd=str(cwd),
@@ -112,24 +112,16 @@ def dual_repo_env(tmp_path):
 
 
 def start_task(env, task_id, repo_name, scope_path, *, check=True):
-    proc = run_cmd(
-        [
-            "task-start",
-            "--task-id",
-            task_id,
-            "--title",
-            task_id,
-            "--class",
-            "SMALL",
-            "--repo",
-            repo_name,
-            "--scope",
-            f"{repo_name}:{scope_path}",
-        ],
+    return run_cmd(
+        plane_start_args(
+            task_id=task_id,
+            title=task_id,
+            repo=repo_name,
+            scope=f"{repo_name}:{scope_path}",
+        ),
         env=env,
         check=check,
     )
-    return proc
 
 
 def test_scope_normalization_and_overlap_rules():
@@ -154,7 +146,7 @@ def test_parallel_tasks_in_different_repos(dual_repo_env):
     env = dual_repo_env["env"]
     start_task(env, "task-a", dual_repo_env["name_a"], ".")
     start_task(env, "task-b", dual_repo_env["name_b"], ".")
-    listed = json.loads(run_cmd(["task-list", "--json"], env=env).stdout)
+    listed = parse_json_stdout(run_cmd(["task-list", "--json"], env=env).stdout)
     assert set(listed["active"]) == {"task-a", "task-b"}
 
 
@@ -163,7 +155,7 @@ def test_parallel_disjoint_scopes_in_same_repo(dual_repo_env):
     repo = dual_repo_env["name_a"]
     start_task(env, "task-a", repo, "alpha.txt")
     start_task(env, "task-b", repo, "beta.txt")
-    listed = json.loads(run_cmd(["task-list", "--json"], env=env).stdout)
+    listed = parse_json_stdout(run_cmd(["task-list", "--json"], env=env).stdout)
     assert set(listed["active"]) == {"task-a", "task-b"}
 
 
@@ -194,19 +186,12 @@ def test_concurrent_task_start_respects_registry_lock(dual_repo_env):
     def worker(task_id: str, scope: str):
         barrier.wait()
         proc = run_cmd(
-            [
-                "task-start",
-                "--task-id",
-                task_id,
-                "--title",
-                task_id,
-                "--class",
-                "SMALL",
-                "--repo",
-                repo,
-                "--scope",
-                f"{repo}:{scope}",
-            ],
+            plane_start_args(
+                task_id=task_id,
+                title=task_id,
+                repo=repo,
+                scope=f"{repo}:{scope}",
+            ),
             env=env,
             check=False,
         )
@@ -223,7 +208,7 @@ def test_concurrent_task_start_respects_registry_lock(dual_repo_env):
 
     assert len(results) == 2
     assert sum(proc.returncode == 0 for proc in results) == 2
-    listed = json.loads(run_cmd(["task-list", "--json"], env=env).stdout)
+    listed = parse_json_stdout(run_cmd(["task-list", "--json"], env=env).stdout)
     assert set(listed["active"]) == {"task-a", "task-b"}
 
 
@@ -232,7 +217,7 @@ def test_failed_close_does_not_release_active_task(dual_repo_env):
     repo_name = dual_repo_env["name_a"]
     start_task(env, "task-fail", repo_name, ".")
     proc = run_cmd(["task-close", "--task-id", "task-fail", "--validate-only", "--json"], env=env, check=False)
-    result = json.loads(proc.stdout)
+    result = parse_json_stdout(proc.stdout)
     assert proc.returncode == 1
     assert result["verdict"] == "FAIL"
     assert active_checkpoint(env["AI_OS_TASK_STATE_DIR"], "task-fail").exists()
@@ -242,9 +227,8 @@ def test_failed_close_does_not_release_active_task(dual_repo_env):
 def test_successful_close_archives_and_releases(dual_repo_env):
     env = dual_repo_env["env"]
     repo_name = dual_repo_env["name_a"]
-    repo = dual_repo_env["repo_a"]
     start_task(env, "task-close", repo_name, "alpha.txt")
-    run_cmd(["task-branch", "--task-id", "task-close", "--repo", repo_name, "--name", "fix/close"], env=env)
+    repo = worktree_path(run_cmd, env, repo_name, "task-close")
     (repo / "alpha.txt").write_text("changed\n", encoding="utf-8")
     run_cmd(
         [
@@ -264,7 +248,7 @@ def test_successful_close_archives_and_releases(dual_repo_env):
         ],
         env=env,
     )
-    commit = json.loads(
+    commit = parse_json_stdout(
         run_cmd(
             ["task-commit", "--task-id", "task-close", "--repo", repo_name, "--message", "fix(test): close", "--json"],
             env=env,
@@ -283,26 +267,8 @@ def test_successful_close_archives_and_releases(dual_repo_env):
         ],
         env=env,
     )
-    run_cmd(
-        [
-            "task-gate",
-            "--task-id",
-            "task-close",
-            "--gate-id",
-            "proof",
-            "--repo",
-            repo_name,
-            "--scope",
-            "alpha.txt",
-            "--",
-            sys.executable,
-            "-c",
-            "print('ok')",
-        ],
-        env=env,
-    )
     proc = run_cmd(["task-close", "--task-id", "task-close", "--json"], env=env)
-    result = json.loads(proc.stdout)
+    result = parse_json_stdout(proc.stdout)
     assert result["verdict"] == "PASS"
     assert not active_checkpoint(env["AI_OS_TASK_STATE_DIR"], "task-close").exists()
     archived = json.loads(archive_checkpoint(env["AI_OS_TASK_STATE_DIR"], "task-close").read_text(encoding="utf-8"))
@@ -340,9 +306,10 @@ def test_task_commit_respects_task_id_and_foreign_scope(dual_repo_env):
     repo = dual_repo_env["repo_a"]
     start_task(env, "task-a", repo_name, "alpha.txt")
     start_task(env, "task-b", repo_name, "beta.txt")
-    run_cmd(["task-branch", "--task-id", "task-a", "--repo", repo_name, "--name", "fix/parallel"], env=env)
-    (repo / "alpha.txt").write_text("a\n", encoding="utf-8")
-    (repo / "beta.txt").write_text("b\n", encoding="utf-8")
+    wt_a = worktree_path(run_cmd, env, repo_name, "task-a")
+    wt_b = worktree_path(run_cmd, env, repo_name, "task-b")
+    (wt_a / "alpha.txt").write_text("a\n", encoding="utf-8")
+    (wt_b / "beta.txt").write_text("b\n", encoding="utf-8")
     for task_id, scope in (("task-a", "alpha.txt"), ("task-b", "beta.txt")):
         run_cmd(
             [
@@ -362,7 +329,7 @@ def test_task_commit_respects_task_id_and_foreign_scope(dual_repo_env):
             ],
             env=env,
         )
-    commit_a = json.loads(
+    commit_a = parse_json_stdout(
         run_cmd(
             ["task-commit", "--task-id", "task-a", "--repo", repo_name, "--message", "fix(a): alpha", "--json"],
             env=env,
@@ -387,7 +354,7 @@ def test_task_commit_respects_task_id_and_foreign_scope(dual_repo_env):
         ],
         env=env,
     )
-    plan_b = json.loads(
+    plan_b = parse_json_stdout(
         run_cmd(["task-commit-plan", "--task-id", "task-b", "--repo", repo_name, "--json"], env=env).stdout
     )
     assert plan_b["owned_paths"] == ["beta.txt"]

@@ -11,12 +11,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ai_os_task.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plane_harness import child_env, parse_json_stdout, plane_start_args, worktree_path  # noqa: E402
 
 
 def run_cmd(args, *, env=None, check=True):
-    merged = os.environ.copy()
-    if env:
-        merged.update(env)
+    merged = child_env(env)
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         cwd=str(ROOT),
@@ -79,21 +79,14 @@ def active_checkpoint(state_dir: str, task_id: str = "unit") -> Path:
 
 
 def start_task(repo_name: str, env: dict[str, str], *, next_action: str = ""):
-    args = [
-        "task-start",
-        "--task-id",
-        "unit",
-        "--title",
-        "Unit",
-        "--class",
-        "SMALL",
-        "--repo",
-        repo_name,
-        "--scope",
-        f"{repo_name}:alpha.txt",
-    ]
-    if next_action:
-        args.extend(["--next", next_action])
+    extra = ["--next", next_action] if next_action else None
+    args = plane_start_args(
+        task_id="unit",
+        title="Unit",
+        repo=repo_name,
+        scope=f"{repo_name}:alpha.txt",
+        extra=extra,
+    )
     run_cmd(args, env=env)
 
 
@@ -104,7 +97,8 @@ def load_checkpoint(env: dict[str, str]) -> dict:
 def test_scope_add_rejects_dirty_scope_unless_adopted(task_repo):
     repo_name, repo, env = task_repo
     start_task(repo_name, env)
-    (repo / "beta.txt").write_text("dirty\n", encoding="utf-8")
+    worktree = worktree_path(run_cmd, env, repo_name, "unit")
+    (worktree / "beta.txt").write_text("dirty\n", encoding="utf-8")
 
     rejected = run_cmd(
         ["task-scope-add", "--scope", f"{repo_name}:beta.txt"],
@@ -163,30 +157,18 @@ def test_next_clear_persists_after_checkpoint_and_status_reload(task_repo):
     assert data["next_action"] == ""
     assert data["current_phase"] == "next-cleared"
 
-    status = json.loads(run_cmd(["task-status", "--json"], env=env).stdout)
+    status = parse_json_stdout(run_cmd(["task-status", "--json"], env=env).stdout)
     assert status["next_action"] == ""
 
     plan_proc = run_cmd(["task-commit-plan", "--repo", repo_name, "--json"], env=env, check=False)
-    plan = json.loads(plan_proc.stdout)
+    plan = parse_json_stdout(plan_proc.stdout)
     assert all("next_action niepuste" not in blocker for blocker in plan["decision"]["blockers"])
 
 
 def test_commit_plan_ready_does_not_invent_stale_next_blocker_after_clear(task_repo):
     repo_name, repo, env = task_repo
     start_task(repo_name, env, next_action="finish slice")
-
-    run_cmd(
-        [
-            "task-branch",
-            "--task-id",
-            "unit",
-            "--repo",
-            repo_name,
-            "--name",
-            "fix/commit-plan-next-clear",
-        ],
-        env=env,
-    )
+    repo = worktree_path(run_cmd, env, repo_name, "unit")
     (repo / "alpha.txt").write_text("owned change\n", encoding="utf-8")
 
     run_cmd(["task-next-clear"], env=env)
@@ -209,7 +191,7 @@ def test_commit_plan_ready_does_not_invent_stale_next_blocker_after_clear(task_r
         env=env,
     )
 
-    plan = json.loads(
+    plan = parse_json_stdout(
         run_cmd(
             ["task-commit-plan", "--task-id", "unit", "--repo", repo_name, "--json"],
             env=env,
@@ -241,21 +223,13 @@ def test_next_clear_missing_task_id_fails_closed(task_repo, tmp_path):
     git(other_repo, "config", "user.name", "Test User")
     try:
         run_cmd(
-            [
-                "task-start",
-                "--task-id",
-                "unit-two",
-                "--title",
-                "Unit two",
-                "--class",
-                "SMALL",
-                "--repo",
-                other_name,
-                "--scope",
-                f"{other_name}:gamma.txt",
-                "--next",
-                "task-two",
-            ],
+            plane_start_args(
+                task_id="unit-two",
+                title="Unit two",
+                repo=other_name,
+                scope=f"{other_name}:gamma.txt",
+                extra=["--next", "task-two"],
+            ),
             env=env,
         )
 

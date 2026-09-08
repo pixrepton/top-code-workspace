@@ -13,12 +13,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 TASK_SCRIPT = ROOT / "scripts" / "ai_os_task.py"
 HOOK_SCRIPT = ROOT / "scripts" / "ai_os_codex_hook.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plane_harness import child_env, plane_start_args  # noqa: E402
 
 
 def run_task(args, *, cwd=ROOT, env=None, check=True):
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
+    merged_env = child_env(env)
     proc = subprocess.run(
         [sys.executable, str(TASK_SCRIPT), *args],
         cwd=str(cwd),
@@ -32,9 +32,7 @@ def run_task(args, *, cwd=ROOT, env=None, check=True):
 
 
 def run_hook(payload, *, cwd=ROOT, env=None, check=True):
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
+    merged_env = child_env(env)
     proc = subprocess.run(
         [sys.executable, str(HOOK_SCRIPT)],
         cwd=str(cwd),
@@ -103,24 +101,19 @@ def hook_repo(tmp_path):
 
 def start_task(hook_repo, *, next_action="Do the next thing."):
     name, _repo, _nested, env = hook_repo
+    extra = ["--next", next_action] if next_action else None
     run_task(
-        [
-            "task-start",
-            "--task-id",
-            "hook-unit",
-            "--title",
-            "Hook unit",
-            "--class",
-            "MEDIUM",
-            "--repo",
-            name,
-            "--scope",
-            f"{name}:tracked.txt",
-            "--next",
-            next_action,
-        ],
+        plane_start_args(
+            task_id="hook-unit",
+            title="Hook unit",
+            repo=name,
+            scope=f"{name}:tracked.txt",
+            task_class="MEDIUM",
+            extra=extra,
+        ),
         env=env,
     )
+    env["AI_OS_TASK_ID"] = "hook-unit"
     return env
 
 

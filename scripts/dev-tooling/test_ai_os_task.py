@@ -12,12 +12,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ai_os_task.py"
 BASE_LINES = [f"line {number}\n" for number in range(1, 31)]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plane_harness import child_env, parse_json_stdout, plane_start_args, worktree_path  # noqa: E402
 
 
 def run_cmd(args, cwd=ROOT, env=None, check=True):
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
+    merged_env = child_env(env)
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         cwd=str(cwd),
@@ -83,22 +83,17 @@ def task_repo(tmp_path):
 
 def start_task(task_repo, *, adopt=None):
     name, _, env = task_repo
-    args = [
-        "task-start",
-        "--task-id",
-        "unit",
-        "--title",
-        "Unit test",
-        "--class",
-        "SMALL",
-        "--repo",
-        name,
-        "--scope",
-        f"{name}:.",
-    ]
+    args = plane_start_args(
+        task_id="unit",
+        title="Unit test",
+        repo=name,
+        scope=f"{name}:.",
+    )
     for path in adopt or []:
         args.extend(["--adopt-baseline", f"{name}:{path}"])
     run_cmd(args, env=env)
+    worktree = worktree_path(run_cmd, env, name, "unit")
+    return name, worktree, env
 
 
 def commit_task_file(task_repo, text="task change\n"):
@@ -145,6 +140,21 @@ def close_result(task_repo, commit_sha):
     )
     run_cmd(
         [
+            "task-gate",
+            "--gate-id",
+            "FINAL_HEAD_GATE",
+            "--repo",
+            name,
+            "--final-head",
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        env=env,
+    )
+    run_cmd(
+        [
             "task-checkpoint",
             "--status",
             "READY_TO_CLOSE",
@@ -155,12 +165,11 @@ def close_result(task_repo, commit_sha):
         env=env,
     )
     proc = run_cmd(["task-close", "--validate-only", "--json"], env=env, check=False)
-    return proc, json.loads(proc.stdout)
+    return proc, parse_json_stdout(proc.stdout)
 
 
 def test_checkpoint_gate_dedupe_and_stale(task_repo):
-    name, repo, env = task_repo
-    start_task(task_repo)
+    name, repo, env = start_task(task_repo)
     gate = [
         "task-gate",
         "--gate-id",
@@ -183,110 +192,113 @@ def test_checkpoint_gate_dedupe_and_stale(task_repo):
 
 
 def test_own_uncommitted_change_blocks_closure(task_repo):
-    _, repo, _ = task_repo
-    start_task(task_repo)
-    sha = commit_task_file(task_repo)
+    started = start_task(task_repo)
+    _, repo, _ = started
+    sha = commit_task_file(started)
     set_lines(repo, {1: "own residue"})
-    proc, result = close_result(task_repo, sha)
+    proc, result = close_result(started, sha)
     assert proc.returncode == 1
     assert any("own unstaged files remain" in issue for issue in result["issues"])
 
 
 def test_preexisting_change_untouched_does_not_block(task_repo):
-    _, repo, _ = task_repo
-    set_lines(repo, {25: "foreign baseline"})
-    start_task(task_repo)
-    sha = commit_task_file(task_repo)
-    proc, result = close_result(task_repo, sha)
+    _, canonical, _ = task_repo
+    set_lines(canonical, {25: "foreign baseline"})
+    started = start_task(task_repo)
+    sha = commit_task_file(started)
+    proc, result = close_result(started, sha)
     assert proc.returncode == 0, result
     assert result["verdict"] == "PASS"
 
 
-def test_preexisting_and_committed_owned_hunk_in_same_file_passes(task_repo):
-    _, repo, _ = task_repo
-    set_lines(repo, {25: "foreign baseline"})
-    start_task(task_repo)
+def test_partial_index_commit_leaves_owned_unstaged_residue(task_repo):
+    started = start_task(task_repo)
+    _, repo, _ = started
     combined = set_lines(repo, {1: "owned commit", 25: "foreign baseline"})
     own_only = list(BASE_LINES)
     own_only[0] = "owned commit\n"
     sha = commit_only_tracked_content(repo, "".join(own_only))
     assert (repo / "tracked.txt").read_text(encoding="utf-8") == combined
-    proc, result = close_result(task_repo, sha)
-    assert proc.returncode == 0, result
-    assert result["verdict"] == "PASS"
-
-
-def test_preexisting_and_uncommitted_owned_hunk_in_same_file_blocks(task_repo):
-    _, repo, _ = task_repo
-    set_lines(repo, {25: "foreign baseline"})
-    start_task(task_repo)
-    sha = commit_task_file(task_repo)
-    set_lines(repo, {1: "own residue", 25: "foreign baseline"})
-    proc, result = close_result(task_repo, sha)
+    proc, result = close_result(started, sha)
     assert proc.returncode == 1
     assert any("tracked.txt" in issue for issue in result["issues"])
 
 
-def test_preexisting_change_violation_is_detected(task_repo):
-    _, repo, _ = task_repo
-    set_lines(repo, {25: "foreign baseline"})
-    start_task(task_repo)
-    sha = commit_task_file(task_repo)
-    set_lines(repo, {})
-    proc, result = close_result(task_repo, sha)
+def test_preexisting_and_uncommitted_owned_hunk_in_same_file_blocks(task_repo):
+    started = start_task(task_repo)
+    _, repo, _ = started
+    sha = commit_task_file(started)
+    set_lines(repo, {1: "own residue", 25: "foreign baseline"})
+    proc, result = close_result(started, sha)
     assert proc.returncode == 1
-    assert any("OWNERSHIP_CONFLICT" in issue for issue in result["issues"])
+    assert any("tracked.txt" in issue for issue in result["issues"])
 
 
-def test_preexisting_change_cannot_be_absorbed_by_task_commit(task_repo):
-    _, repo, _ = task_repo
-    foreign = set_lines(repo, {25: "foreign baseline"})
-    start_task(task_repo)
-    sha = commit_only_tracked_content(repo, foreign)
-    proc, result = close_result(task_repo, sha)
-    assert proc.returncode == 1
-    assert any("absorbed" in issue for issue in result["issues"])
+def test_canonical_preexisting_is_isolated_from_worktree_close(task_repo):
+    _, canonical, _ = task_repo
+    set_lines(canonical, {25: "foreign baseline"})
+    started = start_task(task_repo)
+    sha = commit_task_file(started)
+    set_lines(canonical, {})
+    proc, result = close_result(started, sha)
+    assert proc.returncode == 0, result
+    assert result["verdict"] == "PASS"
+
+
+def test_canonical_preexisting_cannot_be_absorbed_into_worktree_commit(task_repo):
+    _, canonical, _ = task_repo
+    set_lines(canonical, {25: "foreign baseline"})
+    started = start_task(task_repo)
+    sha = commit_task_file(started)
+    _, worktree, _ = started
+    assert "foreign baseline" not in (worktree / "tracked.txt").read_text(encoding="utf-8")
+    assert "foreign baseline" in (canonical / "tracked.txt").read_text(encoding="utf-8")
+    proc, result = close_result(started, sha)
+    assert proc.returncode == 0, result
+    assert result["verdict"] == "PASS"
 
 
 def test_preexisting_untracked_file_untouched_does_not_block(task_repo):
-    _, repo, _ = task_repo
-    (repo / "foreign.tmp").write_text("foreign\n", encoding="utf-8")
-    start_task(task_repo)
-    sha = commit_task_file(task_repo)
-    proc, result = close_result(task_repo, sha)
+    _, canonical, _ = task_repo
+    (canonical / "foreign.tmp").write_text("foreign\n", encoding="utf-8")
+    started = start_task(task_repo)
+    sha = commit_task_file(started)
+    proc, result = close_result(started, sha)
     assert proc.returncode == 0
     assert result["verdict"] == "PASS"
 
 
 def test_new_owned_untracked_file_blocks(task_repo):
-    _, repo, _ = task_repo
-    start_task(task_repo)
-    sha = commit_task_file(task_repo)
+    started = start_task(task_repo)
+    _, repo, _ = started
+    sha = commit_task_file(started)
     (repo / "owned.tmp").write_text("owned\n", encoding="utf-8")
-    proc, result = close_result(task_repo, sha)
+    proc, result = close_result(started, sha)
     assert proc.returncode == 1
     assert any("own untracked files remain" in issue for issue in result["issues"])
 
 
 def test_new_owned_change_after_owned_commit_blocks(task_repo):
-    _, repo, _ = task_repo
-    start_task(task_repo)
+    started = start_task(task_repo)
+    _, repo, _ = started
     committed = set_lines(repo, {1: "owned commit"})
     sha = commit_only_tracked_content(repo, committed)
     set_lines(repo, {1: "owned commit", 2: "post-commit residue"})
-    proc, result = close_result(task_repo, sha)
+    proc, result = close_result(started, sha)
     assert proc.returncode == 1
     assert any("own unstaged files remain" in issue for issue in result["issues"])
 
 
-def test_explicitly_adopted_baseline_must_be_resolved(task_repo):
-    _, repo, _ = task_repo
-    (repo / "adopted.tmp").write_text("adopted\n", encoding="utf-8")
-    start_task(task_repo, adopt=["adopted.tmp"])
-    sha = commit_task_file(task_repo)
-    proc, result = close_result(task_repo, sha)
-    assert proc.returncode == 1
-    assert any("own untracked files remain" in issue for issue in result["issues"])
+def test_canonical_untracked_is_not_imported_into_worktree(task_repo):
+    _, canonical, _ = task_repo
+    (canonical / "adopted.tmp").write_text("adopted\n", encoding="utf-8")
+    started = start_task(task_repo, adopt=["adopted.tmp"])
+    sha = commit_task_file(started)
+    _, worktree, _ = started
+    assert not (worktree / "adopted.tmp").exists()
+    proc, result = close_result(started, sha)
+    assert proc.returncode == 0, result
+    assert result["verdict"] == "PASS"
 
 
 def active_checkpoint(state_dir: str, task_id: str) -> Path:
@@ -348,8 +360,26 @@ def test_stale_commit_evaluation_does_not_resurrect_cleared_next_action(task_rep
 
 
 def test_create_task_branch_does_not_resurrect_stale_next_action(task_repo, monkeypatch):
-    name, _repo, env = task_repo
-    start_task(task_repo)
+    name, _, env = task_repo
+    run_cmd(
+        [
+            "task-start",
+            "--task-id",
+            "unit",
+            "--title",
+            "Unit test",
+            "--class",
+            "SMALL",
+            "--legacy",
+            "--execution-mode",
+            "DOCS",
+            "--repo",
+            name,
+            "--scope",
+            f"{name}:.",
+        ],
+        env=env,
+    )
     run_cmd(["task-checkpoint", "--next", "stale-next"], env=env)
 
     scripts_dir = ROOT / "scripts"
