@@ -1074,3 +1074,140 @@ def test_z_historical_replay_without_pins_blocked(plane_workspace):
     )
     assert proc.returncode == 2
     assert "BLOCKED_TIME_NOT_CONTROLLED" in (proc.stderr + proc.stdout)
+
+
+def test_aa_takeover_generation_allocates_new_worktree(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f3-takeover")
+    start_plane(env, repo_name, task_id="f3-takeover", extra=["--execution-mode", "MUTATE"])
+    bundle, _ = bundle_for(env, "f3-takeover")
+    old_path = Path(bundle["repos"][repo_name]["worktree_path"])
+    (old_path / "tracked.txt").write_text("generation-one\n", encoding="utf-8")
+    run_cmd(["execution-takeover", "--task-id", "f3-takeover"], env=env)
+    bundle, _ = bundle_for(env, "f3-takeover")
+    new_path = Path(bundle["repos"][repo_name]["worktree_path"])
+    assert bundle.get("lease_generation") == 2
+    assert new_path != old_path
+    assert old_path.exists()
+    assert (old_path / "tracked.txt").read_text(encoding="utf-8") == "generation-one\n"
+    assert (new_path / "tracked.txt").read_text(encoding="utf-8") != "generation-one\n"
+    (new_path / "tracked.txt").write_text("generation-two\n", encoding="utf-8")
+    git(new_path, "add", "--", "tracked.txt")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f3-takeover",
+            "--gate-id",
+            "dev-gen2",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        env=env,
+    )
+    run_cmd(
+        ["task-commit", "--task-id", "f3-takeover", "--repo", repo_name, "--message", "gen2 commit"],
+        env=env,
+    )
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "f3-takeover",
+            "--gate-id",
+            "FINAL_HEAD_GATE",
+            "--repo",
+            repo_name,
+            "--final-head",
+            "--",
+            sys.executable,
+            "-c",
+            "import pathlib; assert pathlib.Path('tracked.txt').read_text() == 'generation-two\\n'",
+        ],
+        env=env,
+    )
+    assert git(old_path, "rev-parse", "HEAD").stdout.strip() != git(new_path, "rev-parse", "HEAD").stdout.strip()
+
+
+def test_ab_close_execution_revokes_secrets(plane_workspace):
+    from ai_os_execution.child_env import write_workload_secrets_file
+
+    names, env, tmp_path = plane_workspace
+    os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
+    repo_name, _ = add_named_repo(plane_workspace, "f3-close")
+    start_plane(env, repo_name, task_id="f3-close")
+    bundle, _ = bundle_for(env, "f3-close")
+    secret_path = write_workload_secrets_file(
+        bundle["execution_id"],
+        {"MAILBOX_MEMORY_DATABASE_URL": "postgresql://task:secret@127.0.0.1/taskdb"},
+    )
+    assert secret_path.exists()
+    run_cmd(["execution-close", "--task-id", "f3-close"], env=env)
+    assert not secret_path.exists()
+    closed_bundle, _ = bundle_for(env, "f3-close")
+    assert closed_bundle.get("status") == "CLOSED_RETAINED"
+    assert closed_bundle.get("secrets_revoked_at")
+
+
+def test_ac_container_profile_requires_image_provenance(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f3-image")
+    proc = run_cmd(
+        [
+            "start",
+            "--task-id",
+            "f3-image",
+            "--title",
+            "container profile",
+            "--class",
+            "SMALL",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+            "--runtime-profile",
+            "container",
+        ],
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "image" in (proc.stderr + proc.stdout).lower()
+
+
+def test_ad_container_profile_with_image_succeeds(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, _ = add_named_repo(plane_workspace, "f3-image-ok")
+    proc = run_cmd(
+        [
+            "start",
+            "--task-id",
+            "f3-image-ok",
+            "--title",
+            "container with image",
+            "--class",
+            "SMALL",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+            "--runtime-profile",
+            "container",
+            "--image-digest",
+            "sha256:deadbeef",
+            "--image-repo",
+            repo_name,
+        ],
+        env=env,
+    )
+    assert "TASK READY" in proc.stdout
+    bundle, _ = bundle_for(env, "f3-image-ok")
+    digest = (bundle.get("runtime") or {}).get("image_digests", {}).get(repo_name) or {}
+    assert digest.get("digest") == "sha256:deadbeef"
+    assert digest.get("build_context") == "worktree"

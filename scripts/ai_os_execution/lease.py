@@ -94,6 +94,7 @@ def acquire_lease(
     ttl_seconds: int = LEASE_TTL_SECONDS,
     now: str | None = None,
     takeover: bool = False,
+    lease_generation: int = 1,
 ) -> dict[str, Any]:
     stamp = now or utc_now()
     qualified = [path if ":" in path else f"{repo}:{path}" for path in owned_paths]
@@ -129,6 +130,7 @@ def acquire_lease(
         "heartbeat_at": stamp,
         "status": "ACTIVE",
         "recovered_from": recovered_from,
+        "lease_generation": lease_generation,
     }
     leases.append(record)
     save_leases(leases)

@@ -44,11 +44,29 @@ from ai_os_execution.stores import fail_closed_if_canonical_writable, inspect_en
 from ai_os_execution.child_env import (
     control_plane_fingerprint,
     provision_hermetic_profile,
+    revoke_workload_secrets,
     write_public_env_file,
     write_workload_secrets_file,
 )
+from ai_os_execution.generation import (
+    append_worktree_history,
+    bump_lease_generation,
+    fencing_token,
+    mark_repo_revoked,
+)
+from ai_os_execution.runtime_profile import (
+    record_image_digest,
+    require_container_image_provenance,
+    uses_container,
+)
 from ai_os_execution.public_bundle import public_bundle as serialize_public_bundle
-from ai_os_execution.worktree import add_repo_worktree, remove_repo_worktree, task_branch_name, worktree_head
+from ai_os_execution.worktree import (
+    add_repo_worktree,
+    generation_worktree_dest,
+    remove_repo_worktree,
+    task_branch_name,
+    worktree_head,
+)
 from ai_os_task_errors import TaskError
 from ai_os_task_git import canonical_repo_path, run
 from ai_os_task_paths import utc_now
@@ -115,8 +133,8 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         for repo in data["target_repositories"]:
             canonical = canonical_repo_path(repo)
             base_sha = run(["git", "rev-parse", "--verify", "HEAD"], canonical).stdout.strip()
-            branch = task_branch_name(data["task_id"], execution_id, repo)
-            dest = root / "worktrees" / repo
+            branch = task_branch_name(data["task_id"], execution_id, repo, generation=1)
+            dest = generation_worktree_dest(root, repo, 1)
             created = add_repo_worktree(repo=repo, dest=dest, branch=branch, base_sha=base_sha)
             created_worktrees.append((repo, dest))
             repos[repo] = empty_repo_entry(
@@ -149,6 +167,14 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
     bundle["capability_profile"] = capability_profile
     bundle["scratch_path"] = str(scratch)
     bundle["hermetic"] = dict(hermetic_env)
+    bundle["fencing_token"] = fencing_token(execution_id, 1)
+    bundle["ownership"]["fencing_token"] = bundle["fencing_token"]
+    bundle["ownership"]["lease_generation"] = 1
+
+    runtime_profile = str(getattr(args, "runtime_profile", None) or "").strip()
+    if not runtime_profile:
+        runtime_profile = "container" if isolate_db else "host"
+    bundle["runtime"]["profile"] = runtime_profile
 
     declared_public: dict[str, str] = {
         "AI_OS_EXECUTION_ID": execution_id,
@@ -267,6 +293,18 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         semantic_clock=semantic_clock,
     )
     require_preflight_pass(preflight)
+    image_digest = str(getattr(args, "image_digest", None) or "").strip()
+    image_repo = str(getattr(args, "image_repo", None) or (target_repos[0] if target_repos else "")).strip()
+    if image_digest and image_repo:
+        record_image_digest(
+            bundle,
+            repo=image_repo,
+            digest=image_digest,
+            source_sha=str((bundle["repos"].get(image_repo) or {}).get("current_sha") or ""),
+            worktree_clean_at_build=True,
+        )
+    if uses_container(runtime_profile):
+        require_container_image_provenance(bundle)
     bundle["tooling"] = {
         "preflight_manifest": preflight["preflight_path"],
         "graph_freshness": graph,
@@ -286,14 +324,23 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
             execution_id=execution_id,
             repo=first_repo,
             owned_paths=owned_paths,
+            lease_generation=1,
         )
         bundle["ownership"] = {
             "lease_id": lease["lease_id"],
             "owned_paths": owned_paths,
             "expires_at": lease["expires_at"],
+            "lease_generation": 1,
+            "fencing_token": bundle["fencing_token"],
         }
     else:
-        bundle["ownership"] = {"lease_id": "", "owned_paths": owned_paths, "expires_at": ""}
+        bundle["ownership"] = {
+            "lease_id": "",
+            "owned_paths": owned_paths,
+            "expires_at": "",
+            "lease_generation": 1,
+            "fencing_token": bundle["fencing_token"],
+        }
 
     save_bundle(bundle)
     write_task_entry(
@@ -354,18 +401,132 @@ def resume_execution(task_id: str) -> dict[str, Any]:
     }
 
 
+def takeover_execution(task_id: str) -> dict[str, Any]:
+    """Bump lease generation and provision fresh physical worktrees (F3)."""
+    bundle = load_bundle_for_task(task_id)
+    if not bundle:
+        raise TaskError(f"no execution bundle for task {task_id}")
+    if bundle.get("status") not in {"ACTIVE"}:
+        raise TaskError(f"takeover requires ACTIVE bundle, got {bundle.get('status')}")
+
+    execution_id = bundle["execution_id"]
+    root = execution_dir(execution_id)
+    generation = bump_lease_generation(bundle)
+    mutation_mode = "READ_ONLY" if bundle.get("execution_mode") == "LIVE_READ_ONLY" else "MUTATE"
+    owned_paths = list((bundle.get("ownership") or {}).get("owned_paths") or [])
+    first_repo = next(iter((bundle.get("repos") or {}).keys()), "")
+    created: list[tuple[str, Path]] = []
+    revoked_entries: dict[str, dict[str, Any]] = {}
+
+    try:
+        for repo, entry in list((bundle.get("repos") or {}).items()):
+            if str(entry.get("worktree_status") or "ACTIVE") != "ACTIVE":
+                continue
+            revoked = mark_repo_revoked(entry, generation=generation - 1)
+            append_worktree_history(bundle, repo, revoked)
+            revoked_entries[repo] = revoked
+
+            canonical = canonical_repo_path(repo)
+            base_sha = run(["git", "rev-parse", "--verify", "HEAD"], canonical).stdout.strip()
+            branch = task_branch_name(task_id, execution_id, repo, generation=generation)
+            dest = generation_worktree_dest(root, repo, generation)
+            added = add_repo_worktree(repo=repo, dest=dest, branch=branch, base_sha=base_sha)
+            created.append((repo, dest))
+            bundle["repos"][repo] = empty_repo_entry(
+                canonical_repo=str(canonical),
+                worktree_path=added["worktree_path"],
+                base_sha=base_sha,
+                current_sha=added["current_sha"],
+                branch=added["branch"],
+                mutation_mode=mutation_mode,
+                lease_generation=generation,
+                worktree_status="ACTIVE",
+            )
+    except Exception:
+        for repo, dest in created:
+            try:
+                remove_repo_worktree(repo, dest, force=True)
+            except TaskError:
+                pass
+        raise
+
+    for repo, revoked in revoked_entries.items():
+        bundle.setdefault("revoked_worktrees", {})[repo] = revoked
+
+    if mutation_mode == "MUTATE" and first_repo and owned_paths:
+        lease = acquire_lease(
+            task_id=task_id,
+            execution_id=execution_id,
+            repo=first_repo,
+            owned_paths=owned_paths,
+            takeover=True,
+            lease_generation=generation,
+        )
+        bundle["ownership"]["lease_id"] = lease["lease_id"]
+        bundle["ownership"]["expires_at"] = lease["expires_at"]
+    bundle["ownership"]["lease_generation"] = generation
+    bundle["ownership"]["fencing_token"] = bundle["fencing_token"]
+    bundle["final_head"] = {
+        **(bundle.get("final_head") or {}),
+        "required": True,
+        "valid": False,
+        "gate_id": "FINAL_HEAD_GATE",
+        "invalidated_reason": f"takeover generation {generation}",
+    }
+    save_bundle(bundle)
+    return {
+        "task_id": task_id,
+        "execution_id": execution_id,
+        "lease_generation": generation,
+        "fencing_token": bundle["fencing_token"],
+        "worktrees": {name: entry.get("worktree_path") for name, entry in bundle["repos"].items()},
+        "revoked_worktrees": {name: entry.get("worktree_path") for name, entry in revoked_entries.items()},
+    }
+
+
+def close_execution(task_id: str) -> dict[str, Any]:
+    """Retain evidence; revoke workload secrets and release leases."""
+    bundle = load_bundle_for_task(task_id)
+    if not bundle:
+        raise TaskError(f"no execution bundle for task {task_id}")
+    removed = revoke_workload_secrets(bundle["execution_id"])
+    release_leases(bundle["execution_id"])
+    bundle["status"] = "CLOSED_RETAINED"
+    bundle["secrets_revoked_at"] = utc_now()
+    save_bundle(bundle)
+    return {
+        "execution_id": bundle["execution_id"],
+        "status": bundle["status"],
+        "secrets_removed": removed,
+    }
+
+
 def destroy_execution(task_id: str, *, retain_evidence: bool = True) -> dict[str, Any]:
     bundle = load_bundle_for_task(task_id)
     if not bundle:
         raise TaskError(f"no execution bundle for task {task_id}")
+    removed = revoke_workload_secrets(bundle["execution_id"])
     release_leases(bundle["execution_id"])
     for name, entry in (bundle.get("repos") or {}).items():
+        if str(entry.get("worktree_status") or "ACTIVE") == "ACTIVE":
+            dest = Path(entry.get("worktree_path") or "")
+            if dest.exists():
+                remove_repo_worktree(name, dest, force=True)
+    for name, entry in (bundle.get("revoked_worktrees") or {}).items():
         dest = Path(entry.get("worktree_path") or "")
         if dest.exists():
-            remove_repo_worktree(name, dest, force=True)
+            try:
+                remove_repo_worktree(name, dest, force=True)
+            except TaskError:
+                pass
     bundle["status"] = "CLOSED_RETAINED" if retain_evidence else "DESTROYABLE"
+    bundle["secrets_revoked_at"] = utc_now()
     save_bundle(bundle)
-    return {"execution_id": bundle["execution_id"], "status": bundle["status"]}
+    return {
+        "execution_id": bundle["execution_id"],
+        "status": bundle["status"],
+        "secrets_removed": removed,
+    }
 
 def print_task_ready(bundle: dict[str, Any]) -> None:
     print("TASK READY")

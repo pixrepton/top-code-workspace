@@ -230,6 +230,23 @@ def write_public_env_file(execution_id: str, declared: dict[str, str]) -> Path:
     return path
 
 
+def revoke_workload_secrets(execution_id: str) -> list[str]:
+    """Delete workload secret files; return paths removed."""
+    root = execution_dir(execution_id)
+    removed: list[str] = []
+    secret_path = root / _SECRET_FILE_NAME
+    if secret_path.exists():
+        secret_path.unlink()
+        removed.append(str(secret_path))
+    hermetic_secrets = root / "scratch" / _HERMETIC_ROOT_NAME / "secrets"
+    if hermetic_secrets.exists():
+        for item in hermetic_secrets.iterdir():
+            if item.is_file():
+                item.unlink()
+                removed.append(str(item))
+    return removed
+
+
 def write_workload_secrets_file(execution_id: str, secrets: dict[str, str]) -> Path:
     path = execution_dir(execution_id) / _SECRET_FILE_NAME
     path.parent.mkdir(parents=True, exist_ok=True)

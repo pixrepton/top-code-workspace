@@ -454,12 +454,9 @@ def close_task(args: argparse.Namespace) -> int:
             return 0
         archive_path, target = _finalize_closed_task(data, args)
         if data.get("execution_id"):
-            from ai_os_execution.bundle import load_bundle_for_task, save_bundle
+            from ai_os_execution.plane import close_execution
 
-            bundle = load_bundle_for_task(data["task_id"])
-            if bundle:
-                bundle["status"] = "CLOSED_RETAINED"
-                save_bundle(bundle)
+            close_execution(data["task_id"])
         if args.json:
             payload["summary_file"] = str(target)
             payload["archived"] = str(archive_path)

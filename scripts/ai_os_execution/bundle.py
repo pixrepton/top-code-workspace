@@ -171,6 +171,8 @@ def empty_repo_entry(
     current_sha: str,
     branch: str,
     mutation_mode: str,
+    lease_generation: int = 1,
+    worktree_status: str = "ACTIVE",
 ) -> dict[str, Any]:
     return {
         "canonical_repo": canonical_repo,
@@ -179,6 +181,8 @@ def empty_repo_entry(
         "current_sha": current_sha,
         "branch": branch,
         "mutation_mode": mutation_mode,
+        "lease_generation": lease_generation,
+        "worktree_status": worktree_status,
     }
 
 
@@ -205,6 +209,7 @@ def new_bundle(
         "runtime": {
             "namespace": docker_namespace(execution_id),
             "compose_project": docker_namespace(execution_id),
+            "profile": "host",
             "image_digests": {},
         },
         "database": {
@@ -229,6 +234,8 @@ def new_bundle(
             "lease_id": "",
             "owned_paths": [],
             "expires_at": "",
+            "lease_generation": 1,
+            "fencing_token": "",
         },
         "proof": {
             "latest_proof_bundle": "",
@@ -241,4 +248,7 @@ def new_bundle(
             "invalidated_reason": "",
         },
         "environment_manifest_hash": "",
+        "lease_generation": 1,
+        "fencing_token": "",
+        "worktree_history": [],
     }

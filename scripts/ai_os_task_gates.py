@@ -280,6 +280,15 @@ def run_gate(args: argparse.Namespace) -> int:
     from ai_os_task_lifecycle import require_plane_bundle
 
     require_plane_bundle(data)
+    if data.get("execution_id") and (
+        args.gate_id == "FINAL_HEAD_GATE" or getattr(args, "final_head", False)
+    ):
+        from ai_os_execution.bundle import load_bundle_for_task
+        from ai_os_execution.runtime_profile import require_container_image_provenance
+
+        bundle = load_bundle_for_task(data["task_id"])
+        if bundle:
+            require_container_image_provenance(bundle)
     if args.repo not in data["target_repositories"]:
         raise TaskError(f"gate repo is not in checkpoint target_repositories: {args.repo}")
     profile = getattr(args, "profile", None)

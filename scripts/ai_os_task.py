@@ -34,6 +34,7 @@ from ai_os_task_lifecycle import (
     status_task,
     update_checkpoint,
 )
+from ai_os_task_state import resolve_task_id
 from ai_os_task_scope import normalize_scope_path, scope_entries_overlap, scopes_conflict
 
 try:
@@ -109,6 +110,9 @@ def add_start_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Assert temporal scoring paths use semantic clock (HISTORICAL_REPLAY)",
     )
+    parser.add_argument("--runtime-profile", choices=["host", "container"], default="")
+    parser.add_argument("--image-digest", default="")
+    parser.add_argument("--image-repo", default="")
     parser.add_argument("--db-isolation", dest="db_isolation", action="store_true")
     parser.add_argument("--no-db-isolation", dest="db_isolation", action="store_false")
     parser.add_argument("--db-host", default="")
@@ -139,6 +143,33 @@ def apply_runtime_context(args: argparse.Namespace) -> None:
     repo_override = getattr(args, "repo_path_flag", None)
     if repo_override:
         os.environ["AI_OS_REPO_PATH"] = str(repo_override)
+
+def takeover_cmd(args: argparse.Namespace) -> int:
+    from ai_os_execution.plane import takeover_execution
+
+    payload = takeover_execution(resolve_task_id(getattr(args, "task_id", None)))
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def close_execution_cmd(args: argparse.Namespace) -> int:
+    from ai_os_execution.plane import close_execution
+
+    payload = close_execution(resolve_task_id(getattr(args, "task_id", None)))
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def destroy_execution_cmd(args: argparse.Namespace) -> int:
+    from ai_os_execution.plane import destroy_execution
+
+    payload = destroy_execution(
+        resolve_task_id(getattr(args, "task_id", None)),
+        retain_evidence=not getattr(args, "no_retain_evidence", False),
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI-OS Codex execution task checkpoint helper")
@@ -173,6 +204,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_execution_context_args(repo_cmd)
     repo_cmd.add_argument("--repo", required=True)
     repo_cmd.set_defaults(func=task_repo_cmd)
+
+    takeover = sub.add_parser("execution-takeover", help="Bump lease generation and allocate new worktrees")
+    add_task_id_arg(takeover)
+    takeover.set_defaults(func=takeover_cmd)
+
+    exec_close = sub.add_parser("execution-close", help="Close execution bundle; revoke secrets, keep evidence")
+    add_task_id_arg(exec_close)
+    exec_close.set_defaults(func=close_execution_cmd)
+
+    exec_destroy = sub.add_parser("execution-destroy", help="Destroy execution worktrees and revoke secrets")
+    add_task_id_arg(exec_destroy)
+    exec_destroy.add_argument("--no-retain-evidence", action="store_true")
+    exec_destroy.set_defaults(func=destroy_execution_cmd)
 
     owner_add = sub.add_parser("task-owner-add", help="Expand write scope with lease conflict check")
     add_task_id_arg(owner_add)

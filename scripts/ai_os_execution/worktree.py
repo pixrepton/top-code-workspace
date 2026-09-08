@@ -11,9 +11,15 @@ from ai_os_task_git import canonical_repo_path, run
 _BRANCH_SAFE = re.compile(r"[^A-Za-z0-9._/-]+")
 
 
-def task_branch_name(task_id: str, execution_id: str, repo: str) -> str:
+def generation_worktree_dest(execution_root: Path, repo: str, generation: int) -> Path:
+    if generation <= 1:
+        return execution_root / "worktrees" / repo
+    return execution_root / "worktrees" / repo / f"g{generation}"
+
+
+def task_branch_name(task_id: str, execution_id: str, repo: str, *, generation: int = 1) -> str:
     short = execution_id.split("_")[-1][:8]
-    raw = f"task/{task_id}/{repo}/{short}"
+    raw = f"task/{task_id}/{repo}/g{generation}/{short}"
     cleaned = _BRANCH_SAFE.sub("-", raw).strip("-")
     return cleaned[:200]
 
