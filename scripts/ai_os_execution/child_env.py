@@ -92,6 +92,13 @@ _PUBLIC_ENV_FILE = "HOST_ENV.json"
 _HERMETIC_ROOT_NAME = "profile"
 
 
+def _ensure_hermetic_gitconfig(path: Path) -> None:
+    """Keep task-local Git non-interactive and Windows long-path capable."""
+    expected = "[credential]\n\thelper =\n[core]\n\tlongpaths = true\n"
+    if not path.exists() or path.read_text(encoding="utf-8") != expected:
+        path.write_text(expected, encoding="utf-8")
+
+
 def store_env_keys() -> frozenset[str]:
     keys: set[str] = set()
     try:
@@ -141,6 +148,7 @@ def load_hermetic_profile(execution_root: Path) -> dict[str, str]:
     docker_cfg = profile / "docker"
     secrets = profile / "secrets"
     gitconfig = config / ".gitconfig"
+    _ensure_hermetic_gitconfig(gitconfig)
     return {
         "HOME": str(home),
         "USERPROFILE": str(home),
@@ -168,11 +176,7 @@ def provision_hermetic_profile(execution_root: Path) -> dict[str, str]:
         path.mkdir(parents=True, exist_ok=True)
 
     gitconfig = config / ".gitconfig"
-    if not gitconfig.exists():
-        gitconfig.write_text(
-            "[credential]\n\thelper =\n",
-            encoding="utf-8",
-        )
+    _ensure_hermetic_gitconfig(gitconfig)
 
     return {
         "HOME": str(home),
@@ -299,10 +303,10 @@ def build_effective_child_env(
         env["AI_OS_EXECUTION_ID"] = execution_id
         env["AI_OS_TASK_ID"] = str(bundle.get("task_id") or "")
         env["AI_OS_EXECUTION_MODE"] = str(bundle.get("execution_mode") or "TEST")
-    env.pop("AI_OS_TASK_ID", None)  # gate children must not inherit parent task routing
     if cwd is not None:
         env["PWD"] = str(cwd)
-    _assert_no_host_poison(env)
+    allowed_control_keys = {"AI_OS_TASK_ID"} if include_execution_ids else set()
+    _assert_no_host_poison(env, allowed_control_keys=allowed_control_keys)
     return env
 
 
@@ -351,12 +355,17 @@ def gate_subprocess_env(
     return minimal_legacy_gate_env()
 
 
-def _assert_no_host_poison(env: dict[str, str]) -> None:
+def _assert_no_host_poison(
+    env: dict[str, str],
+    *,
+    allowed_control_keys: set[str] | None = None,
+) -> None:
+    allowed = allowed_control_keys or set()
     for key in env:
         if key in _CONTROL_PLANE_ENV_KEYS:
             raise TaskError(f"control-plane credential leaked into workload env: {key}")
     for key in env:
-        if _is_blocked_host_key(key) and key not in store_env_keys():
+        if _is_blocked_host_key(key) and key not in store_env_keys() and key not in allowed:
             raise TaskError(f"blocked host env key leaked into workload: {key}")
 
 

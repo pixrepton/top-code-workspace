@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -18,8 +19,15 @@ def generation_worktree_dest(execution_root: Path, repo: str, generation: int) -
 
 
 def task_branch_name(task_id: str, execution_id: str, repo: str, *, generation: int = 1) -> str:
-    short = execution_id.split("_")[-1][:8]
-    raw = f"task/{task_id}/{repo}/g{generation}/{short}"
+    short = execution_id.split("_")[-1][:6]
+    # Keep every execution branch as a single ref leaf below ``task/``.
+    # A legacy/user branch such as ``task/<task-id>`` is a file in the loose
+    # refs store, so attempting to create ``task/<task-id>/<repo>/...`` fails
+    # with a file-versus-directory collision.
+    task_slug = _BRANCH_SAFE.sub("-", task_id.replace("/", "-")).strip("-") or "task"
+    identity = f"{task_id}\0{repo}\0{generation}\0{execution_id}".encode("utf-8")
+    digest = hashlib.sha256(identity).hexdigest()[:10]
+    raw = f"task/{task_slug[:16]}-{digest}-g{generation}-{short}"
     cleaned = _BRANCH_SAFE.sub("-", raw).strip("-")
     return cleaned[:200]
 
@@ -39,7 +47,10 @@ def add_repo_worktree(
     exists = run(["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"], canonical, check=False)
     if exists.returncode == 0:
         raise TaskError(f"task branch already exists in canonical repo: {branch}")
-    run(["git", "worktree", "add", "-b", branch, str(dest), base_sha], canonical)
+    run(
+        ["git", "-c", "core.longpaths=true", "worktree", "add", "-b", branch, str(dest), base_sha],
+        canonical,
+    )
     head = run(["git", "rev-parse", "--verify", "HEAD"], dest).stdout.strip()
     current_branch = run(["git", "branch", "--show-current"], dest).stdout.strip()
     return {

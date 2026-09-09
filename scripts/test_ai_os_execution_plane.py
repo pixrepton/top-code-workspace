@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -76,10 +77,37 @@ def init_repo(path: Path, name: str) -> None:
     git(path, "commit", "-m", f"init {name}")
 
 
+def test_task_branch_name_avoids_existing_task_id_ref_collision(tmp_path):
+    from ai_os_execution.worktree import task_branch_name
+
+    repo = tmp_path / "branch-ref-collision"
+    init_repo(repo, "branch-ref-collision")
+    git(repo, "branch", "task/f5-history")
+
+    branch = task_branch_name(
+        "f5-history",
+        "exec_20260908T174026Z_23d7e1",
+        "workspace",
+    )
+
+    assert branch.startswith("task/f5-history-")
+    assert branch.endswith("-g1-23d7e1")
+    assert len(branch) <= 48
+    assert branch.count("/") == 1
+    git(repo, "branch", branch)
+
+
 @pytest.fixture
 def plane_workspace(tmp_path):
     names = []
-    env = {"AI_OS_TASK_STATE_DIR": str(tmp_path / "state")}
+    state_dir = tmp_path / "state"
+    external_state_dir = False
+    if os.name == "nt" and len(str(state_dir)) > 120:
+        unique = hashlib.sha256(str(tmp_path).encode("utf-8")).hexdigest()[:8]
+        scratch = Path(os.environ.get("TOP_CODE_SESSION_SCRATCH", r"C:\top-code-session-scratch"))
+        state_dir = scratch / "ai-os-execution-tests" / unique
+        external_state_dir = True
+    env = {"AI_OS_TASK_STATE_DIR": str(state_dir)}
     try:
         yield names, env, tmp_path
     finally:
@@ -87,19 +115,23 @@ def plane_workspace(tmp_path):
             target = ROOT / name
             if target.exists():
                 remove_tree(target)
+        if external_state_dir and state_dir.exists():
+            remove_tree(state_dir)
 
 
 def add_named_repo(plane_workspace, label: str) -> tuple[str, Path]:
     names, env, tmp_path = plane_workspace
     source = tmp_path / f"src-{label}"
     init_repo(source, label)
-    name = f"tmp-exec-plane-{label}-{tmp_path.name}"
+    unique = hashlib.sha256(str(tmp_path).encode("utf-8")).hexdigest()[:8]
+    name = f"ep-{label[:12]}-{unique}"
     dest = ROOT / name
     if dest.exists():
         remove_tree(dest)
     git(ROOT, "clone", str(source), str(dest))
     git(dest, "config", "user.email", "test@example.invalid")
     git(dest, "config", "user.name", "Test User")
+    git(dest, "config", "core.autocrlf", "input")
     names.append(name)
     return name, dest
 
@@ -372,6 +404,8 @@ def test_g_final_head_gate_after_commit(plane_workspace):
         env=env,
     )
     run_cmd(["task-commit", "--task-id", "plane-unit", "--repo", repo_name, "--message", "final head"], env=env)
+    status = git(worktree, "status", "--porcelain=v1").stdout
+    assert not status, status
     checkpoint = json.loads((Path(env["AI_OS_TASK_STATE_DIR"]) / "tasks" / "active" / "plane-unit.json").read_text(encoding="utf-8"))
     gate_ids = [gate["gate_id"] for gate in checkpoint["gates"]]
     assert "dev-proof" in gate_ids
@@ -728,6 +762,9 @@ def test_n_hermetic_userprofile_differs_from_host(tmp_path, monkeypatch):
     assert env["USERPROFILE"] != str(host_home)
     assert env["USERPROFILE"] == hermetic["USERPROFILE"]
     assert env.get("PYTHONNOUSERSITE") == "1"
+    assert env["AI_OS_TASK_ID"] == "hermetic-userprofile"
+    gitconfig = Path(env["GIT_CONFIG_GLOBAL"])
+    assert "longpaths = true" in gitconfig.read_text(encoding="utf-8")
 
 
 def test_o_host_poison_tokens_absent_from_child_env(tmp_path, monkeypatch):
@@ -1736,5 +1773,3 @@ def test_ax_graph_stale_advisory_uses_worktree_sha(plane_workspace):
     heads = payload["current_heads"]
     status = next(iter(heads.values()))["graph_status"]
     assert status == "STALE_ADVISORY"
-
-
