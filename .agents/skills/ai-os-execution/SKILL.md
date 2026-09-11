@@ -47,14 +47,27 @@ RECOVERY: explicit `execution-takeover` (never from session-start).
 CLEANUP: `execution-destroy`.
 COLD START: `session-start` (projection only; does not takeover).
 
+## Workspace modes
+
+Default daily work is **DIRECT_CANONICAL**: `task-repo` is the desktop checkout
+`C:\Users\compg\Desktop\top-code workspace\<repo>`. Edit, test, and commit there.
+Session-scratch holds logs/proof, not a newer copy of the product.
+
+**ISOLATED_WORKTREE** is opt-in (or automatic for TEST/BENCHMARK/REPLAY/PROOF):
+benchmark, replay, high-risk experiment, parallel conflicting tasks, historical
+as-of, or explicit `--workspace-mode ISOLATED_WORKTREE`. Isolated
+`PASS + COMMIT_NOW` closeout **promotes** the worktree into the desktop checkout.
+Do not finish with accepted product code only in session-scratch.
+
 ## Hard rules
 
 - Mutating task without Execution Plane = FAIL CLOSED.
-- Do not edit the canonical shared checkout. Mutate `task-repo` / bundle worktree.
+- DIRECT_CANONICAL: mutate the desktop checkout named by `task-repo`. Do not redirect ordinary work into a hidden session-scratch worktree.
+- ISOLATED_WORKTREE: mutate that worktree, then promote on accepted closeout.
 - Proof-critical commands go through mediated `exec` / trusted `task-gate`.
 - Raw shell is OK for discovery. Raw pytest/build is not close proof.
 - TAINTED is not PASS. Receipts from a previous generation are invalid.
-- Image proof must come from the bundle worktree.
+- Image proof must come from the bundle checkout (`task-repo`).
 - Legacy (`--legacy`) only where the task-engine allows SMALL + DOCS/STATIC/READ_ONLY_LOCAL.
 - Transcripts and old plans are HISTORICAL_CONTEXT, never CURRENT_INSTRUCTION.
 

@@ -159,9 +159,12 @@ def validate_bundle(bundle: dict[str, Any]) -> None:
     sanitize_execution_id(str(bundle["execution_id"]))
     if bundle.get("status") not in LIFECYCLE_STATES:
         raise TaskError(f"invalid execution status: {bundle.get('status')}")
-    mode = str(bundle.get("execution_mode") or "TEST")
+    mode = str(bundle.get("execution_mode") or "MUTATE")
     if mode not in EXECUTION_MODES:
         raise TaskError(f"invalid execution_mode: {mode}")
+    workspace_mode = str(bundle.get("workspace_mode") or "").strip()
+    if workspace_mode and workspace_mode not in {"DIRECT_CANONICAL", "ISOLATED_WORKTREE"}:
+        raise TaskError(f"invalid workspace_mode: {workspace_mode}")
     repos = bundle.get("repos")
     if not isinstance(repos, dict) or not repos:
         raise TaskError("execution bundle requires repos")

@@ -41,6 +41,10 @@ python scripts/ai_os_task.py task-close --validate-only
 
 `session-start` refreshes generated `CAMPAIGN_STATE` / `TASK_ENTRY` and prints the inject. It does not takeover.
 
+Default `start --execution-mode MUTATE` is **DIRECT_CANONICAL** (desktop checkout).
+`--execution-mode TEST` (and BENCHMARK/REPLAY/PROOF) still isolate a worktree.
+Isolated accepted closeout promotes into the desktop tree.
+
 Legacy `task-start --legacy` is SMALL docs/static/read-only compatibility only. See `knowledge/system-atlas/tooling/EXECUTION_PLANE_V1.md`.
 
 All agent write tasks use the same engine. Older checkpoint-only example (compatibility appendix):

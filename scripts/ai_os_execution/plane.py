@@ -60,6 +60,12 @@ from ai_os_execution.runtime_profile import (
     uses_container,
 )
 from ai_os_execution.public_bundle import public_bundle as serialize_public_bundle
+from ai_os_execution.promote import promote_isolated_to_canonical
+from ai_os_execution.workspace_mode import (
+    checkout_is_canonical,
+    resolve_workspace_mode,
+    stop_conditions_for,
+)
 from ai_os_execution.worktree import (
     add_repo_worktree,
     generation_worktree_dest,
@@ -67,10 +73,26 @@ from ai_os_execution.worktree import (
     task_branch_name,
     worktree_head,
 )
+from ai_os_task_constants import PROTECTED_BRANCH_NAMES
 from ai_os_task_errors import TaskError
 from ai_os_task_git import canonical_repo_path, run
 from ai_os_task_paths import utc_now
 from ai_os_task_scope import scopes_for_repo
+
+
+def _direct_branch_is_protected(canonical: Path, branch: str) -> bool:
+    if not branch or branch in PROTECTED_BRANCH_NAMES:
+        return True
+    remote = run(
+        ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+        canonical,
+        check=False,
+    )
+    if remote.returncode == 0 and remote.stdout.strip():
+        default = remote.stdout.strip().split("/", 1)[-1]
+        if default and branch == default:
+            return True
+    return False
 
 
 def _source_tree_hash(worktree: Path) -> str:
@@ -101,7 +123,10 @@ def _write_env_layers(root: Path, host_env: dict[str, str], container_env: dict[
 
 
 def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
-    execution_mode = str(getattr(args, "execution_mode", None) or "TEST")
+    execution_mode = str(getattr(args, "execution_mode", None) or "MUTATE")
+    workspace_mode = resolve_workspace_mode(
+        execution_mode, getattr(args, "workspace_mode", None)
+    )
     seed_origin = str(getattr(args, "seed_origin", None) or "EMPTY")
     mutation_mode = "READ_ONLY" if execution_mode == "LIVE_READ_ONLY" else "MUTATE"
     raw_db = getattr(args, "db_isolation", None)
@@ -123,30 +148,58 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         task_principal="",
         target_repositories=[],
     )
-    fail_closed_if_canonical_writable(host_store_rows, execution_mode=execution_mode)
+    fail_closed_if_canonical_writable(
+        host_store_rows, execution_mode=execution_mode, workspace_mode=workspace_mode
+    )
     assert_scope_leases_free(data["declared_write_scope"])
 
     repos: dict[str, dict[str, Any]] = {}
     graph: dict[str, Any] = {}
     created_worktrees: list[tuple[str, Path]] = []
+    switched_direct: list[tuple[Path, str]] = []
     try:
         for repo in data["target_repositories"]:
             canonical = canonical_repo_path(repo)
             base_sha = run(["git", "rev-parse", "--verify", "HEAD"], canonical).stdout.strip()
-            branch = task_branch_name(data["task_id"], execution_id, repo, generation=1)
-            dest = generation_worktree_dest(root, repo, 1)
-            created = add_repo_worktree(repo=repo, dest=dest, branch=branch, base_sha=base_sha)
-            created_worktrees.append((repo, dest))
-            repos[repo] = empty_repo_entry(
-                canonical_repo=str(canonical),
-                worktree_path=created["worktree_path"],
-                base_sha=base_sha,
-                current_sha=created["current_sha"],
-                branch=created["branch"],
-                mutation_mode=mutation_mode,
-            )
+            current_branch = run(["git", "branch", "--show-current"], canonical).stdout.strip()
+            if workspace_mode == "DIRECT_CANONICAL":
+                branch = current_branch
+                if _direct_branch_is_protected(canonical, current_branch):
+                    branch = task_branch_name(data["task_id"], execution_id, repo, generation=1)
+                    exists = run(
+                        ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
+                        canonical,
+                        check=False,
+                    )
+                    if exists.returncode == 0:
+                        raise TaskError(f"task branch already exists in canonical repo: {branch}")
+                    run(["git", "checkout", "-b", branch], canonical)
+                    switched_direct.append((canonical, current_branch))
+                repos[repo] = empty_repo_entry(
+                    canonical_repo=str(canonical),
+                    worktree_path=str(canonical),
+                    base_sha=base_sha,
+                    current_sha=base_sha,
+                    branch=branch,
+                    mutation_mode=mutation_mode,
+                )
+            else:
+                branch = task_branch_name(data["task_id"], execution_id, repo, generation=1)
+                dest = generation_worktree_dest(root, repo, 1)
+                created = add_repo_worktree(repo=repo, dest=dest, branch=branch, base_sha=base_sha)
+                created_worktrees.append((repo, dest))
+                repos[repo] = empty_repo_entry(
+                    canonical_repo=str(canonical),
+                    worktree_path=created["worktree_path"],
+                    base_sha=base_sha,
+                    current_sha=created["current_sha"],
+                    branch=created["branch"],
+                    mutation_mode=mutation_mode,
+                )
             graph[repo] = graph_freshness_for_repo(canonical, base_sha)
     except Exception:
+        for canonical, previous in switched_direct:
+            run(["git", "checkout", previous], canonical, check=False)
         for repo, dest in created_worktrees:
             try:
                 remove_repo_worktree(repo, dest, force=True)
@@ -162,6 +215,7 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         execution_mode=execution_mode,
         now=now,
     )
+    bundle["workspace_mode"] = workspace_mode
     capability_profile = str(getattr(args, "capability_profile", None) or "NO_EXTERNAL")
     bundle["seed_origin"] = seed_origin
     bundle["capability_profile"] = capability_profile
@@ -239,7 +293,9 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         task_principal=str(db_info.get("principal") or ""),
         target_repositories=target_repos,
     )
-    fail_closed_if_canonical_writable(store_rows, execution_mode=execution_mode)
+    fail_closed_if_canonical_writable(
+        store_rows, execution_mode=execution_mode, workspace_mode=workspace_mode
+    )
 
     effective_caps = compile_effective_capabilities(
         execution_mode=execution_mode,
@@ -347,12 +403,7 @@ def provision_execution(data: dict[str, Any], args: Any) -> dict[str, Any]:
         bundle,
         goal=str(data.get("task_title") or ""),
         owned_paths=owned_paths,
-        stop_conditions=[
-            "Do not mutate product behavior outside owned paths.",
-            "Do not use canonical writable DB credentials.",
-            "Do not treat historical plans/transcripts as active instructions.",
-            "FINAL_HEAD_GATE is required after the last commit before task-close.",
-        ],
+        stop_conditions=stop_conditions_for(workspace_mode),
         references=[
             "HISTORICAL_CONTEXT: older Cursor/Codex plans and transcripts",
             "knowledge/system-atlas/tooling/EXECUTION_PLANE_V1.md",
@@ -413,6 +464,7 @@ def takeover_execution(task_id: str) -> dict[str, Any]:
     root = execution_dir(execution_id)
     generation = bump_lease_generation(bundle)
     mutation_mode = "READ_ONLY" if bundle.get("execution_mode") == "LIVE_READ_ONLY" else "MUTATE"
+    workspace_mode = str(bundle.get("workspace_mode") or "ISOLATED_WORKTREE")
     owned_paths = list((bundle.get("ownership") or {}).get("owned_paths") or [])
     first_repo = next(iter((bundle.get("repos") or {}).keys()), "")
     created: list[tuple[str, Path]] = []
@@ -428,6 +480,19 @@ def takeover_execution(task_id: str) -> dict[str, Any]:
 
             canonical = canonical_repo_path(repo)
             base_sha = run(["git", "rev-parse", "--verify", "HEAD"], canonical).stdout.strip()
+            current_branch = run(["git", "branch", "--show-current"], canonical).stdout.strip()
+            if workspace_mode == "DIRECT_CANONICAL":
+                bundle["repos"][repo] = empty_repo_entry(
+                    canonical_repo=str(canonical),
+                    worktree_path=str(canonical),
+                    base_sha=base_sha,
+                    current_sha=base_sha,
+                    branch=current_branch,
+                    mutation_mode=mutation_mode,
+                    lease_generation=generation,
+                    worktree_status="ACTIVE",
+                )
+                continue
             branch = task_branch_name(task_id, execution_id, repo, generation=generation)
             dest = generation_worktree_dest(root, repo, generation)
             added = add_repo_worktree(repo=repo, dest=dest, branch=branch, base_sha=base_sha)
@@ -490,10 +555,11 @@ def takeover_execution(task_id: str) -> dict[str, Any]:
 
 
 def close_execution(task_id: str) -> dict[str, Any]:
-    """Retain evidence; revoke workload secrets and release leases."""
+    """Promote isolated accepted work, then retain evidence and release leases."""
     bundle = load_bundle_for_task(task_id)
     if not bundle:
         raise TaskError(f"no execution bundle for task {task_id}")
+    promotion = promote_isolated_to_canonical(bundle)
     removed = revoke_workload_secrets(bundle["execution_id"])
     release_leases(bundle["execution_id"])
     bundle["status"] = "CLOSED_RETAINED"
@@ -503,6 +569,7 @@ def close_execution(task_id: str) -> dict[str, Any]:
         "execution_id": bundle["execution_id"],
         "status": bundle["status"],
         "secrets_removed": removed,
+        "promotion": promotion,
     }
 
 
@@ -515,11 +582,11 @@ def destroy_execution(task_id: str, *, retain_evidence: bool = True) -> dict[str
     for name, entry in (bundle.get("repos") or {}).items():
         if str(entry.get("worktree_status") or "ACTIVE") == "ACTIVE":
             dest = Path(entry.get("worktree_path") or "")
-            if dest.exists():
+            if dest.exists() and not checkout_is_canonical(name, dest):
                 remove_repo_worktree(name, dest, force=True)
     for name, entry in (bundle.get("revoked_worktrees") or {}).items():
         dest = Path(entry.get("worktree_path") or "")
-        if dest.exists():
+        if dest.exists() and not checkout_is_canonical(name, dest):
             try:
                 remove_repo_worktree(name, dest, force=True)
             except TaskError:
@@ -538,10 +605,12 @@ def print_task_ready(bundle: dict[str, Any]) -> None:
     print(f"task_id: {bundle['task_id']}")
     print(f"execution_id: {bundle['execution_id']}")
     print(f"mode: {bundle.get('execution_mode')}")
+    print(f"workspace_mode: {bundle.get('workspace_mode')}")
     print(f"scratch: {bundle.get('scratch_path')}")
     print(f"runtime_namespace: {(bundle.get('runtime') or {}).get('namespace')}")
     db = bundle.get("database") or {}
     print(f"db: {db.get('isolation_mode')} {db.get('database_name')} principal={db.get('principal')}")
     for name, entry in (bundle.get("repos") or {}).items():
-        print(f"worktree[{name}]: {entry.get('worktree_path')} {entry.get('current_sha')}")
+        label = "working_dir" if bundle.get("workspace_mode") == "DIRECT_CANONICAL" else "worktree"
+        print(f"{label}[{name}]: {entry.get('worktree_path')} {entry.get('current_sha')}")
     print(f"entry: {execution_dir(bundle['execution_id']) / 'TASK_ENTRY.md'}")

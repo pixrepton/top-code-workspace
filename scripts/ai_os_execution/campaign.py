@@ -32,7 +32,8 @@ AUTHORITY_ORDER = [
 _SECRET_URL_RE = re.compile(r"(?i)(?:postgres(?:ql)?|mysql|mongodb|redis)://[^\s\"']+")
 _CRED_URL_RE = re.compile(r"(?i)https?://[^/\s:]+:[^@/\s]+@")
 _DEFAULT_STOP = [
-    "Do not mutate the canonical shared checkout.",
+    "Mutate the checkout named by workspace_mode (canonical desktop or isolated worktree).",
+    "Isolated PASS + COMMIT_NOW must promote into the canonical desktop checkout before close.",
     "Stateful proof commands go through mediated exec / trusted gate.",
     "TAINTED is not PASS; old-generation receipts are not valid.",
     "FINAL_HEAD_GATE is required after the last commit before task-close.",
@@ -230,6 +231,7 @@ def generate_campaign_state(*, current_task_id: str = "", current_program: str =
         "taint_status": taint_status,
         "taint_reasons": taint_reasons,
         "execution_mode": (bundle or {}).get("execution_mode") or checkpoint.get("execution_mode") or "",
+        "workspace_mode": (bundle or {}).get("workspace_mode") or checkpoint.get("workspace_mode") or "",
         "seed_origin": ((bundle or {}).get("database") or {}).get("seed_origin") or "",
         "current_heads": heads,
         "worktrees": {name: item.get("worktree") for name, item in heads.items()},
@@ -391,6 +393,7 @@ def format_session_inject(state: dict[str, Any]) -> str:
         f"GENERATION: {state.get('execution_generation')}",
         f"STATUS: {state.get('execution_status')}",
         f"MODE: {state.get('execution_mode')}",
+        f"WORKSPACE_MODE: {state.get('workspace_mode') or '(none)'}",
         taint_line,
         "REPOS:",
         *repo_lines,
@@ -399,7 +402,13 @@ def format_session_inject(state: dict[str, Any]) -> str:
         f"LATEST TRUSTED PROOF: {proof.get('verdict') or '(none)'} receipt={proof.get('command_receipt_id') or '-'}",
         f"FINAL_HEAD: {state.get('final_head_status')}",
         f"NEXT: {next_line}",
-        "RULE: Use Execution Plane. Stateful commands via mediated exec. Raw pytest/build is not close proof.",
+        (
+            "RULE: DIRECT_CANONICAL — mutate the desktop checkout. Do not hide product code in session-scratch."
+            if str(state.get("workspace_mode") or "") == "DIRECT_CANONICAL"
+            else "RULE: ISOLATED_WORKTREE — mutate task-repo. Promote to canonical desktop on PASS + COMMIT_NOW closeout."
+            if str(state.get("workspace_mode") or "") == "ISOLATED_WORKTREE"
+            else "RULE: Use Execution Plane. Stateful commands via mediated exec. Raw pytest/build is not close proof."
+        ),
     ]
     if lease == "STALE_LEASE":
         lines.insert(-1, "STALE_LEASE recommended action: explicit recovery/takeover (do not auto-takeover)")

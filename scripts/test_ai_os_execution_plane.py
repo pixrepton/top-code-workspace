@@ -1116,7 +1116,7 @@ def test_z_historical_replay_without_pins_blocked(plane_workspace):
 def test_aa_takeover_generation_allocates_new_worktree(plane_workspace):
     names, env, _ = plane_workspace
     repo_name, _ = add_named_repo(plane_workspace, "f3-takeover")
-    start_plane(env, repo_name, task_id="f3-takeover", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f3-takeover", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     bundle, _ = bundle_for(env, "f3-takeover")
     old_path = Path(bundle["repos"][repo_name]["worktree_path"])
     (old_path / "tracked.txt").write_text("generation-one\n", encoding="utf-8")
@@ -1327,7 +1327,7 @@ def test_ag_takeover_invalidates_prior_receipt(plane_workspace):
     names, env, _ = plane_workspace
     os.environ["AI_OS_TASK_STATE_DIR"] = env["AI_OS_TASK_STATE_DIR"]
     repo_name, _ = add_named_repo(plane_workspace, "f35-takeover")
-    start_plane(env, repo_name, task_id="f35-takeover", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f35-takeover", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     run_cmd(
         [
             "exec",
@@ -1366,7 +1366,7 @@ def test_ag_takeover_invalidates_prior_receipt(plane_workspace):
 def test_ah_final_head_without_trusted_receipt_blocks_close(plane_workspace):
     names, env, _ = plane_workspace
     repo_name, _ = add_named_repo(plane_workspace, "f35-close")
-    start_plane(env, repo_name, task_id="f35-close", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f35-close", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     bundle, _ = bundle_for(env, "f35-close")
     worktree = Path(bundle["repos"][repo_name]["worktree_path"])
     (worktree / "tracked.txt").write_text("close-test\n", encoding="utf-8")
@@ -1405,7 +1405,7 @@ def test_ah_final_head_without_trusted_receipt_blocks_close(plane_workspace):
 def test_ai_raw_unwrapped_execution_not_close_proof(plane_workspace):
     names, env, tmp_path = plane_workspace
     repo_name, canonical = add_named_repo(plane_workspace, "f35-raw")
-    start_plane(env, repo_name, task_id="f35-raw", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f35-raw", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     bundle, _ = bundle_for(env, "f35-raw")
     worktree = Path(bundle["repos"][repo_name]["worktree_path"])
     (worktree / "tracked.txt").write_text("raw-test\n", encoding="utf-8")
@@ -1449,7 +1449,7 @@ def test_aj_stale_fencing_token_fails_mediated_exec(plane_workspace):
 def test_ak_proof_bundle_references_receipt(plane_workspace):
     names, env, _ = plane_workspace
     repo_name, _ = add_named_repo(plane_workspace, "f35-proof")
-    start_plane(env, repo_name, task_id="f35-proof", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f35-proof", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     bundle, _ = bundle_for(env, "f35-proof")
     worktree = Path(bundle["repos"][repo_name]["worktree_path"])
     (worktree / "tracked.txt").write_text("proof\n", encoding="utf-8")
@@ -1558,7 +1558,7 @@ def test_am_session_start_active_execution(plane_workspace):
 def test_an_session_start_generation_two_worktree(plane_workspace):
     names, env, _ = plane_workspace
     repo_name, _ = add_named_repo(plane_workspace, "f4-b")
-    start_plane(env, repo_name, task_id="f4-b", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f4-b", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     bundle, _ = bundle_for(env, "f4-b")
     g1 = Path(bundle["repos"][repo_name]["worktree_path"])
     run_cmd(["execution-takeover", "--task-id", "f4-b"], env=env)
@@ -1686,7 +1686,7 @@ def test_at_session_inject_has_no_secrets(plane_workspace):
 def test_au_latest_receipt_from_current_generation(plane_workspace):
     names, env, _ = plane_workspace
     repo_name, _ = add_named_repo(plane_workspace, "f4-i")
-    start_plane(env, repo_name, task_id="f4-i", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f4-i", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     run_cmd(
         ["exec", "--task-id", "f4-i", "--repo", repo_name, "--", sys.executable, "-c", "print('g1')"],
         env=env,
@@ -1705,7 +1705,7 @@ def test_au_latest_receipt_from_current_generation(plane_workspace):
 def test_av_final_head_valid_invalid_stale(plane_workspace):
     names, env, _ = plane_workspace
     repo_name, _ = add_named_repo(plane_workspace, "f4-j")
-    start_plane(env, repo_name, task_id="f4-j", extra=["--execution-mode", "MUTATE"])
+    start_plane(env, repo_name, task_id="f4-j", extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"])
     payload, _ = session_start_json(env, "f4-j")
     assert payload["final_head_status"] in {"INVALID", "STALE"}
     bundle, _ = bundle_for(env, "f4-j")
@@ -1773,3 +1773,148 @@ def test_ax_graph_stale_advisory_uses_worktree_sha(plane_workspace):
     heads = payload["current_heads"]
     status = next(iter(heads.values()))["graph_status"]
     assert status == "STALE_ADVISORY"
+
+
+def start_direct(env, repo_name, task_id="plane-direct"):
+    return run_cmd(
+        [
+            "start",
+            "--task-id",
+            task_id,
+            "--title",
+            "Direct canonical unit",
+            "--class",
+            "SMALL",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+            "--execution-mode",
+            "MUTATE",
+            "--workspace-mode",
+            "DIRECT_CANONICAL",
+        ],
+        env=env,
+    )
+
+
+def test_direct_canonical_uses_desktop_checkout_no_hidden_worktree(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, canonical = add_named_repo(plane_workspace, "direct-a")
+    proc = start_direct(env, repo_name, task_id="direct-a")
+    assert proc.returncode == 0
+    assert "workspace_mode: DIRECT_CANONICAL" in proc.stdout
+    bundle, _ = bundle_for(env, "direct-a")
+    working = Path(bundle["repos"][repo_name]["worktree_path"]).resolve()
+    assert bundle.get("workspace_mode") == "DIRECT_CANONICAL"
+    assert working == canonical.resolve()
+    exec_root = Path(env["AI_OS_TASK_STATE_DIR"]) / "executions" / bundle["execution_id"]
+    hidden = exec_root / "worktrees" / repo_name
+    assert not hidden.exists()
+    repo_out = run_cmd(["task-repo", "--task-id", "direct-a", "--repo", repo_name], env=env)
+    repo_payload = json.loads(repo_out.stdout)
+    assert Path(repo_payload["path"]).resolve() == canonical.resolve()
+    assert Path(repo_payload.get("canonical") or repo_payload["path"]).resolve() == canonical.resolve()
+    assert git(canonical, "branch", "--show-current").stdout.strip() not in {"master", "main", "trunk"}
+    (canonical / "tracked.txt").write_text("direct canonical change\n", encoding="utf-8")
+    git(canonical, "add", "--", "tracked.txt")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "direct-a",
+            "--gate-id",
+            "direct-dev",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        env=env,
+    )
+    run_cmd(
+        ["task-commit", "--task-id", "direct-a", "--repo", repo_name, "--message", "direct canonical proof"],
+        env=env,
+    )
+    assert "direct canonical change" in (canonical / "tracked.txt").read_text(encoding="utf-8")
+    assert git(canonical, "log", "-1", "--pretty=%s").stdout.strip() == "direct canonical proof"
+
+
+def test_isolated_worktree_protects_canonical_and_promotes_on_close(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, canonical = add_named_repo(plane_workspace, "iso-promote")
+    start_plane(
+        env,
+        repo_name,
+        task_id="iso-promote",
+        extra=["--execution-mode", "MUTATE", "--workspace-mode", "ISOLATED_WORKTREE"],
+    )
+    bundle, _ = bundle_for(env, "iso-promote")
+    worktree = Path(bundle["repos"][repo_name]["worktree_path"])
+    assert bundle.get("workspace_mode") == "ISOLATED_WORKTREE"
+    assert worktree.resolve() != canonical.resolve()
+    (worktree / "tracked.txt").write_text("isolated accepted\n", encoding="utf-8")
+    git(worktree, "add", "--", "tracked.txt")
+    run_cmd(
+        [
+            "task-gate",
+            "--task-id",
+            "iso-promote",
+            "--gate-id",
+            "iso-dev",
+            "--repo",
+            repo_name,
+            "--",
+            sys.executable,
+            "-c",
+            "print('iso')",
+        ],
+        env=env,
+    )
+    run_cmd(
+        ["task-commit", "--task-id", "iso-promote", "--repo", repo_name, "--message", "isolated accepted"],
+        env=env,
+    )
+    before = git(canonical, "rev-parse", "HEAD").stdout.strip()
+    isolated_head = git(worktree, "rev-parse", "HEAD").stdout.strip()
+    assert before != isolated_head
+    run_cmd(
+        ["task-checkpoint", "--task-id", "iso-promote", "--status", "READY_TO_CLOSE", "--next", ""],
+        env=env,
+    )
+    close = run_cmd(["task-close", "--task-id", "iso-promote"], env=env)
+    assert close.returncode == 0
+    after = git(canonical, "rev-parse", "HEAD").stdout.strip()
+    assert after == isolated_head
+    assert "isolated accepted" in (canonical / "tracked.txt").read_text(encoding="utf-8")
+    assert worktree.exists()
+
+
+def test_mutate_default_is_direct_canonical(plane_workspace):
+    names, env, _ = plane_workspace
+    repo_name, canonical = add_named_repo(plane_workspace, "mutate-default")
+    run_cmd(
+        [
+            "start",
+            "--task-id",
+            "mutate-default",
+            "--title",
+            "default mutate",
+            "--class",
+            "SMALL",
+            "--repo",
+            repo_name,
+            "--scope",
+            f"{repo_name}:.",
+            "--no-db-isolation",
+            "--execution-mode",
+            "MUTATE",
+        ],
+        env=env,
+    )
+    bundle, _ = bundle_for(env, "mutate-default")
+    assert bundle.get("workspace_mode") == "DIRECT_CANONICAL"
+    assert Path(bundle["repos"][repo_name]["worktree_path"]).resolve() == canonical.resolve()

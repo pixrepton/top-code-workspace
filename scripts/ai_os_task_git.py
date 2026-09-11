@@ -26,7 +26,7 @@ def run(args: list[str], cwd: Path, check: bool = True, text: bool = True) -> su
     return proc
 
 def canonical_repo_path(repo: str) -> Path:
-    """Shared checkout. Execution Bundle worktrees are never this path."""
+    """Desktop operator checkout under the workspace root."""
     if repo in {".", "root", "workspace"}:
         path = WORKSPACE
     else:
@@ -39,7 +39,7 @@ def canonical_repo_path(repo: str) -> Path:
 
 
 def repo_path(repo: str) -> Path:
-    """Task runtime path: Execution Bundle worktree when present, else canonical checkout."""
+    """Task runtime path: bundle checkout (canonical or isolated worktree)."""
     from ai_os_execution.bundle import configured_worktree_path
 
     configured = configured_worktree_path(repo)

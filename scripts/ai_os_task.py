@@ -96,7 +96,14 @@ def add_start_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=argparse.SUPPRESS,
     )
-    parser.add_argument("--execution-mode", default="TEST", choices=START_EXECUTION_MODES)
+    parser.add_argument("--execution-mode", default="MUTATE", choices=START_EXECUTION_MODES)
+    parser.add_argument(
+        "--workspace-mode",
+        default=None,
+        choices=["DIRECT_CANONICAL", "ISOLATED_WORKTREE"],
+        help="DIRECT_CANONICAL (default for MUTATE) edits the desktop checkout. "
+        "ISOLATED_WORKTREE is the default for TEST/BENCHMARK/REPLAY/PROOF.",
+    )
     parser.add_argument("--campaign-id", default="")
     parser.add_argument("--seed-origin", default="EMPTY", choices=sorted(SEED_ORIGINS))
     parser.add_argument("--capability-profile", default="NO_EXTERNAL", choices=sorted(CAPABILITY_PROFILES))
@@ -254,7 +261,10 @@ def build_parser() -> argparse.ArgumentParser:
     repo_cmd.add_argument("--repo", required=True)
     repo_cmd.set_defaults(func=task_repo_cmd)
 
-    takeover = sub.add_parser("execution-takeover", help="Bump lease generation and allocate new worktrees")
+    takeover = sub.add_parser(
+        "execution-takeover",
+        help="Bump lease generation; isolated tasks get a fresh worktree, DIRECT_CANONICAL stays on desktop",
+    )
     add_task_id_arg(takeover)
     takeover.set_defaults(func=takeover_cmd)
 

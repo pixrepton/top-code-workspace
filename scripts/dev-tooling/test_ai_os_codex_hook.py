@@ -330,7 +330,7 @@ def test_session_start_points_at_bundle_worktree_not_canonical(hook_repo):
     summary = data["hookSpecificOutput"]["additionalContext"]
     assert str(worktree) in summary
     assert "REPOS:" in summary
-    # Canonical shared checkout must not be advertised as the task worktree.
+    # Isolated TEST tasks must advertise the bundle worktree, not the fixture clone path as a fake alias.
     assert f"{name} -> {repo} @" not in summary.replace("\\", "/")
 
 

@@ -136,7 +136,7 @@ def require_plane_bundle(data: dict[str, Any]) -> None:
 def _resolve_start_mode(args: argparse.Namespace) -> bool:
     """Return True when Execution Plane provisioning is required."""
     legacy = bool(getattr(args, "legacy", False))
-    execution_mode = str(getattr(args, "execution_mode", "TEST") or "TEST")
+    execution_mode = str(getattr(args, "execution_mode", "MUTATE") or "MUTATE")
     cmd = str(getattr(args, "cmd", "") or "")
 
     if cmd == "start" and legacy:
@@ -252,6 +252,7 @@ def new_checkpoint(args: argparse.Namespace) -> int:
             data["execution_id"] = bundle["execution_id"]
             data["execution_bundle_version"] = 1
             data["execution_mode"] = bundle.get("execution_mode")
+            data["workspace_mode"] = bundle.get("workspace_mode")
             refresh_git_fields(data)
             atomic_write(data, active_path)
             print_summary(data, "INITIALIZED")

@@ -1,8 +1,10 @@
 """Shared Execution Plane start helpers for harness tests.
 
-Mutating tests must provision a plane (`start --no-db-isolation`) and operate
-on the bundle worktree. `--legacy` is only for explicit SMALL + DOCS/STATIC
-compatibility coverage — never as a workaround for plane DB isolation.
+Mutating isolation tests must provision a plane (`start --no-db-isolation`)
+and pass `--execution-mode TEST` (or `--workspace-mode ISOLATED_WORKTREE`).
+Ordinary MUTATE starts bind to the canonical checkout. `--legacy` is only for
+explicit SMALL + DOCS/STATIC compatibility coverage — never as a workaround
+for plane DB isolation.
 """
 
 from __future__ import annotations

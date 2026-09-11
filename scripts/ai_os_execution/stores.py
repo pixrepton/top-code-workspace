@@ -125,7 +125,10 @@ def fail_closed_if_canonical_writable(
     rows: list[dict[str, Any]],
     *,
     execution_mode: str,
+    workspace_mode: str = "",
 ) -> None:
+    if workspace_mode == "DIRECT_CANONICAL":
+        return
     if execution_mode not in FAIL_CLOSED_WRITE_MODES:
         return
     leaks = [row for row in rows if row.get("role") == "canonical_writable"]

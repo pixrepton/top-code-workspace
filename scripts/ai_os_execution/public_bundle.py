@@ -44,6 +44,7 @@ def public_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "created_at": bundle.get("created_at"),
         "status": bundle.get("status"),
         "execution_mode": bundle.get("execution_mode"),
+        "workspace_mode": bundle.get("workspace_mode"),
         "seed_origin": bundle.get("seed_origin"),
         "capability_profile": bundle.get("capability_profile"),
         "scratch_path": bundle.get("scratch_path"),

@@ -146,6 +146,13 @@ Canonical mutating workflow (Execution Plane V1.1):
 start → repo → exec → gate → commit → FINAL_HEAD → close
 ```
 
+Default workspace mode is **DIRECT_CANONICAL**: mutate
+`C:\Users\compg\Desktop\top-code workspace\<repo>` (what Cursor/Codex/Claude
+open). Session-scratch is for logs, proof artifacts, and explicit isolation —
+not a hidden newer product tree. Use `--workspace-mode ISOLATED_WORKTREE` (or
+TEST/BENCHMARK/REPLAY/PROOF) only when isolation is required; accepted isolated
+closeout must promote into the desktop checkout.
+
 Resume: `resume → repo → exec → …`. Stateful proof commands go through mediated `exec` / trusted `task-gate`. Raw pytest/build is not close proof. Session-start is a projection (`session-start`); it does not takeover.
 
 Local commit authorization does not authorize push, PR creation, merge, deployment, VPS work or any live mutation.
