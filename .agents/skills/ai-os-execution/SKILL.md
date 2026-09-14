@@ -70,6 +70,8 @@ Do not finish with accepted product code only in session-scratch.
 - Image proof must come from the bundle checkout (`task-repo`).
 - Legacy (`--legacy`) only where the task-engine allows SMALL + DOCS/STATIC/READ_ONLY_LOCAL.
 - Transcripts and old plans are HISTORICAL_CONTEXT, never CURRENT_INSTRUCTION.
+- Coding reports start with `## Zmienione pliki` (desktop paths only); commit SHA is secondary; GitHub only on PUBLISH/SHIP.
+- `kontynuuj` binds to the open user goal in the current thread — not archived task IDs / MEMORY NEXT.
 
 ## Current state
 

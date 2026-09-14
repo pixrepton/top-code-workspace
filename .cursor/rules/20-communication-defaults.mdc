@@ -9,4 +9,5 @@ alwaysApply: true
 - Oddzielaj fakty od wnioskow, ryzyk i rekomendacji.
 - Jesli kierunek jest technicznie bledny albo sprzeczny z ustaleniami workspace, powiedz to wprost i oznacz ryzyko.
 - Zachowuj doslowne komendy, sciezki, logi, ID i proof wording.
-- Gdy masz shell i runtime jest w zakresie zadania, raportuj wynik, nie deleguj standardowej weryfikacji operatorowi.
+- Gdy masz shell i runtime jest w zakresie pytania, raportuj wynik, nie deleguj standardowej weryfikacji operatorowi.
+- Przy zadaniach kodujacych zaczynaj od listy faktycznie zmienionych plikow na desktop checkout (`## Zmienione pliki`); commit i GitHub sa wtorne (patrz `96-local-first-coding-report.mdc`).

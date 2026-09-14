@@ -1,0 +1,39 @@
+---
+description: Local-first coding report contract — desktop SoT, changed-files-first, commit secondary, GitHub optional
+alwaysApply: true
+---
+
+# Local-first coding report
+
+## Desktop SoT
+
+Ordinary MUTATE work binds to **DIRECT_CANONICAL**:
+`C:\Users\compg\Desktop\top-code workspace\<repo>`.
+
+Session-scratch is evidence / logs / optional isolation only.
+Do not treat a scratch worktree as the product tree unless the task
+explicitly used `--workspace-mode ISOLATED_WORKTREE` (then promote on accept).
+
+## Report order (mandatory for coding tasks)
+
+Start every substantial coding reply with:
+
+```markdown
+## Zmienione pliki
+- <repo-relative path> — <1-line why>
+```
+
+Only list files actually written or deleted on the desktop checkout in this turn/task.
+Then: root cause / what changed / proof / status.
+Commit SHA and GitHub are secondary — after the file list and proof.
+
+## Commit vs publication
+
+- Local scoped commit = secondary history of finished owned work (via `task-commit-plan` → act on `decision`).
+- GitHub push/PR only on explicit `PUBLISH` / `SHIP`.
+- Do not ask "czy commit?" when `decision` is `COMMIT_NOW`.
+
+## Continue / resume hygiene
+
+On `kontynuuj` / `dokończ`: restate the **current user goal in this thread** in one line before acting.
+Do **not** silently resume archived task IDs, `MEMORY.md` NEXT, or unrelated P4/P5 proof threads.

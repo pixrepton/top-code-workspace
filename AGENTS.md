@@ -153,6 +153,22 @@ not a hidden newer product tree. Use `--workspace-mode ISOLATED_WORKTREE` (or
 TEST/BENCHMARK/REPLAY/PROOF) only when isolation is required; accepted isolated
 closeout must promote into the desktop checkout.
 
+### Local-first coding report contract
+
+For ordinary coding / MUTATE work:
+
+1. Bind edits to the desktop checkout named by `task-repo` (DIRECT_CANONICAL).
+2. Start substantial replies with `## Zmienione pliki` — only paths actually
+   written or deleted on that checkout — before narrative, commit SHA, or GitHub.
+3. Treat local scoped commit as secondary history of finished owned work
+   (`task-commit-plan` → act on `decision`); do not ask "czy commit?" when
+   `COMMIT_NOW`.
+4. GitHub push/PR remains optional until explicit `PUBLISH` / `SHIP`.
+5. On `kontynuuj` / `dokończ`, restate the current user goal in this thread
+   before acting; do not silently resume archived task IDs or `MEMORY` NEXT.
+
+Cursor adapter: `.cursor/rules/96-local-first-coding-report.mdc`.
+
 Resume: `resume → repo → exec → …`. Stateful proof commands go through mediated `exec` / trusted `task-gate`. Raw pytest/build is not close proof. Session-start is a projection (`session-start`); it does not takeover.
 
 Local commit authorization does not authorize push, PR creation, merge, deployment, VPS work or any live mutation.
@@ -397,6 +413,7 @@ Report:
 Never report `PASS` when required proof is missing.
 
 <!-- gitnexus:start -->
+
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **top-code-workspace** (57586 symbols, 100505 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
@@ -421,22 +438,22 @@ This project is indexed by GitNexus as **top-code-workspace** (57586 symbols, 10
 
 ## Resources
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/top-code-workspace/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/top-code-workspace/clusters` | All functional areas |
-| `gitnexus://repo/top-code-workspace/processes` | All execution flows |
-| `gitnexus://repo/top-code-workspace/process/{name}` | Step-by-step execution trace |
+| Resource                                            | Use for                                  |
+| --------------------------------------------------- | ---------------------------------------- |
+| `gitnexus://repo/top-code-workspace/context`        | Codebase overview, check index freshness |
+| `gitnexus://repo/top-code-workspace/clusters`       | All functional areas                     |
+| `gitnexus://repo/top-code-workspace/processes`      | All execution flows                      |
+| `gitnexus://repo/top-code-workspace/process/{name}` | Step-by-step execution trace             |
 
 ## CLI
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Task                                         | Read this skill file                                        |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
+| Blast radius / "What breaks if I change X?"  | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?"             | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
+| Rename / extract / split / refactor          | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
+| Tools, resources, schema reference           | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
+| Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
 
 <!-- gitnexus:end -->
