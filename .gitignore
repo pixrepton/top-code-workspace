@@ -40,6 +40,18 @@
 docs/*.html
 /tools/**/runs/
 
+# Nested independent Git repos live here; each has its own .git unit.
+# Root meta-repo must never stage/commit them (see AGENTS.md); ignore at root index only.
+/cieplo-orchestrator/
+/daszek/
+/fast-kalk/
+/gmail-agent/
+/kalk-top/
+/knowledge/
+/rag-chat-asystent/
+/rag-widget/
+/top-instal-generator/
+
 # Root-local operator scratch (not harness, not nested product repos)
 /archive-codex-and-claude/
 /_review_bundle/
