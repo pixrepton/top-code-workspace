@@ -30,6 +30,11 @@
 **/.gitnexus/
 **/.serena/cache/
 **/.serena/logs/
+**/.serena/memories/
+
+# Operator chat exports / one-off scratch at workspace root
+/ChatGPT*.md
+/scripts/_tmp_*.py
 
 # Generated audit / test-run artifacts (junk, not product sources)
 docs/*.html
