@@ -68,9 +68,11 @@ Do not write persistent memory without an explicit operator instruction, **excep
 
 ## Publication (GitHub / PR)
 
-- `LOCAL_ONLY` — local commits only (default).
-- `PUBLISH` / `SHIP` — push and PR when `gh` CLI is installed and authenticated.
-- If `gh` is unavailable: agent stops after `git push`; operator creates PR via GitHub web UI.
+- `PUBLISH` — **default**: scoped local commit + ordinary `git push` to the repo product branch (GitHub mirror). Draft PR optional; no merge.
+- `LOCAL_ONLY` — opt-in: local commits only (no push).
+- `SHIP` — prepare a merge-ready PR; merge and deployment still require separate approval.
+- If `gh` is unavailable: agent completes `git push`; operator may create PR via GitHub web UI when a PR is desired.
+- Failed push must be reported as **GitHub copy stale**. Never force-push. Never replace desktop code with an older remote tip.
 
 ## L1 / L2 instruction model
 
@@ -136,8 +138,8 @@ An operator request to fix, implement, migrate, configure, update or complete wo
 
 Default publication mode:
 
-- `LOCAL_ONLY` — local branch and local commits only.
-- `PUBLISH` — push and draft PR allowed; no merge.
+- `PUBLISH` — **default**: local scoped commit + ordinary push to the product branch (GitHub as mirror of the desktop workspace).
+- `LOCAL_ONLY` — local branch and local commits only (opt-in).
 - `SHIP` — prepare a merge-ready PR; merge and deployment still require separate approval.
 
 Canonical mutating workflow (Execution Plane V1.1):
@@ -163,7 +165,9 @@ For ordinary coding / MUTATE work:
 3. Treat local scoped commit as secondary history of finished owned work
    (`task-commit-plan` → act on `decision`); do not ask "czy commit?" when
    `COMMIT_NOW`.
-4. GitHub push/PR remains optional until explicit `PUBLISH` / `SHIP`.
+4. Under default `PUBLISH`, finish with ordinary `git push` after commit; do not ask
+   for per-push consent. Report clearly if GitHub remains stale. `LOCAL_ONLY` is
+   opt-in. Merge/deploy still need explicit authorization.
 5. On `kontynuuj` / `dokończ`, restate the current user goal in this thread
    before acting; do not silently resume archived task IDs or `MEMORY` NEXT.
 
@@ -171,7 +175,7 @@ Cursor adapter: `.cursor/rules/96-local-first-coding-report.mdc`.
 
 Resume: `resume → repo → exec → …`. Stateful proof commands go through mediated `exec` / trusted `task-gate`. Raw pytest/build is not close proof. Session-start is a projection (`session-start`); it does not takeover.
 
-Local commit authorization does not authorize push, PR creation, merge, deployment, VPS work or any live mutation.
+Default `PUBLISH` authorizes ordinary push after scoped commit. Merge, deployment, VPS work and any live production mutation still need separate authorization. Never force-push. Never overwrite the desktop checkout with an older remote tip.
 
 Use:
 
@@ -180,6 +184,7 @@ python scripts/ai_os_task.py task-commit-plan --repo <repo> --json
 python scripts/ai_os_task.py task-commit --repo <repo> --message "<message>"
 ```
 
+Do not use raw `git add` or `git commit` for agent work. Use the ownership-aware commands above.
 The wrapper must:
 
 - isolate task-owned content;
@@ -203,7 +208,7 @@ Scoped implementation **authorizes** local commits; it does **not** authorize as
    - `NO_COMMIT` → no commit in this repo;
    - `DEFER_OPERATOR` → stop for operator.
 
-Never ask "czy commit?" for routine scoped work. Ask only when `decision.ask_operator` is true or publication requires push/merge/deploy.
+Never ask "czy commit?" for routine scoped work. Ask only when `decision.ask_operator` is true or merge/deploy (beyond ordinary `PUBLISH` push) requires explicit authorization.
 
 Canonical rules: `knowledge/system-atlas/tooling/GIT_AND_CHANGE_CONTROL.md`.
 

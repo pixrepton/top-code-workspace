@@ -40,11 +40,11 @@ RAW_GIT_PATTERNS = (
 PUBLICATION_PATTERNS = (
     (
         re.compile(r"(^|[;&|\n]\s*)git\s+push(?:\s|$)", re.I | re.M),
-        "Push is outside LOCAL_ONLY mode. Change the checkpoint to PUBLISH or SHIP first.",
+        "Push is blocked while the checkpoint is LOCAL_ONLY. Use PUBLISH (default) or SHIP for ordinary mirror push.",
     ),
     (
         re.compile(r"(^|[;&|\n]\s*)gh\s+pr\s+create(?:\s|$)", re.I | re.M),
-        "PR creation is outside LOCAL_ONLY mode. Change the checkpoint to PUBLISH or SHIP first.",
+        "PR creation is blocked while the checkpoint is LOCAL_ONLY. Use PUBLISH or SHIP first.",
     ),
 )
 MERGE_PATTERNS = (

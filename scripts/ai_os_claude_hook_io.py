@@ -96,7 +96,7 @@ def refresh(cwd: Path, *, strict: bool) -> tuple[bool, str]:
 
 def publication_mode(cwd: Path) -> str:
     data = task_json(cwd)
-    return str(data.get("publication_mode", "LOCAL_ONLY")) if data else "LOCAL_ONLY"
+    return str(data.get("publication_mode", "PUBLISH")) if data else "PUBLISH"
 
 
 def require_resolvable_task(cwd: Path) -> str | None:

@@ -237,7 +237,7 @@ def _migrate_v2_to_current(data: dict[str, Any]) -> dict[str, Any]:
     migrated = dict(data)
     repos = migrated.get("target_repositories", [])
     migrated["schema_version"] = SCHEMA_VERSION
-    migrated["publication_mode"] = "LOCAL_ONLY"
+    migrated["publication_mode"] = "PUBLISH"
     migrated["commit_policy"] = "AUTO_LOCAL"
     migrated["baseline_branches"] = {repo: git_branch(repo) for repo in repos}
     migrated["current_branches"] = dict(migrated["baseline_branches"])

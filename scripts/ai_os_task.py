@@ -83,7 +83,7 @@ def add_start_args(parser: argparse.ArgumentParser) -> None:
         help="repo:path already dirty at task start that this task is explicitly authorized to own",
     )
     parser.add_argument("--next", dest="next_action", default="")
-    parser.add_argument("--publication-mode", choices=sorted(ALLOWED_PUBLICATION_MODES), default="LOCAL_ONLY")
+    parser.add_argument("--publication-mode", choices=sorted(ALLOWED_PUBLICATION_MODES), default="PUBLISH")
     parser.add_argument("--summary", default="")
     parser.add_argument("--replace", action="store_true")
     parser.add_argument(

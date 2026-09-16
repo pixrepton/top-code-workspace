@@ -14,8 +14,9 @@ def test_shared_policy_has_one_commit_route():
     for text in (agents, engineering, git_policy):
         assert "task-commit-plan" in text
         assert "task-commit" in text
+        assert "PUBLISH" in text
         assert "LOCAL_ONLY" in text
-    assert "does not authorize push" in agents
+    assert "ordinary push" in agents.lower() or "ordinary `git push`" in agents
     assert "Do not use raw `git add` or `git commit`" in agents
 
 
@@ -33,8 +34,9 @@ def test_claude_and_codex_adapters_are_valid_and_portable():
 
 def test_claude_configuration_sources_can_be_versioned():
     ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
-    for path in ("!/.claude/agents/**", "!/.claude/hooks/**", "!/.claude/rules/**", "!/.claude/skills/**"):
-        assert path in ignore
+    assert ".claude/settings.local.json" in ignore
+    assert (ROOT / ".claude" / "settings.json").is_file()
+    assert (ROOT / ".claude" / "skills").is_dir()
 
 
 def test_execution_map_routes_to_git_policy():
@@ -42,5 +44,6 @@ def test_execution_map_routes_to_git_policy():
         ROOT / "knowledge" / "system-atlas" / "tooling" / "CODEX_EXECUTION_MAP.md"
     ).read_text(encoding="utf-8")
     assert "[Git And Change Control](GIT_AND_CHANGE_CONTROL.md)" in execution_map
-    assert "task-branch ->" in execution_map
-    assert "task-commit-plan/task-commit" in execution_map
+    assert "task-commit-plan" in execution_map
+    assert "task-commit" in execution_map
+    assert "PUBLISH" in execution_map

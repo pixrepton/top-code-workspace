@@ -58,7 +58,7 @@ def evaluate_commit_decision(data: dict[str, Any], repo: str, plan: dict[str, An
 
     status = str(data.get("status", ""))
     next_action = str(data.get("next_action") or "").strip()
-    publication = str(data.get("publication_mode", "LOCAL_ONLY"))
+    publication = str(data.get("publication_mode", "PUBLISH"))
     conflicts = list(data.get("ownership_conflicts", []))
     out_of_scope = paths_outside_scope(data, repo, owned)
     other_dirty = other_repos_with_owned_paths(data, repo)

@@ -29,7 +29,7 @@ start → repo → exec → gate → commit → FINAL_HEAD → close
 ```
 
 ```powershell
-python scripts/ai_os_task.py start --task-id RP-XX --title "Bounded repair" --class MEDIUM --repo gmail-agent --scope gmail-agent:path/to/file.py --publication-mode LOCAL_ONLY
+python scripts/ai_os_task.py start --task-id RP-XX --title "Bounded repair" --class MEDIUM --repo gmail-agent --scope gmail-agent:path/to/file.py --publication-mode PUBLISH
 python scripts/ai_os_task.py task-repo --repo gmail-agent
 python scripts/ai_os_task.py exec --repo gmail-agent -- python -m pytest path/to/test.py -q
 python scripts/ai_os_task.py task-gate --gate-id focused --repo gmail-agent -- python -m pytest path/to/test.py -q
@@ -57,7 +57,7 @@ python scripts/ai_os_task.py task-start `
   --class MEDIUM `
   --repo gmail-agent `
   --scope gmail-agent:path/to/file.py `
-  --publication-mode LOCAL_ONLY
+  --publication-mode PUBLISH
 
 # Leave the default/protected branch before the first write
 python scripts/ai_os_task.py task-branch `
@@ -101,11 +101,12 @@ Deterministic shortcuts added by `CODING-AGENT-HARNESS-OPTIMIZATION`:
 python scripts/ai_os_task.py task-finalize --message "fix(scope): ..." --summary "closed" --gate-id FULL_GATE_A --gate-repo gmail-agent --gate-profile FULL_GATE_A
 ```
 
-  Order: validate task/scope/blockers/next_action -> commit-plan -> commit
-  (only COMMIT_READY, LOCAL_ONLY, owned paths) -> optional post-commit gate ->
-  re-run stale PASSED gate fingerprints from their recorded argv -> checkpoint
-  READY_TO_CLOSE -> close. Never: skips gates, auto-adopts foreign changes,
-  pushes, force-commits, invents PASS, or re-runs a failed gate.
+Order: validate task/scope/blockers/next_action -> commit-plan -> commit
+(only COMMIT_READY, PUBLISH/LOCAL_ONLY as declared, owned paths) -> optional post-commit gate ->
+re-run stale PASSED gate fingerprints from their recorded argv -> checkpoint
+READY_TO_CLOSE -> close. Never: skips gates, auto-adopts foreign changes,
+pushes, force-commits, invents PASS, or re-runs a failed gate.
+
 - **Proof artifact helper**: `scripts/ai_os_proof_artifact.py` provides
   `ProofArtifact` (`record` / `assert_invariant` / `write`) for future bounded
   trajectory scripts: deterministic JSON, secret redaction, PASS/FAIL summary.

@@ -1,5 +1,5 @@
 ---
-description: Local-first coding report contract — desktop SoT, changed-files-first, commit secondary, GitHub optional
+description: Local-first coding report — desktop SoT, changed-files-first, commit then ordinary GitHub push
 alwaysApply: true
 ---
 
@@ -13,6 +13,7 @@ Ordinary MUTATE work binds to **DIRECT_CANONICAL**:
 Session-scratch is evidence / logs / optional isolation only.
 Do not treat a scratch worktree as the product tree unless the task
 explicitly used `--workspace-mode ISOLATED_WORKTREE` (then promote on accept).
+Never replace the desktop checkout with an older GitHub tip.
 
 ## Report order (mandatory for coding tasks)
 
@@ -25,12 +26,14 @@ Start every substantial coding reply with:
 
 Only list files actually written or deleted on the desktop checkout in this turn/task.
 Then: root cause / what changed / proof / status.
-Commit SHA and GitHub are secondary — after the file list and proof.
+Commit SHA is secondary; GitHub push status follows proof.
 
 ## Commit vs publication
 
 - Local scoped commit = secondary history of finished owned work (via `task-commit-plan` → act on `decision`).
-- GitHub push/PR only on explicit `PUBLISH` / `SHIP`.
+- Default publication is `PUBLISH`: after commit, ordinary `git push` to the product branch (GitHub mirror). Do not ask for per-push consent.
+- If push fails, report clearly that the GitHub copy is **stale**.
+- `LOCAL_ONLY` only when the operator opts in. Merge/deploy still need explicit authorization. No force-push.
 - Do not ask "czy commit?" when `decision` is `COMMIT_NOW`.
 
 ## Continue / resume hygiene
